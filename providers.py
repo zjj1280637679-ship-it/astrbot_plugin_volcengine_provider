@@ -770,10 +770,13 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         """Build Ark Chat's input_audio block from byte-validated WAV data."""
 
         wav_data = await normalize_ark_chat_audio(audio_ref)
+        audio_base64 = await asyncio.to_thread(
+            lambda: base64.b64encode(wav_data).decode("ascii")
+        )
         return {
             "type": "input_audio",
             "input_audio": {
-                "data": base64.b64encode(wav_data).decode("ascii"),
+                "data": audio_base64,
                 "format": "wav",
             },
         }

@@ -130,8 +130,8 @@ def register_owned_provider(
 ):
     """Register once and replace only an older class owned by this plugin.
 
-    AstrBot 4.26 has a process-global registry without plugin ownership or an
-    unregister hook.  A plugin reload must therefore remove its own previous
+    AstrBot currently has a process-global registry without plugin ownership or
+    an unregister hook. A plugin reload must therefore remove its own previous
     metadata before registering the new class.  A foreign collision fails
     closed instead of silently hijacking another adapter.
     """
