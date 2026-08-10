@@ -1,4 +1,4 @@
-"""Two isolated Volcengine Ark chat providers for AstrBot 4.26.x.
+"""Two isolated Volcengine Ark chat providers built on AstrBot.
 
 Both upstreams implement the OpenAI Chat Completions protocol, so this plugin
 inherits AstrBot's native OpenAI adapter.  That keeps streaming, multimodal
@@ -28,7 +28,6 @@ from astrbot.core.provider.sources.openai_source import ProviderOpenAIOfficial
 from astrbot.core.provider.sources.request_retry import retry_provider_request
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 from astrbot.core.utils.media_utils import MediaResolver, describe_media_ref
-from astrbot.core.utils.tencent_record_helper import tencent_silk_to_wav
 from astrbot.core.utils.llm_metadata import LLM_METADATAS
 from openai._exceptions import NotFoundError
 
@@ -54,8 +53,8 @@ ARK_CHAT_AUDIO_CHANNELS = 1
 ARK_CHAT_AUDIO_SAMPLE_WIDTH = 2
 ARK_CHAT_AUDIO_TRANSCODE_TIMEOUT_SECONDS = 120
 
-# AstrBot 4.26.x represents an incoming video as a framework-generated
-# TextPart because ProviderRequest has no video_urls field yet.  Match only the
+# AstrBot currently represents an incoming video as a framework-generated
+# TextPart because ProviderRequest has no video_urls field. Match only the
 # exact framework envelope, and only when the same TextPart is present in
 # extra_user_content_parts for the current request.  This prevents ordinary
 # chat text that happens to look like a local path from becoming file access.
@@ -247,21 +246,75 @@ def redact_video_urls_from_log(message: str) -> str:
     )
 
 
+def _redact_sdk_log_structure(value: object) -> tuple[object, bool]:
+    """Redact SDK request structures copy-on-write before logging renders them."""
+
+    if isinstance(value, dict):
+        result: dict | None = None
+        for key, item in value.items():
+            replacement = item
+            changed = False
+            if key == "video_url" and isinstance(item, dict) and "url" in item:
+                replacement = item.copy()
+                replacement["url"] = VIDEO_LOG_REDACTION
+                changed = True
+            elif key == "input_audio" and isinstance(item, dict) and "data" in item:
+                replacement = item.copy()
+                replacement["data"] = AUDIO_LOG_REDACTION
+                changed = True
+            else:
+                replacement, changed = _redact_sdk_log_structure(item)
+
+            if changed:
+                if result is None:
+                    result = value.copy()
+                result[key] = replacement
+        return (value, False) if result is None else (result, True)
+
+    if isinstance(value, list):
+        result: list | None = None
+        for index, item in enumerate(value):
+            replacement, changed = _redact_sdk_log_structure(item)
+            if changed:
+                if result is None:
+                    result = value.copy()
+                result[index] = replacement
+        return (value, False) if result is None else (result, True)
+
+    if isinstance(value, tuple):
+        result: list | None = None
+        for index, item in enumerate(value):
+            replacement, changed = _redact_sdk_log_structure(item)
+            if changed:
+                if result is None:
+                    result = list(value)
+                result[index] = replacement
+        return (value, False) if result is None else (tuple(result), True)
+
+    if isinstance(value, str) and (
+        "video_url" in value or "input_audio" in value
+    ):
+        redacted = redact_video_urls_from_log(value)
+        if redacted != value:
+            return redacted, True
+
+    return value, False
+
+
 class VideoRequestLogFilter(logging.Filter):
-    """Plugin-owned redaction for OpenAI SDK request-body debug records."""
+    """Redact media payloads without eagerly rendering large SDK log records."""
 
     _volcengine_provider_video_redaction = True
     _volcengine_provider_video_redaction_leases = 0
 
     def filter(self, record: logging.LogRecord) -> bool:
-        try:
-            rendered = record.getMessage()
-        except Exception:
-            return True
-        redacted = redact_video_urls_from_log(rendered)
-        if redacted != rendered:
-            record.msg = redacted
-            record.args = ()
+        redacted_args, args_changed = _redact_sdk_log_structure(record.args)
+        if args_changed:
+            record.args = redacted_args
+
+        redacted_msg, msg_changed = _redact_sdk_log_structure(record.msg)
+        if msg_changed:
+            record.msg = redacted_msg
         return True
 
 
@@ -522,14 +575,6 @@ def publish_ark_model_metadata(model: object) -> str:
     return model_id
 
 
-def _has_tencent_silk_magic(path: Path) -> bool:
-    """Detect Tencent Silk from bytes, never from a filename or MIME label."""
-
-    with path.open("rb") as source:
-        prefix = source.read(16)
-    return prefix.startswith((b"#!SILK_V3", b"\x02#!SILK_V3"))
-
-
 def _validate_ark_chat_wav(wav_data: bytes) -> None:
     """Enforce the exact audio invariant sent to Ark Chat Completions."""
 
@@ -611,51 +656,33 @@ async def _ffmpeg_to_ark_chat_wav(source_path: Path, output_path: Path) -> None:
 
 
 async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
-    """Resolve and canonicalize an AstrBot audio reference for Ark Chat.
-
-    ``MediaResolver`` remains the single materializer.  The provider only owns
-    Ark's final byte invariant: already-valid 16 kHz mono PCM WAV passes through
-    unchanged, while Silk or any other format is converted with the existing
-    AstrBot/ffmpeg path.
-    """
+    """Use AstrBot for audio resolution and enforce only Ark's final WAV invariant."""
 
     temp_dir = Path(get_astrbot_temp_path())
     temp_dir.mkdir(parents=True, exist_ok=True)
-    token = uuid.uuid4().hex
-    decoded_silk_path = temp_dir / f"volcengine_audio_{token}_silk.wav"
-    output_path = temp_dir / f"volcengine_audio_{token}.wav"
+    output_path = temp_dir / f"volcengine_audio_{uuid.uuid4().hex}.wav"
 
     try:
         async with MediaResolver(
             audio_ref,
-            media_type="file",
-            default_suffix=".bin",
-        ).as_path() as resolved:
+            media_type="audio",
+            default_suffix=".wav",
+        ).as_path(target_format="wav") as resolved:
             source_path = resolved.path
-            is_silk = await asyncio.to_thread(_has_tencent_silk_magic, source_path)
 
             wav_data: bytes | None = None
-            if not is_silk:
-                source_stat = await asyncio.to_thread(source_path.stat)
-                if source_stat.st_size <= ARK_CHAT_AUDIO_MAX_BYTES:
-                    candidate = await asyncio.to_thread(source_path.read_bytes)
-                    try:
-                        _validate_ark_chat_wav(candidate)
-                    except ValueError:
-                        pass
-                    else:
-                        wav_data = candidate
+            source_stat = await asyncio.to_thread(source_path.stat)
+            if source_stat.st_size <= ARK_CHAT_AUDIO_MAX_BYTES:
+                candidate = await asyncio.to_thread(source_path.read_bytes)
+                try:
+                    _validate_ark_chat_wav(candidate)
+                except ValueError:
+                    pass
+                else:
+                    wav_data = candidate
 
             if wav_data is None:
-                conversion_source = source_path
-                if is_silk:
-                    await tencent_silk_to_wav(
-                        str(source_path),
-                        str(decoded_silk_path),
-                    )
-                    conversion_source = decoded_silk_path
-
-                await _ffmpeg_to_ark_chat_wav(conversion_source, output_path)
+                await _ffmpeg_to_ark_chat_wav(source_path, output_path)
                 wav_data = await asyncio.to_thread(output_path.read_bytes)
 
         _validate_ark_chat_wav(wav_data)
@@ -674,11 +701,10 @@ async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
             "无法把本次音频附件归一化为火山方舟可读格式，未发送请求。"
         ) from exc
     finally:
-        for path in (decoded_silk_path, output_path):
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                logger.warning("Failed to clean provider-owned audio temp file")
+        try:
+            output_path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Failed to clean provider-owned audio temp file")
 
 
 class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
