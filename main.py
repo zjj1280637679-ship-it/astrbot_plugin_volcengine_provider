@@ -6,13 +6,14 @@ configured provider instances during cold startup.
 
 from astrbot.api import logger, star
 
-from .providers import (
+from . import providers as _providers  # noqa: F401  # provider registration side effect
+from .adapters.logging import install_video_log_redaction, remove_video_log_redaction
+from .registry import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
-    install_video_log_redaction,
-    remove_video_log_redaction,
+    acquire_owned_provider_schema,
+    release_owned_provider_schema,
 )
-from .registry import acquire_owned_provider_schema, release_owned_provider_schema
 
 
 class VolcengineProviderPlugin(star.Star):

@@ -12,12 +12,10 @@ import asyncio
 import base64
 import copy
 import io
-import logging
 import re
 import subprocess
 import uuid
 import wave
-from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +26,15 @@ from astrbot.core.provider.sources.openai_source import ProviderOpenAIOfficial
 from astrbot.core.provider.sources.request_retry import retry_provider_request
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 from astrbot.core.utils.media_utils import MediaResolver, describe_media_ref
-from astrbot.core.utils.llm_metadata import LLM_METADATAS
 from openai._exceptions import NotFoundError
+
+from .compatibility.astrbot import _ApiKeyLogView
+from .metadata.agent_plan import (
+    KNOWN_AGENT_PLAN_MODELS,
+    publish_agent_plan_metadata,
+)
+from .metadata.ark import publish_ark_model_metadata
+from .metadata.common import _dedupe_nonempty
 
 from .registry import (
     AGENT_PLAN_PROVIDER_TYPE,
@@ -64,34 +69,6 @@ VIDEO_ATTACHMENT_PATTERN = re.compile(
     r"(?P<source>.+)\]$"
 )
 
-OPENAI_BASE_CLIENT_LOGGER = "openai._base_client"
-VIDEO_URL_LOG_PATTERN = re.compile(
-    r"(?P<prefix>['\"]video_url['\"]\s*:\s*\{\s*"
-    r"['\"]url['\"]\s*:\s*['\"])(?P<value>.*?)(?P<suffix>['\"])",
-    re.DOTALL,
-)
-VIDEO_LOG_REDACTION = "[REDACTED_VIDEO_URL]"
-AUDIO_DATA_LOG_PATTERN = re.compile(
-    r"(?P<prefix>['\"]input_audio['\"]\s*:\s*\{\s*"
-    r"['\"]data['\"]\s*:\s*['\"])(?P<value>.*?)(?P<suffix>['\"])",
-    re.DOTALL,
-)
-AUDIO_LOG_REDACTION = "[REDACTED_AUDIO_BASE64]"
-
-
-class _ApiKeyLogView(str):
-    """Preserve a real API key while redacting the slice AstrBot logs on 429.
-
-    This object is passed only into AstrBot's native error-recovery method.
-    Equality and hashing stay identical to ``str``, so the framework still owns
-    key-pool membership, removal, selection and retry policy.  Only indexing is
-    redacted because AstrBot currently logs ``chosen_key[:12]`` on rate limits.
-    """
-
-    def __getitem__(self, key):
-        if isinstance(key, slice):
-            return "[REDACTED_API_KEY]"
-        return "*"
 
 AZURE_ONLY_CONFIG_KEYS = frozenset(
     {
@@ -104,92 +81,6 @@ AZURE_ONLY_CONFIG_KEYS = frozenset(
     }
 )
 
-# Agent Plan's inference-key plane has no documented /models route. Keep only
-# active language models shown by the official Agent Plan console on
-# 2026-08-09; users can still type a newer official model name manually.
-# Models marked "即将下线" are deliberately omitted.
-KNOWN_AGENT_PLAN_MODELS = (
-    "doubao-seed-2.1-turbo",
-    "doubao-seed-evolving",
-    "doubao-seed-2.0-lite",
-    "doubao-seed-2.0-mini",
-    "deepseek-v4-flash",
-    "deepseek-v4-pro",
-    "glm-5.2",
-    "glm-latest",
-    "kimi-k3",
-    "kimi-k2.7-code",
-    "minimax-m3",
-    "ark-code-latest",
-)
-
-# The Plan control plane exposes only ModelID values. These limits and input
-# modalities therefore follow the public package/model tables and the live
-# console, rather than pretending the inference key returns a capability map.
-# k-values in the public table are binary token units except the official
-# ark-code-latest client example, which uses literal 256000/32000 limits.
-AGENT_PLAN_MODEL_SPECS: dict[str, dict[str, Any]] = {
-    "doubao-seed-2.0-mini": {
-        "input": ["text", "image", "video", "audio"],
-        "context": 262_144,
-        "output": 131_072,
-    },
-    "doubao-seed-2.0-lite": {
-        "input": ["text", "image", "video", "audio"],
-        "context": 262_144,
-        "output": 131_072,
-    },
-    "deepseek-v4-flash": {
-        "input": ["text"],
-        "context": 1_048_576,
-        "output": 393_216,
-    },
-    "doubao-seed-2.1-turbo": {
-        "input": ["text", "image", "video"],
-        "context": 262_144,
-        "output": 262_144,
-    },
-    "doubao-seed-evolving": {
-        "input": ["text", "image", "video"],
-        "context": 1_048_576,
-        "output": 262_144,
-    },
-    "minimax-m3": {
-        "input": ["text", "image"],
-        "context": 1_048_576,
-        "output": 131_072,
-    },
-    "glm-5.2": {
-        "input": ["text"],
-        "context": 1_048_576,
-        "output": 131_072,
-    },
-    "glm-latest": {
-        "input": ["text"],
-        "context": 1_048_576,
-        "output": 131_072,
-    },
-    "kimi-k2.7-code": {
-        "input": ["text", "image", "video"],
-        "context": 262_144,
-        "output": 32_768,
-    },
-    "deepseek-v4-pro": {
-        "input": ["text"],
-        "context": 1_048_576,
-        "output": 393_216,
-    },
-    "kimi-k3": {
-        "input": ["text", "image"],
-        "context": 1_048_576,
-        "output": 131_072,
-    },
-    "ark-code-latest": {
-        "input": ["text", "image"],
-        "context": 256_000,
-        "output": 32_000,
-    },
-}
 
 ARK_DEFAULT_CONFIG = {
     "id": "volcengine-ark",
@@ -222,156 +113,8 @@ AGENT_PLAN_DEFAULT_CONFIG = {
 }
 
 
-def redact_video_urls_from_log(message: str) -> str:
-    """Remove Ark video URLs and audio data from an SDK debug message.
-
-    The OpenAI SDK logs request JSON at DEBUG level.  Local videos are data
-    URLs and remote videos may use signed URLs, so neither value belongs in a
-    persistent log. Audio is sent as bare Base64, so the value nested under an
-    ``input_audio.data`` key is protected by the same plugin-owned filter.
-    Unrelated SDK diagnostics remain intact.
-    """
-
-    redacted = VIDEO_URL_LOG_PATTERN.sub(
-        lambda match: (
-            f"{match.group('prefix')}{VIDEO_LOG_REDACTION}"
-            f"{match.group('suffix')}"
-        ),
-        message,
-    )
-    return AUDIO_DATA_LOG_PATTERN.sub(
-        lambda match: (
-            f"{match.group('prefix')}{AUDIO_LOG_REDACTION}"
-            f"{match.group('suffix')}"
-        ),
-        redacted,
-    )
 
 
-def _redact_sdk_log_structure(value: object) -> tuple[object, bool]:
-    """Redact SDK request structures copy-on-write before logging renders them."""
-
-    if isinstance(value, dict):
-        result: dict | None = None
-        for key, item in value.items():
-            replacement = item
-            changed = False
-            if key == "video_url" and isinstance(item, dict) and "url" in item:
-                replacement = item.copy()
-                replacement["url"] = VIDEO_LOG_REDACTION
-                changed = True
-            elif key == "input_audio" and isinstance(item, dict) and "data" in item:
-                replacement = item.copy()
-                replacement["data"] = AUDIO_LOG_REDACTION
-                changed = True
-            else:
-                replacement, changed = _redact_sdk_log_structure(item)
-
-            if changed:
-                if result is None:
-                    result = value.copy()
-                result[key] = replacement
-        return (value, False) if result is None else (result, True)
-
-    if isinstance(value, list):
-        result: list | None = None
-        for index, item in enumerate(value):
-            replacement, changed = _redact_sdk_log_structure(item)
-            if changed:
-                if result is None:
-                    result = value.copy()
-                result[index] = replacement
-        return (value, False) if result is None else (result, True)
-
-    if isinstance(value, tuple):
-        result: list | None = None
-        for index, item in enumerate(value):
-            replacement, changed = _redact_sdk_log_structure(item)
-            if changed:
-                if result is None:
-                    result = list(value)
-                result[index] = replacement
-        return (value, False) if result is None else (tuple(result), True)
-
-    if isinstance(value, str) and (
-        "video_url" in value or "input_audio" in value
-    ):
-        redacted = redact_video_urls_from_log(value)
-        if redacted != value:
-            return redacted, True
-
-    return value, False
-
-
-class VideoRequestLogFilter(logging.Filter):
-    """Redact media payloads without eagerly rendering large SDK log records."""
-
-    _volcengine_provider_video_redaction = True
-    _volcengine_provider_video_redaction_leases = 0
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        redacted_args, args_changed = _redact_sdk_log_structure(record.args)
-        if args_changed:
-            record.args = redacted_args
-
-        redacted_msg, msg_changed = _redact_sdk_log_structure(record.msg)
-        if msg_changed:
-            record.msg = redacted_msg
-        return True
-
-
-def install_video_log_redaction() -> VideoRequestLogFilter:
-    """Acquire one lease on the SDK request-log redaction filter.
-
-    The lease count lives on the filter instance rather than in module globals,
-    so it survives AstrBot plugin-module reload overlap.  An older plugin
-    instance can then release only its own lease without removing protection
-    still owned by the newly loaded instance.
-    """
-
-    sdk_logger = logging.getLogger(OPENAI_BASE_CLIENT_LOGGER)
-    for existing in sdk_logger.filters:
-        if getattr(existing, "_volcengine_provider_video_redaction", False):
-            leases = int(
-                getattr(
-                    existing,
-                    "_volcengine_provider_video_redaction_leases",
-                    0,
-                )
-            )
-            existing._volcengine_provider_video_redaction_leases = leases + 1
-            return existing
-    log_filter = VideoRequestLogFilter()
-    log_filter._volcengine_provider_video_redaction_leases = 1
-    sdk_logger.addFilter(log_filter)
-    return log_filter
-
-
-def remove_video_log_redaction(log_filter: logging.Filter | None) -> None:
-    """Release one lease and remove only the exact unowned filter instance."""
-
-    if log_filter is None:
-        return
-    leases = int(
-        getattr(log_filter, "_volcengine_provider_video_redaction_leases", 1)
-    )
-    if leases > 1:
-        log_filter._volcengine_provider_video_redaction_leases = leases - 1
-        return
-    log_filter._volcengine_provider_video_redaction_leases = 0
-    logging.getLogger(OPENAI_BASE_CLIENT_LOGGER).removeFilter(log_filter)
-
-
-def _dedupe_nonempty(values: Iterable[object]) -> list[str]:
-    result: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        text = str(value or "").strip()
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        result.append(text)
-    return result
 
 
 def _video_attachments_from_current_request(
@@ -438,143 +181,6 @@ def to_agent_plan_upstream_model(model: object) -> str:
 
     public = to_agent_plan_public_model(model)
     return public[len(AGENT_PLAN_PREFIX) :]
-
-
-def _as_mapping(value: object) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return value
-    model_dump = getattr(value, "model_dump", None)
-    if callable(model_dump):
-        dumped = model_dump()
-        return dumped if isinstance(dumped, dict) else {}
-    return {}
-
-
-def _positive_int(value: object) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return 0
-    return parsed if parsed > 0 else 0
-
-
-def _feature_flag(value: object) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, dict):
-        for name in ("supported", "enabled", "available", "function_calling"):
-            if isinstance(value.get(name), bool):
-                return value[name]
-    return None
-
-
-def _normalized_modalities(values: object) -> list[str]:
-    if not isinstance(values, (list, tuple)):
-        return []
-    allowed = {"text", "image", "audio", "video"}
-    return [value for value in _dedupe_nonempty(values) if value in allowed]
-
-
-def _publish_metadata(model_id: str, metadata: dict[str, Any]) -> None:
-    """Publish model facts through AstrBot's native model metadata cache."""
-
-    existing = LLM_METADATAS.get(model_id, {})
-    LLM_METADATAS[model_id] = {
-        "id": model_id,
-        "reasoning": bool(metadata.get("reasoning", existing.get("reasoning", False))),
-        "tool_call": bool(metadata.get("tool_call", existing.get("tool_call", False))),
-        "knowledge": str(existing.get("knowledge", "none")),
-        "release_date": str(existing.get("release_date", "")),
-        "modalities": metadata.get(
-            "modalities",
-            existing.get("modalities", {"input": [], "output": []}),
-        ),
-        "open_weights": bool(existing.get("open_weights", False)),
-        "limit": metadata.get(
-            "limit",
-            existing.get("limit", {"context": 0, "output": 0}),
-        ),
-    }
-
-
-def publish_agent_plan_metadata() -> None:
-    """Publish the documented Plan model table under local prefixed IDs."""
-
-    for upstream_id, spec in AGENT_PLAN_MODEL_SPECS.items():
-        public_id = to_agent_plan_public_model(upstream_id)
-        _publish_metadata(
-            public_id,
-            {
-                "reasoning": spec.get("reasoning", True),
-                "tool_call": spec.get("tool_call", True),
-                "modalities": {
-                    "input": list(spec["input"]),
-                    "output": ["text"],
-                },
-                "limit": {
-                    "context": int(spec["context"]),
-                    "output": int(spec["output"]),
-                },
-            },
-        )
-
-
-def publish_ark_model_metadata(model: object) -> str:
-    """Translate ordinary Ark model facts using conservative card defaults.
-
-    AstrBot treats a missing metadata entry as a legacy provider and enables
-    image, audio and tool use by default.  That is unsafe for Ark's mixed model
-    catalogue: some entries omit capability fields entirely, and the absence of
-    a field is not evidence that every optional input is accepted.  Publish an
-    entry for every returned model, always keep text available, and add optional
-    capabilities only when this specific ``/models`` receipt says so.
-
-    The result is only a default for a newly-created model card.  Users remain
-    free to edit ``modalities`` afterwards; request-time handling continues to
-    respect the saved card without a second capability policy here.
-    """
-
-    data = _as_mapping(model)
-    model_id = str(data.get("id") or getattr(model, "id", "") or "").strip()
-    if not model_id:
-        return ""
-
-    modalities = _as_mapping(data.get("modalities"))
-    input_modalities = _dedupe_nonempty(
-        ["text", *_normalized_modalities(modalities.get("input_modalities"))]
-    )
-    output_modalities = _normalized_modalities(modalities.get("output_modalities"))
-
-    limits = _as_mapping(data.get("token_limits"))
-    context_limit = _positive_int(limits.get("context_window"))
-    output_limit = _positive_int(limits.get("max_output_token_length"))
-    reasoning_limit = _positive_int(limits.get("max_reasoning_token_length"))
-
-    features = _as_mapping(data.get("features"))
-    tools = _as_mapping(features.get("tools"))
-    tool_call = _feature_flag(tools.get("function_calling"))
-    if tool_call is None:
-        tool_call = _feature_flag(features.get("function_calling"))
-    reasoning = _feature_flag(features.get("reasoning"))
-    if reasoning is None and "max_reasoning_token_length" in limits:
-        reasoning = reasoning_limit > 0
-
-    _publish_metadata(
-        model_id,
-        {
-            "reasoning": False if reasoning is None else reasoning,
-            "tool_call": False if tool_call is None else tool_call,
-            "modalities": {
-                "input": input_modalities,
-                "output": output_modalities,
-            },
-            "limit": {
-                "context": context_limit,
-                "output": output_limit,
-            },
-        },
-    )
-    return model_id
 
 
 def _validate_ark_chat_wav(wav_data: bytes) -> None:
@@ -958,12 +564,12 @@ class ProviderVolcengineAgentPlan(_FixedArkEndpointProvider):
         config["model"] = to_agent_plan_public_model(
             config.get("model") or AGENT_PLAN_DEFAULT_MODEL
         )
-        publish_agent_plan_metadata()
+        publish_agent_plan_metadata(to_agent_plan_public_model)
         super().__init__(config, provider_settings)
 
     async def get_models(self) -> list[str]:
         # Do not probe an undocumented /models route with the Plan inference key.
-        publish_agent_plan_metadata()
+        publish_agent_plan_metadata(to_agent_plan_public_model)
         models = (self.get_model(), *KNOWN_AGENT_PLAN_MODELS)
         return _dedupe_nonempty(to_agent_plan_public_model(model) for model in models)
 
