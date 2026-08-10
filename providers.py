@@ -204,6 +204,7 @@ ARK_DEFAULT_CONFIG = {
     "timeout": 120,
     "proxy": "",
     "custom_headers": {},
+    ARK_VIDEO_INPUT_KEY: False,
 }
 
 AGENT_PLAN_DEFAULT_CONFIG = {
@@ -217,6 +218,7 @@ AGENT_PLAN_DEFAULT_CONFIG = {
     "timeout": 120,
     "proxy": "",
     "custom_headers": {},
+    AGENT_PLAN_VIDEO_INPUT_KEY: False,
 }
 
 
@@ -776,6 +778,21 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
             },
         }
 
+    def _supports_video_input(self) -> bool:
+        """Resolve only the plugin-owned video switch, with legacy fallback.
+
+        AstrBot does not yet model video in its native modality axis. New
+        Volcengine sources therefore use a provider-specific boolean. Existing
+        0.1.7-0.1.12 model cards that already saved ``video`` in ``modalities``
+        keep working until the host gains a native video capability.
+        """
+
+        explicit = self.provider_config.get(self._video_input_config_key)
+        if isinstance(explicit, bool):
+            return explicit
+        modalities = self.provider_config.get("modalities")
+        return isinstance(modalities, list) and "video" in modalities
+
     async def _inject_current_request_videos(
         self,
         messages: list[dict],
@@ -787,22 +804,7 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         if not attachments:
             return
 
-        modalities = self.provider_config.get("modalities")
-        if isinstance(modalities, list):
-            # One model capability set is authoritative, exactly like image,
-            # audio and tool use.  This avoids two switches disagreeing.
-            supports_video = "video" in modalities
-        else:
-            # Read a value saved by 0.1.6 only when the native capability list
-            # is genuinely absent; all new/normal configurations use modalities.
-            explicit_video_input = self.provider_config.get(
-                self._video_input_config_key
-            )
-            supports_video = (
-                explicit_video_input
-                if isinstance(explicit_video_input, bool)
-                else False
-            )
+        supports_video = self._supports_video_input()
         if not supports_video:
             for marker_text, _ in reversed(attachments):
                 if not _replace_last_text_block(

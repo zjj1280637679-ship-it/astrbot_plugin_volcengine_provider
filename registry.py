@@ -15,9 +15,9 @@ PLUGIN_MODULE_MARKER = "astrbot_plugin_volcengine_provider"
 
 ARK_PROVIDER_TYPE = "volcengine_ark_chat_completion"
 AGENT_PLAN_PROVIDER_TYPE = "volcengine_agent_plan_chat_completion"
-# Kept only to read any configuration saved by the short-lived 0.1.6 build.
-# From 0.1.7 onward, ``modalities`` is the single authoritative model-level
-# capability set, matching AstrBot's native image/audio/tool switches.
+# AstrBot does not yet expose video as a native provider modality. Keep the
+# provider-owned switch scoped to each Volcengine source; old model cards that
+# saved ``video`` in ``modalities`` remain readable as a compatibility fallback.
 ARK_VIDEO_INPUT_KEY = "volcengine_ark_video_input"
 AGENT_PLAN_VIDEO_INPUT_KEY = "volcengine_agent_plan_video_input"
 
@@ -26,15 +26,16 @@ _SCHEMA_WRAPPER: Callable[..., dict[str, Any]] | None = None
 _SCHEMA_ORIGINAL: Callable[..., dict[str, Any]] | None = None
 
 
-def _inject_volcengine_video_fields(payload: dict[str, Any]) -> dict[str, Any]:
-    """Complete AstrBot's native model-capability selector with video.
+def _inject_volcengine_video_control_fields(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Expose only Volcengine-owned video switches in AstrBot's shared schema.
 
-    AstrBot 4.26 already models text/image/audio/tool support in one per-model
-    ``modalities`` list.  Video belongs to that same axis.  The Dashboard's
-    translated label list is compiled with only four entries, so appending an
-    option alone renders a blank checkbox.  This response adapter appends the
-    option and its visible label together after AstrBot has completed i18n
-    conversion.  It does not modify AstrBot or Dashboard files.
+    AstrBot 4.27 has no provider-specific schema-extension registry and its
+    native ``modalities`` axis stops at text/image/audio/tool_use. Injecting a
+    fifth common modality would affect every provider card. Instead, add two
+    boolean field definitions; AstrBotConfig renders them only on Volcengine
+    source templates that actually contain the corresponding key.
     """
 
     try:
@@ -44,33 +45,24 @@ def _inject_volcengine_video_fields(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(items, dict):
         return payload
 
-    modalities = items.get("modalities")
-    if not isinstance(modalities, dict):
-        return payload
-
-    options = modalities.get("options")
-    if not isinstance(options, list):
-        return payload
-    # ConfigMetadataI18n keeps nested lists by reference.  Mutating ``options``
-    # in place would therefore alter process-global CONFIG_METADATA_2 and leave
-    # a ghost fifth option after this plugin releases its method wrapper.
-    options = list(options)
-    modalities["options"] = options
-    if "video" not in options:
-        options.append("video")
-
-    # ConfigMetadataI18n replaces the original labels list with a translation
-    # key.  The Dashboard can therefore translate only the four labels compiled
-    # into AstrBot 4.26.  Supply the complete visible list together so index 4
-    # cannot become an unlabeled checkbox.
-    label_by_option = {
-        "text": "文本",
-        "image": "图像",
-        "audio": "音频",
-        "tool_use": "工具使用",
-        "video": "视频",
-    }
-    modalities["labels"] = [label_by_option.get(option, option) for option in options]
+    items.setdefault(
+        ARK_VIDEO_INPUT_KEY,
+        {
+            "description": "视频输入",
+            "type": "bool",
+            "hint": "仅控制火山方舟普通 API 的视频附件输入；关闭时视频会保留为 [Video] 文本占位。",
+            "condition": {"type": ARK_PROVIDER_TYPE},
+        },
+    )
+    items.setdefault(
+        AGENT_PLAN_VIDEO_INPUT_KEY,
+        {
+            "description": "视频输入",
+            "type": "bool",
+            "hint": "仅控制火山方舟 Agent Plan 的视频附件输入；关闭时视频会保留为 [Video] 文本占位。",
+            "condition": {"type": AGENT_PLAN_PROVIDER_TYPE},
+        },
+    )
     return payload
 
 
@@ -88,21 +80,21 @@ def acquire_owned_provider_schema() -> None:
     if getattr(current, "_volcengine_provider_schema_wrapper", False):
         current = getattr(current, "_volcengine_provider_schema_original")
 
-    def get_provider_schema_with_volcengine_video(self) -> dict[str, Any]:
+    def get_provider_schema_with_volcengine_controls(self) -> dict[str, Any]:
         payload = current(self)
-        return _inject_volcengine_video_fields(payload)
+        return _inject_volcengine_video_control_fields(payload)
 
-    get_provider_schema_with_volcengine_video._volcengine_provider_schema_wrapper = (  # type: ignore[attr-defined]
+    get_provider_schema_with_volcengine_controls._volcengine_provider_schema_wrapper = (  # type: ignore[attr-defined]
         True
     )
-    get_provider_schema_with_volcengine_video._volcengine_provider_schema_original = (  # type: ignore[attr-defined]
+    get_provider_schema_with_volcengine_controls._volcengine_provider_schema_original = (  # type: ignore[attr-defined]
         current
     )
     ProviderConfigService.get_provider_schema = (  # type: ignore[method-assign]
-        get_provider_schema_with_volcengine_video
+        get_provider_schema_with_volcengine_controls
     )
     _SCHEMA_ORIGINAL = current
-    _SCHEMA_WRAPPER = get_provider_schema_with_volcengine_video
+    _SCHEMA_WRAPPER = get_provider_schema_with_volcengine_controls
     _SCHEMA_LEASE_COUNT = 1
 
 

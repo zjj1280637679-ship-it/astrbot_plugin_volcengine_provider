@@ -29,8 +29,8 @@ class VolcengineProviderPlugin(star.Star):
             raise
         logger.info(
             "Volcengine providers registered: %s, %s; restart AstrBot after "
-            "install/update/disable because AstrBot 4.26 has no provider "
-            "registry unload hook",
+            "install/update/disable because the provider type registry has no "
+            "safe plugin-owned unload hook",
             ARK_PROVIDER_TYPE,
             AGENT_PLAN_PROVIDER_TYPE,
         )
@@ -43,5 +43,5 @@ class VolcengineProviderPlugin(star.Star):
             self._provider_schema_acquired = False
         # Provider instances own and close their HTTP clients through AstrBot's
         # ProviderManager.  The process-global type registry has no safe unload
-        # hook in 4.26.x, so removal takes effect after a full restart.
+        # hook, so removal takes effect after a full restart.
         return None
