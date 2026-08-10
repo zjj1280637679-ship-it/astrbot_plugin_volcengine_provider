@@ -1,8 +1,8 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.11-e85d3f)](CHANGELOG.md)
-[![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1%2C%3C4.27-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
+[![Version](https://img.shields.io/badge/version-0.1.12-e85d3f)](CHANGELOG.md)
+[![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp%20%7C%20webchat-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -49,6 +49,8 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 2. 完整关闭并重新启动 AstrBot。
 3. 打开 `模型提供商 → 对话 → 新增`。
 4. 确认列表里出现“火山方舟普通 API”和“火山方舟 Agent Plan API”。
+
+插件最低支持 AstrBot `4.26.1`，不再人为设置未来版本上限；后续 AstrBot 新版本只要相关 Provider API 保持兼容即可继续使用。
 
 AstrBot 4.26.x 的 Provider 注册表没有安全的热卸载钩子，所以安装、更新、禁用或卸载后都应完整重启。只刷新网页不能证明新版本已经生效。
 
