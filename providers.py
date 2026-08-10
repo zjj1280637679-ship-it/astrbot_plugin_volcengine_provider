@@ -11,10 +11,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import copy
-import hashlib
 import io
 import logging
-import random
 import re
 import subprocess
 import uuid
@@ -80,6 +78,21 @@ AUDIO_DATA_LOG_PATTERN = re.compile(
     re.DOTALL,
 )
 AUDIO_LOG_REDACTION = "[REDACTED_AUDIO_BASE64]"
+
+
+class _ApiKeyLogView(str):
+    """Preserve a real API key while redacting the slice AstrBot logs on 429.
+
+    This object is passed only into AstrBot's native error-recovery method.
+    Equality and hashing stay identical to ``str``, so the framework still owns
+    key-pool membership, removal, selection and retry policy.  Only indexing is
+    redacted because AstrBot currently logs ``chosen_key[:12]`` on rate limits.
+    """
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return "[REDACTED_API_KEY]"
+        return "*"
 
 AZURE_ONLY_CONFIG_KEYS = frozenset(
     {
@@ -600,11 +613,10 @@ async def _ffmpeg_to_ark_chat_wav(source_path: Path, output_path: Path) -> None:
 async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
     """Resolve and canonicalize an AstrBot audio reference for Ark Chat.
 
-    ``MediaResolver`` is deliberately used as a generic file materializer here.
-    Its audio conversion path in AstrBot 4.26.x can trust a temporary ``.wav``
-    suffix even when QQ returned AMR bytes. This provider-owned last mile makes
-    file bytes authoritative while keeping download and cleanup on AstrBot's
-    existing resolver.
+    ``MediaResolver`` remains the single materializer.  The provider only owns
+    Ark's final byte invariant: already-valid 16 kHz mono PCM WAV passes through
+    unchanged, while Silk or any other format is converted with the existing
+    AstrBot/ffmpeg path.
     """
 
     temp_dir = Path(get_astrbot_temp_path())
@@ -620,25 +632,39 @@ async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
             default_suffix=".bin",
         ).as_path() as resolved:
             source_path = resolved.path
-            conversion_source = source_path
-            if await asyncio.to_thread(_has_tencent_silk_magic, source_path):
-                await tencent_silk_to_wav(
-                    str(source_path),
-                    str(decoded_silk_path),
-                )
-                conversion_source = decoded_silk_path
+            is_silk = await asyncio.to_thread(_has_tencent_silk_magic, source_path)
 
-            await _ffmpeg_to_ark_chat_wav(conversion_source, output_path)
-            wav_data = await asyncio.to_thread(output_path.read_bytes)
+            wav_data: bytes | None = None
+            if not is_silk:
+                source_stat = await asyncio.to_thread(source_path.stat)
+                if source_stat.st_size <= ARK_CHAT_AUDIO_MAX_BYTES:
+                    candidate = await asyncio.to_thread(source_path.read_bytes)
+                    try:
+                        _validate_ark_chat_wav(candidate)
+                    except ValueError:
+                        pass
+                    else:
+                        wav_data = candidate
+
+            if wav_data is None:
+                conversion_source = source_path
+                if is_silk:
+                    await tencent_silk_to_wav(
+                        str(source_path),
+                        str(decoded_silk_path),
+                    )
+                    conversion_source = decoded_silk_path
+
+                await _ffmpeg_to_ark_chat_wav(conversion_source, output_path)
+                wav_data = await asyncio.to_thread(output_path.read_bytes)
 
         _validate_ark_chat_wav(wav_data)
         logger.debug(
             "Normalized Ark audio attachment: source=%s format=wav "
-            "pcm_s16le=%dHz mono bytes=%d sha256=%s",
+            "pcm_s16le=%dHz mono bytes=%d",
             describe_media_ref(audio_ref),
             ARK_CHAT_AUDIO_SAMPLE_RATE,
             len(wav_data),
-            hashlib.sha256(wav_data).hexdigest()[:12],
         )
         return wav_data
     except ValueError:
@@ -816,42 +842,26 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         max_retries: int,
         image_fallback_used: bool = False,
     ) -> tuple:
-        """Keep AstrBot's recovery path while never logging an API-key prefix."""
+        """Delegate recovery to AstrBot while keeping its key-prefix log redacted."""
 
-        if "429" not in str(error):
-            return await super()._handle_api_error(
-                error,
-                payloads,
-                context_query,
-                func_tool,
-                chosen_key,
-                available_api_keys,
-                retry_cnt,
-                max_retries,
-                image_fallback_used=image_fallback_used,
-            )
-
-        logger.warning(
-            "%s was rate limited; retrying another configured key without "
-            "logging key material",
-            self.__class__.__name__,
+        result = await super()._handle_api_error(
+            error,
+            payloads,
+            context_query,
+            func_tool,
+            _ApiKeyLogView(chosen_key),
+            available_api_keys,
+            retry_cnt,
+            max_retries,
+            image_fallback_used=image_fallback_used,
         )
-        if retry_cnt < max_retries - 1:
-            await asyncio.sleep(1)
-        if chosen_key in available_api_keys:
-            available_api_keys.remove(chosen_key)
-        if available_api_keys:
-            chosen_key = random.choice(available_api_keys)
-            return (
-                False,
-                chosen_key,
-                available_api_keys,
-                payloads,
-                context_query,
-                func_tool,
-                image_fallback_used,
-            )
-        raise error
+        if isinstance(result, tuple) and len(result) > 1 and isinstance(
+            result[1], _ApiKeyLogView
+        ):
+            result = list(result)
+            result[1] = str(result[1])
+            return tuple(result)
+        return result
 
 
 @register_owned_provider(
