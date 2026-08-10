@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.13-e85d3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.14-e85d3f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp%20%7C%20webchat-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -103,17 +103,44 @@ QQ Record
 
 你手打一个像路径的字符串、旧历史里只剩下的附件标记，都不会让插件打开本地文件。需要模型在后续独立回合重新观看时，请重新引用或附加原视频。
 
-## 0.1.13 的职责边界整理
+## 0.1.14 的工程结构
 
-这一版专门检查“插件是否在替 AstrBot 做 AstrBot 已经会做的事”。结果是：
+0.1.13 先把控制权还给 AstrBot；0.1.14 再让源码结构与这条职责边界一致。目标不是把文件切得越多越好，而是让每个模块只有一个主要变化原因，同时让 Provider 保持为薄调度层。
 
-- **429 与 Key 轮换回归 AstrBot**：插件不再删除 Key、随机选 Key、sleep 或维护自己的 429 恢复状态；只对 AstrBot 原生日志中的 Key 前缀做脱敏。
-- **Tencent Silk / 通用音频解析回归 AstrBot**：插件不再自己读 Silk 魔数或直接调用 Silk 解码器，统一通过 `MediaResolver(media_type="audio", target_format="wav")`；只有 Ark 要求的 16 kHz / 单声道 / 16-bit PCM / 25 MB 校验仍属于插件。
-- **已合规 WAV 不再无条件 ffmpeg**：已经满足 Ark 约束的 WAV 直接通过，避免一次没有意义的子进程启动和重编码。
-- **视频能力不再污染所有 Provider**：不再给 AstrBot 公共 `modalities` 追加 `video`，只给两张火山供应商源提供专属布尔开关，并兼容旧版 `modalities: video`。
-- **日志脱敏改为结构化 copy-on-write**：不再先把包含大 Base64 的 SDK 请求整体渲染成字符串再做正则。8 MiB 合成音频日志基准从约 299 ms / 64 MB 峰值额外内存降到约 0.12 ms / 0.001 MB。
+```text
+插件入口 main.py
+  └─ 显式加载 Provider 注册
 
-这次审计也发现了两个宿主层热路径：AstrBot 的 OpenAI Provider 会再次 materialize 已组装图片；429 请求还会叠加 AstrBot retry 与 OpenAI SDK retry。插件没有为这两点另建旁路，因为它们属于宿主/SDK 生命周期，应在对应层修复。
+providers.py
+  ├─ 两张 Provider 卡与固定端点
+  ├─ Agent Plan 本地命名空间
+  ├─ 调用 AstrBot 原生 Provider 生命周期
+  └─ 只保留 audio / video 的宿主 hook
+
+adapters/
+  ├─ audio.py     Ark 最终 WAV 不变量 + input_audio
+  ├─ video.py     本轮可信视频边界 + video_url
+  └─ logging.py   OpenAI SDK 音视频日志脱敏
+
+metadata/
+  ├─ common.py    写入 AstrBot LLM_METADATAS 的公共句柄
+  ├─ ark.py       /models 回执 → AstrBot 模型事实
+  └─ agent_plan.py 官方套餐/控制台事实快照与来源时间
+
+compatibility/astrbot.py
+  └─ 只放可删除的 AstrBot 临时兼容 shim
+
+registry.py
+  └─ AstrBot 当前缺失的 Provider 注册所有权 / schema 桥
+```
+
+这次还收紧了初始化粒度：普通 `import astrbot_plugin_volcengine_provider.metadata.ark`、`adapters.audio` 等工具模块不会再隐式注册 Provider；只有 AstrBot 的插件入口 `main.py` 明确加载 `providers.py` 时才产生注册副作用。为了兼容已有调用，`from astrbot_plugin_volcengine_provider import ProviderVolcengineArk` 仍可使用，但改为按需惰性加载。
+
+拆分在 `providers.py` 约 10 KB 时停止。剩余内容——固定端点、Provider 默认配置、Agent Plan 名称转换、普通 Ark 模型发现和两张 Provider 类——共享同一个“Provider 身份与调度”变化原因；继续拆成 `base.py / ark.py / agent_plan.py` 只会增加跳转成本，没有新的职责收益。`registry.py` 也保持单文件，因为注册保护与 schema 桥同属 AstrBot 宿主集成边界。
+
+0.1.14 没有新增 retry、模型轮换、媒体下载器或第二套生命周期。相反，架构测试明确禁止 metadata、logging、media adapter 反向依赖 Provider/retry/key pool；Agent Plan 外部事实还显式记录了核对日期与来源类型。
+
+最新发布矩阵同时在 AstrBot `4.26.1` 与 `4.27.2` 验证 Provider 注册、标准 WAV 快路径、真实合成 Tencent Silk、视频可信附件边界、普通 Ark `/models`、模型元数据和真实 Chat Completions，因此最低版本仍保持 `>=4.26.1`。
 
 ## 插件不会替你做的决定
 
@@ -147,7 +174,7 @@ QQ Record
 
 ## 如果你想审计实现
 
-插件只在两个地方扩展 AstrBot 原生边界：
+在运行时对话热路径上，插件只在音频与视频两个地方补充 AstrBot 与 Ark 之间的协议差异：
 
 ```text
 普通文本 / 图片 / 工具 ──────────────→ AstrBot 原生 Chat 适配器
@@ -179,7 +206,7 @@ AstrBot 当前的公共 `modalities` 仍只有文本、图片、音频与工具�
 
 ## 隐私、日志与费用
 
-插件不读取浏览器凭据，不保存额外密钥副本，也不会把 Authorization Header、API Key、签名视频 URL 或音频 Base64 写入自己的日志。音频规范化日志只记录安全引用描述、格式、字节数和短哈希。
+插件不读取浏览器凭据，不保存额外密钥副本，也不会把 Authorization Header、API Key、签名视频 URL 或音频 Base64 写入自己的日志。音频规范化日志只记录安全引用描述、格式与字节数，不计算或记录音频内容哈希。
 
 普通 API 与 Agent Plan 都可能消耗真实额度。Agent Plan 使用 AFP，并受套餐时间窗口约束；如果你在控制台开启“超额后付费”，套餐耗尽后仍可能产生账单。插件只保证请求走你选择的固定端点，不替你管理账户额度与扣费开关。
 

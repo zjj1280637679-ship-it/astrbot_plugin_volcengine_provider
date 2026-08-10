@@ -1,5 +1,18 @@
 # 更新记录
 
+## 0.1.14
+
+- 在 0.1.13“宿主负责生命周期、插件负责火山协议差异”的职责审计基础上继续做纯结构整理，不新增 retry、Key 轮换、媒体下载器、第二模型或独立 Provider 生命周期。
+- 把普通 Ark `/models` 事实翻译、Agent Plan 官方事实快照与 AstrBot `LLM_METADATAS` 写入句柄拆到 `metadata/`；Agent Plan 快照显式记录 `2026-08-09` 核对时间及“火山公开套餐/模型表 + 当时 Agent Plan 控制台”的来源类型，使外部事实与程序控制流分离。
+- 把 OpenAI SDK 音视频请求日志脱敏拆到 `adapters/logging.py`，把 AstrBot 429 Key 前缀日志兼容 shim 拆到 `compatibility/astrbot.py`；观察层与临时宿主兼容层不再混在 Provider 主文件。
+- 把 Ark 音频最后一公里拆到 `adapters/audio.py`：AstrBot `MediaResolver` 继续拥有下载、格式识别与 Tencent Silk 解码，适配器只拥有 16 kHz / 单声道 / PCM16 WAV / 25 MiB 约束与 `input_audio` 序列化。
+- 把视频可信附件边界与 `video_url` 转换拆到 `adapters/video.py`：仅当前请求 `extra_user_content_parts` 中的 AstrBot 可信 `TextPart` 可触发媒体读取，用户自己输入的同形字符串保持普通文本；显式 Provider Source 视频开关继续优先于旧 `modalities: video` 兼容值。
+- `providers.py` 从约 35.6 KB（0.1.13 发布前）降到约 10 KB，并在此停止拆分：剩余固定端点、Provider 配置、Agent Plan 命名空间、模型发现和两张 Provider 类属于同一个 Provider 身份/调度内聚域，避免为了文件数量继续过度碎片化。
+- 根 `__init__.py` 改为无副作用的惰性兼容导出：导入 `metadata/`、`adapters/` 或 `compatibility/` 不再顺带注册 Provider；Provider 注册副作用只由 AstrBot 插件入口 `main.py` 显式触发，旧的根包 Provider 导入方式仍兼容。
+- 新增架构边界回归：验证 knowledge ownership、dependency direction、外部事实 provenance、utility import 无注册副作用、Provider 入口注册、音视频 adapter 不拥有 retry/model/key-pool 生命周期。
+- 最终源码在 AstrBot `4.26.1` 与 `4.27.2` 双版本矩阵全部通过：两版均完成 Provider 注册、标准 WAV 快路径、真实合成 Tencent Silk、视频可信附件桥、普通 Ark `/models` 与 metadata 发布，并使用 `doubao-seed-2-0-pro-260215` 完成真实 Chat Completions；因此继续声明 `astrbot_version: ">=4.26.1"`。
+- 同步修正文档中过时的“音频短哈希”描述：0.1.13 已移除该无协议用途的 SHA-256 计算，当前日志只保留安全引用描述、格式与字节数。
+
 ## 0.1.13
 
 - 完成一次以“插件能力 = 目标能力 − AstrBot 已有能力”为标准的职责边界审计：删除插件自有的 429 Key 池删除、随机轮换与等待逻辑，所有恢复行为重新委托 `ProviderOpenAIOfficial._handle_api_error()`；插件只保留 API Key 日志脱敏。
