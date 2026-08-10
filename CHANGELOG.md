@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.1.13
+
+- 完成一次以“插件能力 = 目标能力 − AstrBot 已有能力”为标准的职责边界审计：删除插件自有的 429 Key 池删除、随机轮换与等待逻辑，所有恢复行为重新委托 `ProviderOpenAIOfficial._handle_api_error()`；插件只保留 API Key 日志脱敏。
+- 删除插件重复实现的 Tencent Silk 魔数检测与直接解码流程，统一把格式识别、下载、Silk 解码和通用音频转换交给 AstrBot `MediaResolver`；插件只验证火山方舟要求的 16 kHz、单声道、16-bit PCM WAV 与 25 MB 上限。
+- 新增已合规 WAV 快路径：标准 Ark WAV 不再无条件启动 ffmpeg，也移除了每次请求都计算但没有协议用途的 SHA-256 调试摘要。
+- OpenAI SDK 的音视频 DEBUG 脱敏改为结构化 copy-on-write，不再先 `record.getMessage()` 生成巨型字符串。GitHub Actions 的 8 MiB 合成音频基准由约 299 ms / 64 MB 峰值额外内存降至约 0.124 ms / 0.001 MB。
+- 撤销对 AstrBot 全局 `modalities` 的 `video` 枚举污染；普通 Ark 与 Agent Plan 改用只属于各自 Provider Source 的“视频输入”布尔字段，旧版已保存的 `modalities: video` 仍作为兼容回退。
+- 接近 25 MiB 上限的 `input_audio` Base64 编码移出 asyncio 主协程的直接 Python 路径；最终 24 MiB 合成数据基准总编码约 24.8 ms，事件循环最大间隔约 20.1 ms。
+- 保留普通 Ark `/models` → AstrBot `LLM_METADATAS` 的元数据映射、Agent Plan 本地候选表，以及插件自有 Provider 注册替换保护：这些分别补足上游能力信息、Agent Plan 无 `/models` 与 AstrBot 当前无 Provider unregister 的宿主缺口，并未另建独立模型/注册生命周期。
+- 最终在 AstrBot `4.27.2` 完成汇总回归：两个 Provider 类型仍由宿主 registry 注册，真实 `/models` 返回 129 个模型，`doubao-seed-2-0-pro-260215` 真实 Chat Completions 返回 `FINAL_THIN_OK`；标准 WAV、真实 Tencent Silk、旧视频配置迁移、日志脱敏与静态职责检查全部通过。
+- 审计同时确认图片二次 materialize，以及 AstrBot 5 次 provider retry 与 OpenAI SDK 内层 retry 的 429 放大属于宿主/SDK 热路径；本插件刻意不为它们建立第二套重试或媒体旁路。
+
 ## 0.1.12
 
 - 解除 AstrBot 兼容版本的人工上限：`astrbot_version` 从 `>=4.26.1,<4.27` 调整为 `>=4.26.1`，只保留经过验证的最低版本，不再因为未来 AstrBot 小版本发布而被元数据直接判定为不兼容。
