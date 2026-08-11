@@ -24,18 +24,18 @@ class VolcengineProviderPlugin(star.Star):
         self._dashboard_bridge_acquired = False
         self._video_log_filter = install_video_log_redaction()
         try:
-            acquire_owned_dashboard_bridge()
-            self._dashboard_bridge_acquired = True
+            self._dashboard_bridge_acquired = acquire_owned_dashboard_bridge()
         except Exception:
             remove_video_log_redaction(self._video_log_filter)
             self._video_log_filter = None
             raise
         logger.info(
-            "Volcengine providers registered: %s, %s; restart AstrBot after "
-            "install/update/disable because the provider type registry has no "
-            "safe plugin-owned unload hook",
+            "Volcengine providers registered: %s, %s; dashboard_bridge=%s; "
+            "restart AstrBot after install/update/disable because the provider "
+            "type registry has no safe plugin-owned unload hook",
             ARK_PROVIDER_TYPE,
             AGENT_PLAN_PROVIDER_TYPE,
+            "active" if self._dashboard_bridge_acquired else "host-unavailable",
         )
 
     async def initialize(self) -> None:
