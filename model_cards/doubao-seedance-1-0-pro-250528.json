@@ -1,12 +1,59 @@
 {
   "model_id": "doubao-seedance-1-0-pro-250528",
-  "card_version": "0.2",
+  "card_version": "0.3",
   "current_account_status": "executable",
+  "evidence_policy": "Exact model runtime evidence is authoritative for current-account executability. Core Ark API documentation may establish API-surface compatibility. Generic wrappers/product articles remain lower-tier for exact duration/control limits unless causally isolated.",
   "modalities": {
-    "text_to_video": {"state": "E2E", "evidence": ["C-013", "D-003"]},
-    "single_image_to_video": {"state": "E2E", "evidence": ["D-006"], "tested_reference_transport": "public GitHub raw URL"},
-    "first_last_frame": {"state": "documented_candidate_lower_tier", "evidence": ["Volcano Engine developer-community implementation material"], "e2e": false},
-    "native_audio_output": {"state": "not_observed_in_tested_T2V_or_I2V_samples", "evidence": ["D-003 media inspection", "D-006 media inspection"]}
+    "text_to_video": {
+      "state": "E2E",
+      "evidence": ["C-013", "D-003"],
+      "tested_duration_seconds": [5],
+      "tested_ratio": ["16:9"]
+    },
+    "single_image_to_video": {
+      "state": "E2E",
+      "evidence": ["D-006"],
+      "tested_reference_transport": "public GitHub raw URL",
+      "tested_duration_seconds": [5],
+      "tested_ratio": ["16:9"]
+    },
+    "first_last_frame": {
+      "state": "documented_candidate",
+      "evidence": ["Volcano Engine developer-community implementation material"],
+      "e2e": false,
+      "notes": "Core Ark API explicitly supports return_last_frame for output chaining, but that does not itself prove explicit first+last-frame input-role support for this exact model."
+    },
+    "native_audio_output": {
+      "state": "not_observed_in_tested_T2V_or_I2V_samples",
+      "evidence": ["D-003 media inspection", "D-006 media inspection"],
+      "observed_media": "video-only MP4 in both tested modes"
+    }
+  },
+  "api_surface_and_product_facts": {
+    "core_api_exact_model_example": "Ark CreateContentsGenerationsTasks uses doubao-seedance-1-0-pro-250528 as the model example and shows text + image_url input.",
+    "return_last_frame": "documented API-surface control for returning a PNG final frame and chaining multiple continuous videos",
+    "product_positioning": ["1080P high-definition video", "multi-shot narrative capability"],
+    "epistemic_limit": "Product positioning is not a Q-level guarantee of multi-shot adherence on every prompt."
+  },
+  "duration_and_output_domain": {
+    "text_to_video": {
+      "5_seconds": "E2E",
+      "maximum_seconds": null,
+      "maximum_evidence": "unknown exact Ark model/modal boundary",
+      "notes": "Do not inherit generic wrapper 2-12s range as exact-model proof. Legacy/other-platform materials showing 5s/10s are contextual evidence only."
+    },
+    "single_image_to_video": {
+      "5_seconds": "E2E",
+      "maximum_seconds": null,
+      "maximum_evidence": "unknown exact I2V boundary"
+    },
+    "observed_resolution": {
+      "t2v": {"reported": "1080p", "encoded_dimensions": "1920x1088", "evidence": "T"},
+      "single_image_i2v": {"reported": "1080p", "encoded_dimensions": "1920x1088", "evidence": "T"},
+      "product_level": "official Volcano Engine commercial material describes Seedance 1.0 Pro as 1080P capable"
+    },
+    "observed_fps": 24,
+    "observed_output_format": "mp4"
   },
   "tested_request_controls": {
     "prompt_suffix_ratio_16_9": "E2E",
@@ -34,10 +81,22 @@
     "sample_visual_observation": "high-level blond muscular fighter / octagon / close combat composition retained; some face/glove/wrist/environment detail drift observed",
     "quality_status": "single-sample reachability only, not Q-level reliability"
   },
+  "prompt_guide_status": {
+    "official_family_guide": "Seedance 1.0 series prompt guide, current docs page updated 2026-07-20",
+    "parsed_detailed_rules": false,
+    "policy": "Multi-shot/camera/action language may be used as candidate handles but is not promoted to reliable strategy without repeated evidence."
+  },
   "epistemic_limits": [
-    "Single-image I2V is now exact current-account E2E, but identity/detail consistency reliability is still probabilistic and unmeasured.",
-    "First-last-frame remains an unexecuted candidate.",
+    "Single-image I2V is exact current-account E2E, but identity/detail consistency reliability is probabilistic and unmeasured.",
+    "First-last-frame input remains an unexecuted candidate even though return_last_frame output chaining is documented at the API level.",
+    "Maximum duration remains modality-specific and unknown beyond the 5-second E2E domain.",
     "Do not promote one latency sample or 1080p/246840-token observations into stable rankings or universal rules."
   ],
+  "production_strategy": {
+    "hard_use": ["5-second T2V", "5-second single-image I2V", "1080P-capable current route as observed"],
+    "candidate_use_requiring_first_probe": ["first+last-frame input", "other duration boundaries"],
+    "continuity_note": "return_last_frame may be used as a documented output mechanism for chaining, but the next-task input semantics still follow the tested single-image path unless explicit first/last roles are separately proven.",
+    "automatic_quality_routing": "not_admitted"
+  },
   "probabilistic_unknowns": ["I2V identity/detail consistency reliability", "first-last-frame behavior", "motion adherence", "camera adherence", "stable latency", "quality ranking versus 1.5 Pro"]
 }
