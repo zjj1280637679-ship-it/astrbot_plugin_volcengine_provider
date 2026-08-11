@@ -48,8 +48,15 @@ def _feature_flag(value: object) -> bool | None:
 
 
 def _normalized_modalities(values: object) -> list[str]:
-    allowed = {"text", "image", "audio", "video"}
-    return [value for value in _dedupe_nonempty(values) if value in allowed]
+    """Preserve every non-empty upstream modality token from this receipt.
+
+    AstrBot 4.26/4.27 currently acts only on the modality names it understands.
+    Filtering here would let today's adapter vocabulary delete information from
+    a future Ark/AstrBot vocabulary, so normalization only deduplicates/cleans
+    strings and leaves interpretation to the current host/UI.
+    """
+
+    return _dedupe_nonempty(values)
 
 
 def normalize_ark_model_metadata(model: object) -> tuple[str, dict[str, Any]]:
@@ -58,7 +65,8 @@ def normalize_ark_model_metadata(model: object) -> tuple[str, dict[str, Any]]:
     Presence and truthiness are deliberately separate. An explicitly returned
     empty modality list is still current feedback and must not be collapsed into
     "field missing", otherwise a stale display value could survive a newer
-    receipt. This remains display feedback, not a model-capability truth claim.
+    receipt. Unknown/future modality tokens are retained rather than interpreted
+    or discarded. This remains feedback, not a model-capability truth claim.
     """
 
     data = _as_mapping(model)
