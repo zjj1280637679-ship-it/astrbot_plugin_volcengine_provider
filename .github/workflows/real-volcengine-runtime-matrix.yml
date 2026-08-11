@@ -1,4 +1,4 @@
-name: Real Volcengine Runtime Matrix
+name: Real Volcengine Protocol Attribution
 
 on:
   workflow_dispatch:
@@ -8,9 +8,7 @@ on:
     paths:
       - .github/workflows/real-volcengine-runtime-matrix.yml
       - tests/e2e/real_volcengine_runtime_matrix.py
-      - tests/e2e/real_ark_audio_candidate.py
       - providers.py
-      - adapters/**
       - capabilities/**
       - metadata/**
 
@@ -30,7 +28,7 @@ jobs:
         shell: bash
         run: |
           if [ -z "$ARK_API_KEY" ]; then
-            echo "HUOSHANYINQINGAPI is unavailable; runtime evidence cannot be collected."
+            echo "HUOSHANYINQINGAPI is unavailable; downstream protocol evidence cannot be collected."
             exit 2
           fi
           echo "Runtime secret is available; value will not be printed."
@@ -41,22 +39,17 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Install AstrBot runtime exactly from v4.27.2
         run: uv sync --directory AstrBot
-      - name: Compile runtime probes
-        run: |
-          python -m py_compile tests/e2e/real_volcengine_runtime_matrix.py
-          python -m py_compile tests/e2e/real_ark_audio_candidate.py
-      - name: Execute raw-vs-plugin runtime attribution matrix
+      - name: Compile downstream attribution probe
+        run: python -m py_compile tests/e2e/real_volcengine_runtime_matrix.py
+      - name: Execute raw-vs-plugin downstream attribution
         shell: bash
         run: |
           mkdir -p "$E2E_ARTIFACT_DIR"
           uv run --directory AstrBot python "$GITHUB_WORKSPACE/tests/e2e/real_volcengine_runtime_matrix.py"
-      - name: Select audio candidate only from current live model feedback
-        shell: bash
-        run: uv run --directory AstrBot python "$GITHUB_WORKSPACE/tests/e2e/real_ark_audio_candidate.py"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: real-volcengine-runtime-matrix
+          name: real-volcengine-protocol-attribution
           path: e2e-artifacts
           if-no-files-found: error
           retention-days: 7
