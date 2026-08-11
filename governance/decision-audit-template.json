@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "decision_id": "D-XXX",
+  "decision": "Describe the concrete action being considered.",
+  "trigger": "What user goal, failure, or new condition caused this decision to be considered?",
+  "rights": {
+    "authorized_by": [],
+    "credentials_or_permissions": [],
+    "asset_rights": [],
+    "scope": "",
+    "invalidators": [],
+    "verdict": "unknown"
+  },
+  "capability": {
+    "required_claim_ids": [],
+    "relation_classes": [],
+    "strongest_evidence": "H",
+    "verified_domain": {},
+    "unverified_assumptions": [],
+    "alternative_existing_paths": [],
+    "verdict": "unknown"
+  },
+  "intent": {
+    "user_goal": "",
+    "why_this_action_serves_the_goal": "",
+    "is_it_necessary": null,
+    "lower_cost_or_lower_risk_equal_effect_options": [],
+    "verdict": "unknown"
+  },
+  "effect": {
+    "expected_state_changes": [],
+    "quota_or_cost": [],
+    "repository_mutations": [],
+    "external_calls": [],
+    "public_or_private_asset_changes": [],
+    "irreversible_effects": [],
+    "cleanup_obligations": [],
+    "useful_output": "",
+    "verdict": "unknown"
+  },
+  "epistemic_review": {
+    "is_this_a_possibility_graph_edge_or_executable_graph_edge": "unknown",
+    "what_exact_claim_is_being_tested_or_used": "",
+    "what_failure_would_falsify": "",
+    "what_failure_would_not_falsify": "",
+    "does_existing_evidence_make_retesting_unnecessary": null,
+    "if_retesting_is_needed_why": ""
+  },
+  "decision_result": "pending"
+}
