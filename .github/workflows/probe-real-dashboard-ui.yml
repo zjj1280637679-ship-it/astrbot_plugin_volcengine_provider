@@ -46,7 +46,7 @@ jobs:
           mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
           rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
           uv run --directory AstrBot astrbot conf set dashboard.username e2e-admin
-          uv run --directory AstrBot astrbot conf set dashboard.password e2e-password
+          uv run --directory AstrBot astrbot conf set dashboard.password E2e-password-123
       - name: Install Playwright Chromium
         run: |
           python -m pip install playwright
@@ -68,7 +68,7 @@ jobs:
         env:
           ASTRBOT_E2E_URL: http://127.0.0.1:6185
           ASTRBOT_E2E_USERNAME: e2e-admin
-          ASTRBOT_E2E_PASSWORD: e2e-password
+          ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
         run: python tests/e2e/provider_card_matrix/browser_probe.py
       - name: Show AstrBot log on failure
