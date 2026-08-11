@@ -33,14 +33,14 @@ jobs:
           end = workflow.index(end_marker, start)
           patcher = textwrap.dedent(workflow[start:end])
 
-          old = '''text = replace_once(
+          acquire_old = '''text = replace_once(
               text,
               '    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL\\n',
               '    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL\\n'
               '    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL\\n',
               'acquire source global',
           )'''
-          new = '''old_global = '    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL\\n'
+          acquire_new = '''old_global = '    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL\\n'
           if text.count(old_global) != 2:
               raise SystemExit(f'acquire/release source global count={text.count(old_global)}')
           text = text.replace(
@@ -48,9 +48,36 @@ jobs:
               old_global + '    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL\\n',
               1,
           )'''
-          if patcher.count(old) != 1:
-              raise SystemExit(f'v1 acquire block count={patcher.count(old)}')
-          patcher = patcher.replace(old, new)
+          if patcher.count(acquire_old) != 1:
+              raise SystemExit(f'v1 acquire block count={patcher.count(acquire_old)}')
+          patcher = patcher.replace(acquire_old, acquire_new)
+
+          release_old = '''# release has the same global line a second time; replace the remaining occurrence.
+          old_global = '    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL\\n'
+          if text.count(old_global) != 1:
+              raise SystemExit(f'release source global remaining count={text.count(old_global)}')
+          text = text.replace(
+              old_global,
+              old_global + '    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL\\n',
+          )'''
+          release_new = '''# Release is targeted by function boundary; the acquire line still contains
+          # the same original text after its extra global declaration is inserted.
+          release_marker = '\\ndef release_owned_dashboard_bridge() -> None:\\n'
+          if text.count(release_marker) != 1:
+              raise SystemExit(f'release function marker count={text.count(release_marker)}')
+          before_release, release_tail = text.split(release_marker, 1)
+          if release_tail.count(old_global) != 1:
+              raise SystemExit(f'release scoped global count={release_tail.count(old_global)}')
+          release_tail = release_tail.replace(
+              old_global,
+              old_global + '    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL\\n',
+              1,
+          )
+          text = before_release + release_marker + release_tail'''
+          if patcher.count(release_old) != 1:
+              raise SystemExit(f'v1 release block count={patcher.count(release_old)}')
+          patcher = patcher.replace(release_old, release_new)
+
           exec(compile(patcher, '<source-hint-patcher-v2>', 'exec'), {})
           PY
 
