@@ -14,10 +14,12 @@ from typing import Any
 from astrbot.core.agent.message import ContentPart, TextPart
 from astrbot.core.utils.media_utils import MediaResolver
 
+from .errors import AdapterInputTransportError
+
 # AstrBot currently represents an incoming video as a framework-generated
 # TextPart because ProviderRequest has no video_urls field. Match only the
 # exact framework envelope, and only when the same TextPart is present in
-# extra_user_content_parts for the current request.  This prevents ordinary
+# extra_user_content_parts for the current request. This prevents ordinary
 # chat text that happens to look like a local path from becoming file access.
 VIDEO_ATTACHMENT_PATTERN = re.compile(
     r"^\[Video Attachment(?: in quoted message)?: "
@@ -32,7 +34,7 @@ def _video_attachments_from_current_request(
     """Return trusted ``(marker_text, media_ref)`` pairs for this request.
 
     The trust boundary is the ContentPart list assembled by AstrBot and passed
-    separately from the user's prompt.  Context history alone is deliberately
+    separately from the user's prompt. Context history alone is deliberately
     insufficient because a user can type arbitrary text that resembles an
     attachment marker.
     """
@@ -70,8 +72,13 @@ def _replace_last_text_block(
                 return True
     return False
 
+
 async def resolve_video_reference(media_ref: str) -> str:
-    """Resolve one trusted AstrBot video reference for Ark Chat Completions."""
+    """Resolve one trusted AstrBot video reference for Ark Chat Completions.
+
+    Failures here are transport evidence only: no valid Ark request has reached
+    the model, so model capability remains unknown.
+    """
 
     normalized = media_ref.strip()
     if normalized.startswith(("http://", "https://", "data:video/")):
@@ -87,28 +94,19 @@ async def resolve_video_reference(media_ref: str) -> str:
             default_mime_type="video/mp4",
         )
     except Exception as exc:
-        raise ValueError(
-            "无法读取本次视频附件，未向火山方舟发送降级后的纯文本请求。"
+        raise AdapterInputTransportError(
+            "无法读取本次视频附件，未向火山方舟发送请求。",
+            media_type="video",
+            stage="resolve_media",
         ) from exc
 
     if media is None or not media.mime_type.startswith("video/"):
-        raise ValueError(
-            "视频附件没有可识别的视频 MIME 类型，未向火山方舟发送请求。"
+        raise AdapterInputTransportError(
+            "视频附件没有可识别的视频 MIME 类型，未向火山方舟发送请求。",
+            media_type="video",
+            stage="validate_media",
         )
     return media.to_data_url()
-
-
-def resolve_video_input_enabled(
-    provider_config: dict,
-    video_input_config_key: str,
-) -> bool:
-    """Resolve the Source-owned video switch, retaining only legacy fallback."""
-
-    explicit = provider_config.get(video_input_config_key)
-    if isinstance(explicit, bool):
-        return explicit
-    modalities = provider_config.get("modalities")
-    return isinstance(modalities, list) and "video" in modalities
 
 
 async def inject_current_request_videos(
@@ -130,9 +128,10 @@ async def inject_current_request_videos(
                 marker_text,
                 {"type": "text", "text": "[Video]"},
             ):
-                raise ValueError(
-                    "AstrBot 已声明视频附件，但当前请求中找不到对应内容块；"
-                    "本次请求已停止。"
+                raise AdapterInputTransportError(
+                    "AstrBot 已声明视频附件，但当前请求中找不到对应内容块；本次请求已停止。",
+                    media_type="video",
+                    stage="assemble_payload",
                 )
         return
 
@@ -153,8 +152,9 @@ async def inject_current_request_videos(
     # Replace from the tail so a user-typed lookalike remains ordinary text.
     for marker_text, replacement in reversed(replacements):
         if not _replace_last_text_block(messages, marker_text, replacement):
-            raise ValueError(
+            raise AdapterInputTransportError(
                 "AstrBot 已声明视频附件，但当前请求中找不到对应内容块；"
-                "为避免静默丢视频，本次请求已停止。"
+                "为避免静默丢视频，本次请求已停止。",
+                media_type="video",
+                stage="assemble_payload",
             )
-

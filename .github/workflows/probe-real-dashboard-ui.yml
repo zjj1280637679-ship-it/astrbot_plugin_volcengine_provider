@@ -1,0 +1,130 @@
+name: 0.1.16 Real AstrBot Dashboard Reachability Evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/probe-real-dashboard-ui.yml
+      - tests/e2e/provider_card_matrix/browser_probe.py
+      - tests/test_model_card_ui_scope.py
+      - tests/test_dashboard_save_boundary.py
+      - tests/test_dashboard_bridge_compat.py
+      - registry.py
+      - providers.py
+      - capabilities/**
+      - docs/ENGINEERING_METHODOLOGY.md
+      - docs/EVIDENCE_LEVELS.md
+      - docs/TEST_BOUNDARIES.md
+      - docs/KNOWLEDGE_BOUNDARY.md
+      - docs/REGRESSION_SCOPE.md
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: git clone --depth 1 --branch v4.27.2 https://github.com/AstrBotDevs/AstrBot.git AstrBot
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --directory AstrBot
+      - name: Setup pnpm exactly as AstrBot v4.27.2 Dashboard CI
+        uses: pnpm/action-setup@v6.0.9
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.13.0'
+          cache: pnpm
+          cache-dependency-path: AstrBot/dashboard/pnpm-lock.yaml
+      - name: Build AstrBot Dashboard
+        working-directory: AstrBot/dashboard
+        run: pnpm install --frozen-lockfile && pnpm run build
+      - name: Install built Dashboard into AstrBot package
+        run: |
+          mkdir -p AstrBot/astrbot/dashboard/dist
+          rsync -a --delete AstrBot/dashboard/dist/ AstrBot/astrbot/dashboard/dist/
+          mkdir -p AstrBot/astrbot/dashboard/dist/assets
+          printf '4.27.2' > AstrBot/astrbot/dashboard/dist/assets/version
+      - name: Initialize AstrBot and install plugin
+        run: |
+          uv run --directory AstrBot astrbot init -y
+          mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
+          rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
+          uv run --directory AstrBot astrbot conf set dashboard.username e2e-admin
+          uv run --directory AstrBot astrbot conf set dashboard.password E2e-password-123
+      - name: Capture secret-free pre-run evidence
+        run: |
+          mkdir -p e2e-artifacts
+          find AstrBot/data/plugins/astrbot_plugin_volcengine_provider -maxdepth 3 -type f -printf '%P\n' | sort > e2e-artifacts/plugin-tree.txt
+          test -f AstrBot/data/plugins/astrbot_plugin_volcengine_provider/main.py
+          test -f AstrBot/data/plugins/astrbot_plugin_volcengine_provider/metadata.yaml
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          source = Path('AstrBot/data/cmd_config.json')
+          target = Path('e2e-artifacts/config-before-run.redacted.json')
+          data = json.loads(source.read_text(encoding='utf-8-sig'))
+
+          def redact(value, key=''):
+              lowered = key.lower()
+              if any(word in lowered for word in ('password', 'secret', 'token', 'api_key', 'apikey', 'key')):
+                  return '<redacted>'
+              if isinstance(value, dict):
+                  return {k: redact(v, str(k)) for k, v in value.items()}
+              if isinstance(value, list):
+                  return [redact(item, key) for item in value]
+              return value
+
+          target.write_text(json.dumps(redact(data), ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
+          PY
+      - name: Install Playwright Chromium
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Start AstrBot and verify plugin runtime
+        run: |
+          nohup uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-e2e.log 2>&1 &
+          echo $! >/tmp/astrbot-e2e.pid
+          ready=0
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:6185/ >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          cp /tmp/astrbot-e2e.log e2e-artifacts/startup.log || true
+          if [ "$ready" != "1" ]; then
+            cat /tmp/astrbot-e2e.log
+            exit 1
+          fi
+          grep -E 'Loading plugin astrbot_plugin_volcengine_provider|Plugin astrbot_plugin_volcengine_provider|Volcengine providers registered' /tmp/astrbot-e2e.log > e2e-artifacts/plugin-runtime.log
+          grep -q 'Volcengine providers registered' /tmp/astrbot-e2e.log
+      - name: Collect real Dashboard presentation evidence
+        env:
+          ASTRBOT_E2E_URL: http://127.0.0.1:6185
+          ASTRBOT_E2E_USERNAME: e2e-admin
+          ASTRBOT_E2E_PASSWORD: E2e-password-123
+          ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
+        run: python tests/e2e/provider_card_matrix/browser_probe.py
+      - name: Capture final AstrBot log
+        if: always()
+        run: cp /tmp/astrbot-e2e.log e2e-artifacts/startup.log || true
+      - name: Show AstrBot log on hard failure
+        if: failure()
+        run: cat /tmp/astrbot-e2e.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-dashboard-ui-evidence
+          path: e2e-artifacts
+          if-no-files-found: error

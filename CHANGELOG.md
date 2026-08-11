@@ -1,5 +1,31 @@
 # 更新记录
 
+## 0.1.16
+
+- 将 0.1.15 的能力/反馈边界收敛为可发布状态：继续把 `volcengine_video_input_enabled` 定义为逐模型卡**请求传输开关**，不写入 AstrBot `modalities`，也不把开关、图标、`/models` 回执或一次运行结果升级成模型永久能力事实。
+- 明确“交互不等于判断”：组件可以有足够信息完成接收、翻译、发送或展示，却仍没有足够信息或权限做全局能力裁决；新增 `docs/KNOWLEDGE_BOUNDARY.md` 与 `docs/AI_RULES.md` 固化该认识论边界。
+- 新增 `docs/TEST_HISTORY.md` 与 `docs/REGRESSION_SCOPE.md`：历史 QQ 音频/视频验证不会因为本版没有重复跑同一条高成本链路而被遗忘；只有媒体 adapter、AstrBot MediaResolver/媒体契约、Ark 音视频 payload 或 QQ/NapCat 输入语义发生相关变化时，才要求完整 QQ 等价链重验。
+- 明确裸供应商测试的权限边界：raw Ark 请求用于下游协议归因，不能替代 `QQ -> NapCat/OneBot -> AstrBot -> MediaResolver -> plugin adapter -> Ark/model` 的产品链；禁止为了让不等价的 WAV/MP4 fixture 变绿而放宽生产代码，避免出现“CI 可用但 QQ 不可用”。
+- 普通 Ark 真实运行证据升级为 raw-vs-plugin 对照：当前账户的 `/models`（一次观测返回 129 项）、文本和同字节 PNG 图片路径均完成对照；这些结果作为当前 L5 运行证据保存，不写成永久模型能力表。
+- 当前普通 Ark 凭据调用 Agent Plan 时，raw 与插件路径同时落在同一认证/账户边界，因此只记录为凭据/账户前提，不据此修改 Provider 生产逻辑，也不把失败归因为模型能力。
+- Dashboard 精细 Playwright 卡片矩阵不再作为发布硬门槛：保留真实 AstrBot 生产 Dashboard 构建、登录、Provider 页面可达的粗粒度 L4 证据，以及截图/DOM/可见文本证据采集；避免把欢迎弹窗、显示标签、固定 Source ID 或 Vuetify selector 等测试夹具假设误报成插件故障。
+- 完善 AI/项目可解释性入口：`AGENTS.md`、`docs/AI_ONBOARDING.md`、`docs/PROJECT_STATE.json`、`docs/DECISION_INDEX.json`、ADR、证据等级与测试边界共同暴露“客观条件 -> 目标 -> 当前策略 -> 历史证据 -> 重新验证条件”，但这些文件仍是解释钩子，不是运行时控制面。
+- 本版本没有重新定义已实现的 QQ 音频/视频产品接口；媒体路径按影响分析继承既有验证资产。若未来修改 `adapters/audio.py`、`adapters/video.py`、相关宿主 hook 或媒体依赖，则必须按 `REGRESSION_SCOPE.md` 重新跑对应 QQ 等价链。
+
+## 0.1.15
+
+- `/models` 模态反馈不再过滤到当前插件认识的 `text/image/audio/video` 枚举：上游未来新增的非空模态 token 会作为本轮信息原样保留，由当前 AstrBot 自然忽略或由未来宿主解释；今天的适配器不替未来删除信息。
+- 修复共享模型卡 schema 的 UI 外溢风险：不再把 `volcengine_video_input_enabled` 作为无条件公共 schema 项暴露；改为按火山 Source 的 `provider_source_id` 生成临时条件字段，使用 Source ID 的 UTF-8→hex 可逆无碰撞编码，保存边界转换回正式字段并删除，外国 Provider 无可见字段也不能用伪造临时键生成火山状态。
+- 普通 Ark 动态反馈改为单次实时回执：请求前清理旧值，使用 `ContextVar` 隔离并发模型列表请求，Dashboard 读取一次即消费；当前回执明确字段只覆盖本次 Source 响应中的同名旧展示值，不写入全局 `LLM_METADATAS`，历史回执不能压过新回执。
+- 新增 `AdapterInputTransportError` 区分本地媒体传递/归一化/Ark payload 组装失败与上游模型回执；前者明确 `reached_model=false`、`capability_observed=null`，只说明输入链路没送达，不作为模型不支持模态的证据，也不由插件自行决定 fallback。
+- 新增 `capabilities/SEMANTICS.json` 机器可读语义契约：允许未来新增能力发现与反馈来源，但必须声明来源、时效和权限，禁止把当前无反馈、历史回执或裸 model ID 升格成永久模型事实。
+- 修正供应商适配能力与模型能力反馈的边界：视频设置改为逐模型卡 `volcengine_video_input_enabled` 请求传输开关，不再存放在 Provider Source，也不读写 AstrBot `modalities`；开关只决定是否尝试发送 `video_url`，不是模型支持/不支持视频的结论。
+- 兼容迁移旧 `volcengine_ark_video_input`、`volcengine_agent_plan_video_input`、`volcengine_model_video_input` 以及旧插件曾写入的 `modalities: video`，但迁移只生成新的插件传输字段，绝不删除或改写宿主 `modalities`。
+- 普通 Ark `/models` 改为 Source-scoped 实时稀疏反馈：缺失字段保持“未反馈”，显式 `False`、显式空列表与显式整数 `0` 都作为本轮信息保留；当前回执只在本次 Source 响应中替换同名旧展示值，未回执字段保持宿主管理，并且绝不写入全局 `LLM_METADATAS[model_id]`。
+- Agent Plan 保留控制台可见 model-name 候选与 `agentplan/` 本地命名空间，但删除按豆包、DeepSeek、GLM、Kimi、MiniMax 等 model ID 预填能力的静态表；模型能力变化无需等待本插件升级。
+- 保留 0.1.14 已完成的 `adapters/audio.py`、`adapters/video.py`、结构化日志脱敏和 side-effect-free package import；本版只纠正能力/反馈策略，不把媒体生命周期重新塞回 Provider。
+- 主模型、fallback、重试、图片/音频/工具能力反馈仍完全归 AstrBot；火山上游对某模态的接受或拒绝属于有效运行反馈，插件不自行换模型。
+
 ## 0.1.14
 
 - 在 0.1.13“宿主负责生命周期、插件负责火山协议差异”的职责审计基础上继续做纯结构整理，不新增 retry、Key 轮换、媒体下载器、第二模型或独立 Provider 生命周期。

@@ -1,7 +1,13 @@
-"""Plugin-owned registration and provider-schema extensions."""
+"""Plugin-owned Provider registration and narrow AstrBot Dashboard bridge.
+
+Dashboard integration is capability-detected at runtime. Missing optional
+Dashboard APIs may reduce UI/feedback integration, but must never prevent the
+Provider adapters themselves from registering or loading.
+"""
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 from typing import Any
 
@@ -11,31 +17,148 @@ from astrbot.core.provider.register import (
     register_provider_adapter,
 )
 
+from .capabilities import (
+    AGENT_PLAN_PROVIDER_TYPE,
+    ARK_PROVIDER_TYPE,
+    OWNED_SOURCE_TYPES,
+    VIDEO_INPUT_ENABLED_KEY,
+    cleanup_owned_settings_on_source_change,
+    consume_source_model_hints,
+    normalize_owned_model_card_for_save,
+    source_types,
+    video_input_enabled,
+)
+
 PLUGIN_MODULE_MARKER = "astrbot_plugin_volcengine_provider"
 
-ARK_PROVIDER_TYPE = "volcengine_ark_chat_completion"
-AGENT_PLAN_PROVIDER_TYPE = "volcengine_agent_plan_chat_completion"
-# AstrBot does not yet expose video as a native provider modality. Keep the
-# provider-owned switch scoped to each Volcengine source; old model cards that
-# saved ``video`` in ``modalities`` remain readable as a compatibility fallback.
-ARK_VIDEO_INPUT_KEY = "volcengine_ark_video_input"
-AGENT_PLAN_VIDEO_INPUT_KEY = "volcengine_agent_plan_video_input"
+# AstrBot 4.26/4.27 exposes one shared model-card schema.  A canonical plugin
+# field added there without a condition would be rendered on foreign Provider
+# cards too.  These keys exist only in Dashboard payloads and are stripped at
+# the save boundary; one condition-scoped key is generated per owned Source.
+_VIDEO_UI_KEY_PREFIX = "_volcengine_video_transport_ui_"
+_SOURCE_TRANSPORT_UI_HINT = (
+    "视频请求通道是逐模型卡的请求转发设置，不是模型能力结论。"
+    "如果当前 AstrBot Dashboard 在新建模型卡时未显示该开关，请先保存模型卡，"
+    "再点击该模型卡进入编辑设置；若未来 Dashboard 已在新建页直接显示，可直接在那里设置。"
+)
 
-_SCHEMA_LEASE_COUNT = 0
-_SCHEMA_WRAPPER: Callable[..., dict[str, Any]] | None = None
-_SCHEMA_ORIGINAL: Callable[..., dict[str, Any]] | None = None
+_DASHBOARD_LEASE_COUNT = 0
+_SCHEMA_WRAPPER: Callable[..., Any] | None = None
+_SCHEMA_ORIGINAL: Callable[..., Any] | None = None
+_MODELS_WRAPPER: Callable[..., Any] | None = None
+_MODELS_ORIGINAL: Callable[..., Any] | None = None
+_CREATE_WRAPPER: Callable[..., Any] | None = None
+_CREATE_ORIGINAL: Callable[..., Any] | None = None
+_UPDATE_WRAPPER: Callable[..., Any] | None = None
+_UPDATE_ORIGINAL: Callable[..., Any] | None = None
+_SOURCE_UPSERT_WRAPPER: Callable[..., Any] | None = None
+_SOURCE_UPSERT_ORIGINAL: Callable[..., Any] | None = None
 
 
-def _inject_volcengine_video_control_fields(
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    """Expose only Volcengine-owned video switches in AstrBot's shared schema.
+def _video_ui_key(source_id: str) -> str:
+    """Return a reversible non-persistent UI key for one Source ID.
 
-    AstrBot 4.27 has no provider-specific schema-extension registry and its
-    native ``modalities`` axis stops at text/image/audio/tool_use. Injecting a
-    fifth common modality would affect every provider card. Instead, add two
-    boolean field definitions; AstrBotConfig renders them only on Volcengine
-    source templates that actually contain the corresponding key.
+    UTF-8 hex is injective for Python strings after UTF-8 encoding, unlike a
+    truncated hash.  The longer key exists only in a Dashboard response and is
+    removed before persistence.
+    """
+
+    encoded = source_id.encode("utf-8").hex()
+    return f"{_VIDEO_UI_KEY_PREFIX}{encoded}"
+
+
+def _strip_video_ui_keys(provider_config: dict[str, Any]) -> None:
+    """Remove every Dashboard-only transport field before host persistence."""
+
+    for key in [
+        key
+        for key in provider_config
+        if isinstance(key, str) and key.startswith(_VIDEO_UI_KEY_PREFIX)
+    ]:
+        provider_config.pop(key, None)
+
+
+def _inject_owned_source_transport_hint(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project a current UI-path hint onto owned Sources only.
+
+    AstrBot V4 builds new Sources from ``config_schema.provider.config_template``
+    and existing Sources from ``provider_sources``. Both collections are copied
+    before mutation. Existing host/user hints are preserved rather than overwritten.
+    """
+
+    # New Sources are built from config_schema.provider.config_template.
+    config_schema = payload.get("config_schema")
+    provider_schema = config_schema.get("provider") if isinstance(config_schema, dict) else None
+    templates = provider_schema.get("config_template") if isinstance(provider_schema, dict) else None
+    if isinstance(templates, dict):
+        copied_templates = copy.deepcopy(templates)
+        provider_schema["config_template"] = copied_templates
+        for template in copied_templates.values():
+            if not isinstance(template, dict):
+                continue
+            source_type = str(template.get("type") or "").strip()
+            if source_type not in OWNED_SOURCE_TYPES:
+                continue
+            if not template.get("hint"):
+                template["hint"] = _SOURCE_TRANSPORT_UI_HINT
+
+    provider_sources = payload.get("provider_sources")
+    if not isinstance(provider_sources, list):
+        return payload
+
+    copied_sources = copy.deepcopy(provider_sources)
+    payload["provider_sources"] = copied_sources
+    types = source_types({"provider_sources": copied_sources})
+    for source in copied_sources:
+        if not isinstance(source, dict):
+            continue
+        source_id = str(source.get("id") or "").strip()
+        if not source_id or types.get(source_id) not in OWNED_SOURCE_TYPES:
+            continue
+        if not source.get("hint"):
+            source["hint"] = _SOURCE_TRANSPORT_UI_HINT
+    return payload
+
+
+def _strip_source_transport_hint(source_config: dict[str, Any]) -> None:
+    """Remove only this plugin's short-lived explanatory Source hint."""
+
+    if source_config.get("hint") == _SOURCE_TRANSPORT_UI_HINT:
+        source_config.pop("hint", None)
+
+
+def _apply_video_ui_transport_setting(
+    provider_config: dict[str, Any],
+    provider_sources: list[dict[str, Any]] | object,
+) -> None:
+    """Translate the current Source's short-lived UI value to the canonical key.
+
+    This is user configuration transport, not model-capability discovery.  UI
+    values from foreign Sources are discarded rather than being promoted into
+    plugin state.
+    """
+
+    source_id = str(provider_config.get("provider_source_id") or "").strip()
+    types = source_types({"provider_sources": provider_sources}) if isinstance(
+        provider_sources, list
+    ) else {}
+    if source_id and types.get(source_id) in OWNED_SOURCE_TYPES:
+        ui_value = provider_config.get(_video_ui_key(source_id))
+        if isinstance(ui_value, bool):
+            # The visible UI value is the user's newest edit, so it intentionally
+            # outranks the hidden canonical value copied into an edit response.
+            provider_config[VIDEO_INPUT_ENABLED_KEY] = ui_value
+    _strip_video_ui_keys(provider_config)
+
+
+def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
+    """Expose Source-conditioned transport toggles only on owned model cards.
+
+    AstrBot's V4 renderer shows every schema item without a ``condition``.  A
+    single canonical field would therefore leak into unrelated Provider cards.
+    Instead, create one Dashboard-only field per currently configured owned
+    Source, conditioned on that card's ``provider_source_id``.  The save bridge
+    converts it back to ``volcengine_video_input_enabled`` and strips the UI key.
     """
 
     try:
@@ -45,79 +168,410 @@ def _inject_volcengine_video_control_fields(
     if not isinstance(items, dict):
         return payload
 
-    items.setdefault(
-        ARK_VIDEO_INPUT_KEY,
-        {
-            "description": "视频输入",
-            "type": "bool",
-            "hint": "仅控制火山方舟普通 API 的视频附件输入；关闭时视频会保留为 [Video] 文本占位。",
-            "condition": {"type": ARK_PROVIDER_TYPE},
-        },
-    )
-    items.setdefault(
-        AGENT_PLAN_VIDEO_INPUT_KEY,
-        {
-            "description": "视频输入",
-            "type": "bool",
-            "hint": "仅控制火山方舟 Agent Plan 的视频附件输入；关闭时视频会保留为 [Video] 文本占位。",
-            "condition": {"type": AGENT_PLAN_PROVIDER_TYPE},
-        },
-    )
+    types = source_types(payload)
+    owned_source_ids = [
+        source_id
+        for source_id, source_type in types.items()
+        if source_type in OWNED_SOURCE_TYPES
+    ]
+
+    for source_id in owned_source_ids:
+        ui_key = _video_ui_key(source_id)
+        items.setdefault(
+            ui_key,
+            {
+                "description": "视频请求通道（当前模型卡）",
+                "type": "bool",
+                "hint": (
+                    "仅控制火山适配器是否按 Ark video_url 协议尝试发送本轮视频；"
+                    "不是模型能力结论。关闭时保留 [Video] 文本占位。"
+                ),
+                "condition": {"provider_source_id": source_id},
+            },
+        )
+
+    providers = payload.get("providers", [])
+    if not isinstance(providers, list):
+        return payload
+    for provider in providers:
+        if not isinstance(provider, dict):
+            continue
+        source_id = str(provider.get("provider_source_id") or "").strip()
+        if types.get(source_id) not in OWNED_SOURCE_TYPES:
+            continue
+        # Dashboard is a projection, not persistence. AstrBotConfig fallback-renders
+        # unknown iterable keys, so the canonical key must not be returned here.
+        # Carry only its value through the short-lived Source-scoped UI switch;
+        # save wrappers translate that switch back to the canonical persistence key.
+        current_value = video_input_enabled(provider)
+        provider.pop(VIDEO_INPUT_ENABLED_KEY, None)
+        provider[_video_ui_key(source_id)] = current_value
     return payload
 
 
-def acquire_owned_provider_schema() -> None:
-    """Install one reversible adapter on AstrBot's provider-schema service."""
+def _is_owned_source(service: Any, source_id: str) -> bool:
+    config = getattr(service, "config", {})
+    types = source_types(config if hasattr(config, "get") else {})
+    return types.get(source_id) in OWNED_SOURCE_TYPES
 
-    global _SCHEMA_LEASE_COUNT, _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL
-    if _SCHEMA_LEASE_COUNT:
-        _SCHEMA_LEASE_COUNT += 1
+
+def _merge_source_feedback(base: object, hint: object) -> dict[str, Any]:
+    """Overlay one *current* Ark receipt onto one Dashboard response only.
+
+    This function does not mutate AstrBot's process-global metadata.  Fields
+    absent from the current receipt remain AstrBot-owned.  Fields explicitly
+    present in the current receipt replace the same display field for this
+    Source response, including explicit ``False`` and current modality lists;
+    otherwise stale information would outrank a newer receipt.
+    """
+
+    merged = copy.deepcopy(base) if isinstance(base, dict) else {}
+    if not isinstance(hint, dict):
+        return merged
+
+    for key, value in hint.items():
+        if key == "modalities" and isinstance(value, dict):
+            current = merged.get("modalities")
+            if not isinstance(current, dict):
+                current = {}
+            else:
+                current = copy.deepcopy(current)
+            for direction in ("input", "output"):
+                if direction in value and isinstance(value[direction], list):
+                    current[direction] = copy.deepcopy(value[direction])
+            merged["modalities"] = current
+            continue
+
+        if key == "limit" and isinstance(value, dict):
+            current = merged.get("limit")
+            if not isinstance(current, dict):
+                current = {}
+            else:
+                current = copy.deepcopy(current)
+            for name, incoming in value.items():
+                current[name] = copy.deepcopy(incoming)
+            merged["limit"] = current
+            continue
+
+        # ``False`` is still a live feedback value.  Do not use truthiness or
+        # preserve an older host/display value over an explicit current receipt.
+        merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def _overlay_source_scoped_model_hints(
+    service: Any,
+    source_id: str,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    models = [str(model) for model in result.get("models", []) or []]
+
+    # Consume first even when the Source changed ownership between get_models()
+    # and this wrapper.  The mailbox is current-call data, never reusable history.
+    hints = consume_source_model_hints(source_id, models)
+    if not _is_owned_source(service, source_id) or not hints:
+        return result
+
+    metadata = result.setdefault("model_metadata", {})
+    if not isinstance(metadata, dict):
+        return result
+    for model_id, hint in hints.items():
+        metadata[model_id] = _merge_source_feedback(metadata.get(model_id), hint)
+    return result
+
+
+def _unwrap_owned_wrapper(
+    candidate: object,
+    *,
+    marker: str,
+    original: str,
+) -> Callable[..., Any] | None:
+    """Return an unwrapped host method, or None when that API is unavailable."""
+
+    if not callable(candidate):
+        return None
+    if getattr(candidate, marker, False):
+        unwrapped = getattr(candidate, original, None)
+        return unwrapped if callable(unwrapped) else None
+    return candidate
+
+
+def _provider_sources_for_service(service: Any) -> list[dict[str, Any]]:
+    config = getattr(service, "config", {})
+    if not hasattr(config, "get"):
+        return []
+    sources = config.get("provider_sources", [])
+    return sources if isinstance(sources, list) else []
+
+
+def _existing_provider_config(service: Any, provider_id: str) -> dict[str, Any]:
+    """Read one persisted model card without requiring a specific manager API."""
+
+    manager = getattr(service, "provider_manager", None)
+    getter = getattr(manager, "get_provider_config_by_id", None)
+    if callable(getter):
+        existing = getter(provider_id)
+        if isinstance(existing, dict):
+            return existing
+
+    config = getattr(service, "config", {})
+    providers = config.get("provider", []) if hasattr(config, "get") else []
+    if isinstance(providers, list):
+        for provider in providers:
+            if not isinstance(provider, dict):
+                continue
+            if str(provider.get("id") or "") == provider_id:
+                return provider
+    return {}
+
+
+def acquire_owned_dashboard_bridge() -> bool:
+    """Install only Dashboard wrappers supported by this AstrBot build.
+
+    The Provider adapters are the required feature. Dashboard model feedback is
+    independent.  The per-model transport UI is installed only when schema,
+    create and update hooks are all available, so the plugin never exposes a UI
+    control whose save semantics it cannot complete.
+    """
+
+    global _DASHBOARD_LEASE_COUNT
+    global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
+    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL
+    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL
+
+    if _DASHBOARD_LEASE_COUNT:
+        _DASHBOARD_LEASE_COUNT += 1
+        return True
+
+    try:
+        from astrbot.dashboard.services.config_service import ProviderConfigService
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+    schema_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "get_provider_schema", None),
+        marker="_volcengine_provider_schema_wrapper",
+        original="_volcengine_provider_schema_original",
+    )
+    models_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "list_provider_source_models", None),
+        marker="_volcengine_source_models_wrapper",
+        original="_volcengine_source_models_original",
+    )
+    create_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "create_provider", None),
+        marker="_volcengine_model_save_wrapper",
+        original="_volcengine_model_save_original",
+    )
+    update_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "update_provider", None),
+        marker="_volcengine_model_save_wrapper",
+        original="_volcengine_model_save_original",
+    )
+    source_upsert_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "upsert_provider_source", None),
+        marker="_volcengine_source_save_wrapper",
+        original="_volcengine_source_save_original",
+    )
+
+    installed = False
+    can_install_transport_ui = (
+        schema_current is not None
+        and create_current is not None
+        and update_current is not None
+    )
+    can_install_source_hint = (
+        can_install_transport_ui and source_upsert_current is not None
+    )
+
+    if can_install_transport_ui:
+        def schema_wrapper(self) -> dict[str, Any]:
+            result = _inject_model_card_video_control(schema_current(self))
+            if can_install_source_hint:
+                result = _inject_owned_source_transport_hint(result)
+            return result
+
+        schema_wrapper._volcengine_provider_schema_wrapper = True  # type: ignore[attr-defined]
+        schema_wrapper._volcengine_provider_schema_original = schema_current  # type: ignore[attr-defined]
+        ProviderConfigService.get_provider_schema = schema_wrapper  # type: ignore[method-assign]
+        _SCHEMA_ORIGINAL, _SCHEMA_WRAPPER = schema_current, schema_wrapper
+        installed = True
+
+    if models_current is not None:
+        async def models_wrapper(self, source_id: str) -> dict[str, Any]:
+            result = await models_current(self, source_id)
+            if not isinstance(result, dict):
+                # Consume any current-call handoff even if a custom AstrBot build
+                # returns an unexpected shape; never leave it as future history.
+                consume_source_model_hints(source_id)
+                return result
+            return _overlay_source_scoped_model_hints(self, source_id, result)
+
+        models_wrapper._volcengine_source_models_wrapper = True  # type: ignore[attr-defined]
+        models_wrapper._volcengine_source_models_original = models_current  # type: ignore[attr-defined]
+        ProviderConfigService.list_provider_source_models = models_wrapper  # type: ignore[method-assign]
+        _MODELS_ORIGINAL, _MODELS_WRAPPER = models_current, models_wrapper
+        installed = True
+
+    if can_install_transport_ui:
+        async def create_wrapper(
+            self,
+            config: dict[str, Any],
+            source_id: str | None = None,
+        ) -> None:
+            normalized = dict(config)
+            if source_id:
+                normalized["provider_source_id"] = source_id
+            sources = _provider_sources_for_service(self)
+            _apply_video_ui_transport_setting(normalized, sources)
+            normalize_owned_model_card_for_save(
+                normalized,
+                sources,
+                default_enabled=False,
+            )
+            await create_current(self, normalized, source_id)
+
+        create_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
+        create_wrapper._volcengine_model_save_original = create_current  # type: ignore[attr-defined]
+        ProviderConfigService.create_provider = create_wrapper  # type: ignore[method-assign]
+        _CREATE_ORIGINAL, _CREATE_WRAPPER = create_current, create_wrapper
+        installed = True
+
+        async def update_wrapper(
+            self,
+            provider_id: str,
+            config: dict[str, Any],
+        ) -> None:
+            normalized = dict(config)
+            existing = _existing_provider_config(self, provider_id)
+            if (
+                not normalized.get("provider_source_id")
+                and existing.get("provider_source_id")
+            ):
+                normalized["provider_source_id"] = existing["provider_source_id"]
+
+            sources = _provider_sources_for_service(self)
+            types = source_types({"provider_sources": sources})
+            old_source_id = str(existing.get("provider_source_id") or "").strip()
+            new_source_id = str(normalized.get("provider_source_id") or "").strip()
+            old_type = types.get(old_source_id, "")
+            new_type = types.get(new_source_id, "")
+
+            cleanup_owned_settings_on_source_change(
+                normalized,
+                old_source_type=old_type,
+                new_source_type=new_type,
+            )
+
+            _apply_video_ui_transport_setting(normalized, sources)
+
+            if (
+                new_type in OWNED_SOURCE_TYPES
+                and VIDEO_INPUT_ENABLED_KEY not in normalized
+                and old_type in OWNED_SOURCE_TYPES
+                and isinstance(existing.get(VIDEO_INPUT_ENABLED_KEY), bool)
+            ):
+                normalized[VIDEO_INPUT_ENABLED_KEY] = existing[
+                    VIDEO_INPUT_ENABLED_KEY
+                ]
+
+            normalize_owned_model_card_for_save(
+                normalized,
+                sources,
+                default_enabled=False,
+            )
+            _strip_video_ui_keys(normalized)
+            await update_current(self, provider_id, normalized)
+
+        update_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
+        update_wrapper._volcengine_model_save_original = update_current  # type: ignore[attr-defined]
+        ProviderConfigService.update_provider = update_wrapper  # type: ignore[method-assign]
+        _UPDATE_ORIGINAL, _UPDATE_WRAPPER = update_current, update_wrapper
+        installed = True
+
+    if can_install_source_hint:
+        async def source_upsert_wrapper(
+            self,
+            source_id: str,
+            config: dict[str, Any],
+        ) -> Any:
+            normalized = dict(config)
+            _strip_source_transport_hint(normalized)
+            return await source_upsert_current(self, source_id, normalized)
+
+        source_upsert_wrapper._volcengine_source_save_wrapper = True  # type: ignore[attr-defined]
+        source_upsert_wrapper._volcengine_source_save_original = source_upsert_current  # type: ignore[attr-defined]
+        ProviderConfigService.upsert_provider_source = source_upsert_wrapper  # type: ignore[method-assign]
+        _SOURCE_UPSERT_ORIGINAL, _SOURCE_UPSERT_WRAPPER = (
+            source_upsert_current,
+            source_upsert_wrapper,
+        )
+        installed = True
+
+    if installed:
+        _DASHBOARD_LEASE_COUNT = 1
+    return installed
+
+
+def release_owned_dashboard_bridge() -> None:
+    global _DASHBOARD_LEASE_COUNT
+    global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
+    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL
+    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL
+
+    if _DASHBOARD_LEASE_COUNT <= 0:
+        return
+    _DASHBOARD_LEASE_COUNT -= 1
+    if _DASHBOARD_LEASE_COUNT:
         return
 
-    from astrbot.dashboard.services.config_service import ProviderConfigService
+    try:
+        from astrbot.dashboard.services.config_service import ProviderConfigService
+    except (ImportError, ModuleNotFoundError):
+        ProviderConfigService = None  # type: ignore[assignment,misc]
 
-    current = ProviderConfigService.get_provider_schema
-    if getattr(current, "_volcengine_provider_schema_wrapper", False):
-        current = getattr(current, "_volcengine_provider_schema_original")
+    if ProviderConfigService is not None:
+        if (
+            _SCHEMA_WRAPPER is not None
+            and getattr(ProviderConfigService, "get_provider_schema", None)
+            is _SCHEMA_WRAPPER
+        ):
+            ProviderConfigService.get_provider_schema = _SCHEMA_ORIGINAL  # type: ignore[method-assign]
+        if (
+            _MODELS_WRAPPER is not None
+            and getattr(ProviderConfigService, "list_provider_source_models", None)
+            is _MODELS_WRAPPER
+        ):
+            ProviderConfigService.list_provider_source_models = _MODELS_ORIGINAL  # type: ignore[method-assign]
+        if (
+            _CREATE_WRAPPER is not None
+            and getattr(ProviderConfigService, "create_provider", None)
+            is _CREATE_WRAPPER
+        ):
+            ProviderConfigService.create_provider = _CREATE_ORIGINAL  # type: ignore[method-assign]
+        if (
+            _UPDATE_WRAPPER is not None
+            and getattr(ProviderConfigService, "update_provider", None)
+            is _UPDATE_WRAPPER
+        ):
+            ProviderConfigService.update_provider = _UPDATE_ORIGINAL  # type: ignore[method-assign]
+        if (
+            _SOURCE_UPSERT_WRAPPER is not None
+            and getattr(ProviderConfigService, "upsert_provider_source", None)
+            is _SOURCE_UPSERT_WRAPPER
+        ):
+            ProviderConfigService.upsert_provider_source = _SOURCE_UPSERT_ORIGINAL  # type: ignore[method-assign]
 
-    def get_provider_schema_with_volcengine_controls(self) -> dict[str, Any]:
-        payload = current(self)
-        return _inject_volcengine_video_control_fields(payload)
-
-    get_provider_schema_with_volcengine_controls._volcengine_provider_schema_wrapper = (  # type: ignore[attr-defined]
-        True
-    )
-    get_provider_schema_with_volcengine_controls._volcengine_provider_schema_original = (  # type: ignore[attr-defined]
-        current
-    )
-    ProviderConfigService.get_provider_schema = (  # type: ignore[method-assign]
-        get_provider_schema_with_volcengine_controls
-    )
-    _SCHEMA_ORIGINAL = current
-    _SCHEMA_WRAPPER = get_provider_schema_with_volcengine_controls
-    _SCHEMA_LEASE_COUNT = 1
+    _SCHEMA_WRAPPER = _SCHEMA_ORIGINAL = None
+    _MODELS_WRAPPER = _MODELS_ORIGINAL = None
+    _CREATE_WRAPPER = _CREATE_ORIGINAL = None
+    _UPDATE_WRAPPER = _UPDATE_ORIGINAL = None
+    _SOURCE_UPSERT_WRAPPER = _SOURCE_UPSERT_ORIGINAL = None
 
 
-def release_owned_provider_schema() -> None:
-    """Release one lease and remove only this plugin's active adapter."""
-
-    global _SCHEMA_LEASE_COUNT, _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL
-    if _SCHEMA_LEASE_COUNT <= 0:
-        return
-    _SCHEMA_LEASE_COUNT -= 1
-    if _SCHEMA_LEASE_COUNT:
-        return
-
-    from astrbot.dashboard.services.config_service import ProviderConfigService
-
-    if (
-        _SCHEMA_WRAPPER is not None
-        and _SCHEMA_ORIGINAL is not None
-        and ProviderConfigService.get_provider_schema is _SCHEMA_WRAPPER
-    ):
-        ProviderConfigService.get_provider_schema = _SCHEMA_ORIGINAL  # type: ignore[method-assign]
-    _SCHEMA_WRAPPER = None
-    _SCHEMA_ORIGINAL = None
+# 0.1.14 import compatibility.
+acquire_owned_provider_schema = acquire_owned_dashboard_bridge
+release_owned_provider_schema = release_owned_dashboard_bridge
 
 
 def register_owned_provider(
@@ -128,14 +582,6 @@ def register_owned_provider(
     default_config_tmpl: dict,
     provider_display_name: str,
 ):
-    """Register once and replace only an older class owned by this plugin.
-
-    AstrBot currently has a process-global registry without plugin ownership or
-    an unregister hook. A plugin reload must therefore remove its own previous
-    metadata before registering the new class.  A foreign collision fails
-    closed instead of silently hijacking another adapter.
-    """
-
     existing = provider_cls_map.get(provider_type_name)
     if existing is not None:
         existing_cls = getattr(existing, "cls_type", None)
@@ -149,7 +595,9 @@ def register_owned_provider(
                 f"Provider type {provider_type_name!r} is already owned by "
                 f"{module or 'an unknown module'}"
             )
-        provider_registry[:] = [item for item in provider_registry if item is not existing]
+        provider_registry[:] = [
+            item for item in provider_registry if item is not existing
+        ]
         provider_cls_map.pop(provider_type_name, None)
 
     return register_provider_adapter(

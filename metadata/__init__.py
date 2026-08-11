@@ -1,1 +1,1 @@
-"""Model facts and translations into AstrBot native metadata."""
+"""Model discovery and sparse upstream-feedback translation."""

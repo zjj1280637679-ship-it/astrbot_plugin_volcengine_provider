@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "scope": "astrbot_plugin_volcengine_provider",
+  "epistemic_contract": {
+    "feedback_is_truth": false,
+    "missing_feedback_means_unsupported": false,
+    "feedback_may_prove_end_to_end_path": false,
+    "historical_feedback_may_override_live_feedback": false,
+    "current_conditions_may_define_future_capability": false,
+    "model_id_alone_is_capability_authority": false
+  },
+  "future_extension_policy": {
+    "allow_new_feedback_sources": true,
+    "allow_new_capability_discovery_protocols": true,
+    "allow_user_intentional_override": true,
+    "require_source_declaration": true,
+    "require_evidence_lifetime_declaration": true,
+    "require_authority_scope_declaration": true,
+    "forbid_unattributed_capability_fact": true,
+    "preserve_unknown_future_feedback_tokens": true,
+    "note": "The current implementation does not predict what future providers or AstrBot versions can know. New mechanisms are allowed when their information source and authority are explicit."
+  },
+  "fields": {
+    "volcengine_video_input_enabled": {
+      "kind": "request_transport_switch",
+      "scope": "one_model_card",
+      "authoritative_for": [
+        "whether_the_volcengine_adapter_attempts_to_forward_current_video_as_ark_video_url"
+      ],
+      "not_authoritative_for": [
+        "model_supports_video",
+        "model_does_not_support_video",
+        "provider_supports_video_for_all_models",
+        "routing_or_fallback_selection"
+      ],
+      "false_means": "do_not_forward_video_payload_for_this_card",
+      "false_does_not_mean": "model_unsupported",
+      "migration_semantics": "preserve_previous_user_transport_intent_only"
+    }
+  },
+  "dashboard_transport_ui": {
+    "canonical_field_in_shared_schema": false,
+    "visibility_selector": "provider_source_id",
+    "owned_sources_only": true,
+    "temporary_key_prefix": "_volcengine_video_transport_ui_",
+    "temporary_key_encoding": "utf8_hex_reversible_injective",
+    "persistent": false,
+    "save_boundary_action": "translate_current_owned_source_ui_value_to_volcengine_video_input_enabled_then_strip_all_temporary_ui_keys",
+    "foreign_provider_visibility": false,
+    "foreign_ui_key_can_create_plugin_state": false,
+    "requires_host_apis": [
+      "get_provider_schema",
+      "create_provider",
+      "update_provider"
+    ],
+    "missing_required_host_api": "disable_transport_ui_only",
+    "note": "AstrBot 4.26/4.27 uses one shared model-card schema. An unconditional plugin field would leak into unrelated Provider cards, so the UI shim is Source-conditioned and short-lived."
+  },
+  "live_model_feedback": {
+    "ordinary_ark_models_receipt": {
+      "source": "current_ordinary_ark_/models_receipt",
+      "scope": "provider_source_plus_model_id",
+      "lifetime": "single_dashboard_model_list_call",
+      "storage": "async_context_single_use_handoff",
+      "persistent": false,
+      "missing_field": "not_reported",
+      "explicit_false": "current_feedback_false_not_model_truth",
+      "explicit_empty_list": "current_feedback_empty_not_missing",
+      "explicit_integer_zero": "current_feedback_zero_not_missing",
+      "unknown_modality_token": "preserve_as_information_do_not_interpret_or_filter",
+      "display_rule": "explicit_current_fields_may_replace_same_display_field_for_this_response_only",
+      "global_metadata_mutation": false,
+      "routing_authority": false
+    },
+    "agent_plan_model_names": {
+      "source": "discovery_candidates_only",
+      "capability_feedback": false,
+      "routing_authority": false
+    }
+  },
+  "failure_domains": {
+    "input_transport": {
+      "meaning": "media_failed_before_a_valid_request_reached_ark_model",
+      "reached_model": false,
+      "model_capability_observed": null,
+      "persist_as_capability": false,
+      "routing_advice": null,
+      "routing_owner": "AstrBot_or_user"
+    },
+    "upstream_response": {
+      "meaning": "request_reached_upstream_and_upstream_returned_a_response_or_error",
+      "reached_model_or_upstream": true,
+      "model_capability_inference": "only_if_the_upstream_receipt_explicitly_says_so_and_even_then_it_is_feedback_not_eternal_truth",
+      "routing_advice": null,
+      "routing_owner": "AstrBot_or_user"
+    }
+  },
+  "migration_precedence": [
+    "current_per_card_volcengine_video_input_enabled",
+    "legacy_per_card_volcengine_model_video_input",
+    "legacy_explicit_source_boolean_including_false",
+    "historical_modalities_video_clue"
+  ],
+  "display_contract": {
+    "unknown": "no_plugin_claim",
+    "not_reported": "no_plugin_claim",
+    "reported": "show_as_feedback_only",
+    "old_plugin_dynamic_feedback": "must_not_be_reused_as_current_feedback"
+  }
+}
