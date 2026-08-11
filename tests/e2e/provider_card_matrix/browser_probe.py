@@ -37,7 +37,7 @@ def write_json(name: str, payload: Any) -> None:
 async def semantic_snapshot(page: Page, name: str) -> dict[str, Any]:
     """Capture visible semantics and coarse geometry without input values."""
     payload = await page.evaluate(
-        """
+        r"""
         () => {
           const visible = (el) => {
             const s = getComputedStyle(el);
