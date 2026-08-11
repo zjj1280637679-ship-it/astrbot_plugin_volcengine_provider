@@ -9,6 +9,7 @@ on:
       - .github/workflows/probe-real-dashboard-ui.yml
       - tests/e2e/provider_card_matrix/browser_probe.py
       - tests/e2e/provider_card_matrix/browser_matrix.py
+      - tests/test_model_card_ui_scope.py
       - registry.py
       - providers.py
       - capabilities/**
