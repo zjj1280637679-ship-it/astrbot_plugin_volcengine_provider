@@ -1,0 +1,97 @@
+name: RC 0.1.15 real Ark E2E
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/rc-0.1.15-real-e2e.yml
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout AstrBot v4.27.2
+        run: git clone --depth 1 --branch v4.27.2 https://github.com/AstrBotDevs/AstrBot.git AstrBot
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --directory AstrBot
+      - name: Install plugin
+        run: |
+          mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
+          rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
+      - name: Compile and persistent regressions
+        run: |
+          uv run --directory AstrBot python -m py_compile \
+            data/plugins/astrbot_plugin_volcengine_provider/providers.py \
+            data/plugins/astrbot_plugin_volcengine_provider/registry.py \
+            data/plugins/astrbot_plugin_volcengine_provider/metadata/ark.py \
+            data/plugins/astrbot_plugin_volcengine_provider/adapters/errors.py
+          python -m json.tool capabilities/SEMANTICS.json >/dev/null
+          uv run --directory AstrBot python ../tests/test_0_1_15_feedback_boundary.py
+          uv run --directory AstrBot python ../tests/test_live_feedback_presence.py
+          uv run --directory AstrBot python ../tests/test_model_card_ui_scope.py
+          uv run --directory AstrBot python ../tests/test_dashboard_save_boundary.py
+          uv run --directory AstrBot python ../tests/test_dashboard_bridge_compat.py
+      - name: Real ordinary Ark models and text chat
+        env:
+          HUOSHANYINQINGAPI: ${{ secrets.HUOSHANYINQINGAPI }}
+        run: |
+          uv run --directory AstrBot python - <<'PY'
+          import asyncio
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path('data/plugins').resolve()))
+          from astrbot_plugin_volcengine_provider.providers import ProviderVolcengineArk
+
+          key = os.environ.get('HUOSHANYINQINGAPI', '').strip()
+          if not key:
+              raise RuntimeError('repository secret is missing')
+
+          async def main():
+              provider = ProviderVolcengineArk(
+                  {
+                      'id': 'rc15-real',
+                      'provider': 'volcengine',
+                      'type': 'volcengine_ark_chat_completion',
+                      'provider_type': 'chat_completion',
+                      'enable': True,
+                      'key': [key],
+                      'api_base': 'https://ark.cn-beijing.volces.com/api/v3',
+                      'model': 'doubao-seed-2-0-pro-260215',
+                  },
+                  {'request_max_retries': 1},
+              )
+              try:
+                  models = await provider.get_models()
+                  if not models:
+                      raise AssertionError('Ark /models returned no visible models')
+                  response = await provider.text_chat(
+                      prompt='Reply with exactly RC15_FINAL_OK',
+                      contexts=[],
+                      image_urls=[],
+                      func_tool=None,
+                      system_prompt='',
+                  )
+                  text = str(getattr(response, 'completion_text', '') or '').strip()
+                  if 'RC15_FINAL_OK' not in text:
+                      raise AssertionError(f'unexpected response marker: {text[:120]!r}')
+                  print(f'REAL_ARK_MODELS_COUNT={len(models)}')
+                  print('REAL_ARK_TEXT_CHAT=OK')
+              finally:
+                  terminate = getattr(provider, 'terminate', None)
+                  if callable(terminate):
+                      result = terminate()
+                      if hasattr(result, '__await__'):
+                          await result
+
+          asyncio.run(main())
+          PY
