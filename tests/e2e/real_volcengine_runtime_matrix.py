@@ -1,8 +1,8 @@
 """Real Volcengine runtime evidence with raw-vs-plugin attribution.
 
-The matrix does not convert one run into permanent model-capability truth.  For
+The matrix does not convert one run into permanent model-capability truth. For
 each supplier card it compares a minimal raw upstream request with the request
-through the plugin provider.  This distinguishes an upstream/account/model
+through the plugin provider. This distinguishes an upstream/account/model
 condition from a plugin-path regression before any production change is made.
 
 Secrets are never printed or written to artifacts.
@@ -11,14 +11,19 @@ Secrets are never printed or written to artifacts.
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import json
 import os
 import sys
+import tempfile
 import traceback
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+from PIL import Image as PILImage
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
@@ -92,6 +97,22 @@ def classify(raw_success: bool, plugin_success: bool) -> str:
     return "upstream_account_or_model_condition"
 
 
+def make_test_png() -> tuple[Path, str]:
+    """Create one deterministic local image using AstrBot's own Pillow precedent."""
+    image = PILImage.new("RGB", (32, 32), (245, 245, 245))
+    for x in range(8, 24):
+        for y in range(8, 24):
+            image.putpixel((x, y), (20, 80, 180))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    data = buf.getvalue()
+    fd, name = tempfile.mkstemp(prefix="volcengine-e2e-image-", suffix=".png")
+    os.close(fd)
+    path = Path(name)
+    path.write_bytes(data)
+    return path, f"data:image/png;base64,{base64.b64encode(data).decode('ascii')}"
+
+
 async def plugin_models(provider: Any) -> dict[str, Any]:
     try:
         models = await provider.get_models()
@@ -104,10 +125,16 @@ async def plugin_models(provider: Any) -> dict[str, Any]:
         return {"success": False, "error": safe_error(exc)}
 
 
-async def plugin_text(provider: Any, *, marker: str) -> dict[str, Any]:
+async def plugin_text(
+    provider: Any,
+    *,
+    marker: str,
+    image_urls: list[str] | None = None,
+) -> dict[str, Any]:
     try:
         response = await provider.text_chat(
             prompt=f"Reply with exactly {marker}",
+            image_urls=image_urls or [],
             request_max_retries=1,
         )
         text = str(getattr(response, "completion_text", "") or "")
@@ -164,7 +191,7 @@ async def main() -> None:
     plan = ProviderVolcengineAgentPlan(plan_config, settings)
 
     result: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "evidence_level": "L5_current_real_upstream_run",
         "timestamp_note": "workflow runtime; do not persist as permanent capability truth",
         "cards": {},
@@ -186,6 +213,37 @@ async def main() -> None:
     )
     plugin_ark_text = await plugin_text(ark, marker="PLUGIN_ARK_OK")
 
+    # Image: AstrBot's own OpenAI-source tests use Pillow-generated image input.
+    # Use the same bytes for a minimal raw data-URL request and for the plugin's
+    # normal local-path media resolver, so differences are attributable.
+    image_path, image_data_url = make_test_png()
+    try:
+        raw_ark_image = await asyncio.to_thread(
+            raw_request,
+            f"{ARK_API_BASE}/chat/completions",
+            method="POST",
+            payload={
+                "model": ARK_DEFAULT_MODEL,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Reply with exactly RAW_IMAGE_OK"},
+                            {"type": "image_url", "image_url": {"url": image_data_url}},
+                        ],
+                    }
+                ],
+                "stream": False,
+            },
+        )
+        plugin_ark_image = await plugin_text(
+            ark,
+            marker="PLUGIN_IMAGE_OK",
+            image_urls=[str(image_path)],
+        )
+    finally:
+        image_path.unlink(missing_ok=True)
+
     result["cards"]["volcengine_ark"] = {
         "provider_type": "chat_completion",
         "configured_model": ARK_DEFAULT_MODEL,
@@ -195,6 +253,9 @@ async def main() -> None:
         "raw_text": raw_ark_text,
         "plugin_text": plugin_ark_text,
         "text_attribution": classify(bool(raw_ark_text.get("success")), bool(plugin_ark_text.get("success"))),
+        "raw_image": raw_ark_image,
+        "plugin_image": plugin_ark_image,
+        "image_attribution": classify(bool(raw_ark_image.get("success")), bool(plugin_ark_image.get("success"))),
     }
 
     # Agent Plan deliberately has no probed /models route in production code.
@@ -224,6 +285,7 @@ async def main() -> None:
     result["summary"] = {
         "ark_models": result["cards"]["volcengine_ark"]["models_attribution"],
         "ark_text": result["cards"]["volcengine_ark"]["text_attribution"],
+        "ark_image": result["cards"]["volcengine_ark"]["image_attribution"],
         "agent_plan_text": result["cards"]["volcengine_agent_plan"]["text_attribution"],
         "production_change_allowed_without_further_attribution": False,
     }
