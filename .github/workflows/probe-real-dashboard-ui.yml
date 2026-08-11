@@ -1,6 +1,7 @@
 name: Probe real AstrBot Dashboard UI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - refactor/0.1.15-feedback-boundary
