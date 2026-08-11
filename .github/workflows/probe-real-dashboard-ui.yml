@@ -8,6 +8,9 @@ on:
       - .github/workflows/probe-real-dashboard-ui.yml
       - tests/e2e/provider_card_matrix/browser_probe.py
       - tests/e2e/provider_card_matrix/browser_matrix.py
+      - registry.py
+      - providers.py
+      - capabilities/**
 
 permissions:
   contents: read
