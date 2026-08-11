@@ -1,4 +1,4 @@
-name: Probe real AstrBot Dashboard UI
+name: Collect real AstrBot Dashboard UI evidence
 
 on:
   workflow_dispatch:
@@ -8,19 +8,21 @@ on:
     paths:
       - .github/workflows/probe-real-dashboard-ui.yml
       - tests/e2e/provider_card_matrix/browser_probe.py
-      - tests/e2e/provider_card_matrix/browser_matrix.py
       - tests/test_model_card_ui_scope.py
       - tests/test_dashboard_save_boundary.py
       - tests/test_dashboard_bridge_compat.py
       - registry.py
       - providers.py
       - capabilities/**
+      - docs/ENGINEERING_METHODOLOGY.md
+      - docs/EVIDENCE_LEVELS.md
+      - docs/TEST_BOUNDARIES.md
 
 permissions:
   contents: read
 
 jobs:
-  probe:
+  evidence:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -103,32 +105,24 @@ jobs:
             cat /tmp/astrbot-e2e.log
             exit 1
           fi
-          echo 'AstrBot Dashboard is up'
           grep -E 'Loading plugin astrbot_plugin_volcengine_provider|Plugin astrbot_plugin_volcengine_provider|Volcengine providers registered' /tmp/astrbot-e2e.log > e2e-artifacts/plugin-runtime.log
           grep -q 'Volcengine providers registered' /tmp/astrbot-e2e.log
-      - name: Run real Dashboard browser probe
+      - name: Collect real Dashboard presentation evidence
         env:
           ASTRBOT_E2E_URL: http://127.0.0.1:6185
           ASTRBOT_E2E_USERNAME: e2e-admin
           ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
         run: python tests/e2e/provider_card_matrix/browser_probe.py
-      - name: Run real provider-card UI matrix
-        env:
-          ASTRBOT_E2E_URL: http://127.0.0.1:6185
-          ASTRBOT_E2E_USERNAME: e2e-admin
-          ASTRBOT_E2E_PASSWORD: E2e-password-123
-          ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
-        run: python tests/e2e/provider_card_matrix/browser_matrix.py
       - name: Capture final AstrBot log
         if: always()
         run: cp /tmp/astrbot-e2e.log e2e-artifacts/startup.log || true
-      - name: Show AstrBot log on failure
+      - name: Show AstrBot log on hard failure
         if: failure()
         run: cat /tmp/astrbot-e2e.log || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: real-dashboard-ui-probe
+          name: real-dashboard-ui-evidence
           path: e2e-artifacts
           if-no-files-found: error
