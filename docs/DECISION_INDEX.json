@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "ADR-0001",
+      "topic": "provider capability authority",
+      "question": "May the plugin infer permanent model capability from provider/model identity?",
+      "decision": "No unscoped inference. Provider plugin owns protocol adaptation; future discovery needs explicit source/lifetime/scope authority.",
+      "doc": "docs/ADR/ADR-0001-provider-is-not-capability-authority.md",
+      "code": ["metadata/agent_plan.py", "metadata/ark.py", "capabilities/source_hints.py"],
+      "tests": ["tests/test_0_1_15_feedback_boundary.py", "tests/test_live_feedback_presence.py"]
+    },
+    {
+      "id": "ADR-0002",
+      "topic": "feedback lifetime",
+      "question": "May dynamic provider feedback be stored as permanent capability truth?",
+      "decision": "No. Current dynamic feedback is evidence with a scope and lifetime; missing feedback is not false and stale feedback must not defeat current feedback.",
+      "doc": "docs/ADR/ADR-0002-feedback-is-not-truth.md",
+      "code": ["metadata/ark.py", "capabilities/source_hints.py"],
+      "tests": ["tests/test_live_feedback_presence.py", "tests/test_0_1_15_feedback_boundary.py"]
+    },
+    {
+      "id": "ADR-0003",
+      "topic": "dashboard schema isolation",
+      "question": "How can Volcengine model-card UI be shown without polluting foreign providers?",
+      "decision": "Use owned-Source conditional temporary UI keys and translate/remove them at the save boundary; do not install an unconditional canonical shared-schema field.",
+      "doc": "docs/ADR/ADR-0003-dashboard-schema-isolation.md",
+      "code": ["registry.py", "capabilities/model_scope.py"],
+      "tests": ["tests/test_model_card_ui_scope.py", "tests/test_dashboard_save_boundary.py", "tests/test_dashboard_bridge_compat.py"]
+    },
+    {
+      "id": "ADR-0004",
+      "topic": "legacy migration precedence",
+      "question": "What does migration preserve?",
+      "decision": "Preserve user configuration intent, not a model capability fact. Explicit false remains explicit information and outranks historical modalities clues.",
+      "doc": "docs/ADR/ADR-0004-migration-preserves-intent.md",
+      "code": ["capabilities/model_scope.py", "capabilities/source_migration.py"],
+      "tests": ["tests/test_0_1_15_feedback_boundary.py"]
+    }
+  ],
+  "active_e2e": {
+    "doc": "docs/E2E_MATRIX.md",
+    "goal": "real Volcengine API x provider-card path x Dashboard UI-layout matrix",
+    "reason": "Function-level correctness does not prove user-path reachability across AstrBot provider layouts."
+  },
+  "warning": "This index is navigation metadata for humans and AI agents. It has no runtime authority."
+}
