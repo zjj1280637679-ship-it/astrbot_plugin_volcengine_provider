@@ -1,0 +1,53 @@
+{
+  "schema_version": "0.1",
+  "decision_id": "D-004",
+  "decision": "Create an executable-model graph that admits only exact model/mode edges proven in the current account, without converting one-sample latency or visual impressions into quality rankings.",
+  "trigger": "D-002 and D-003 established exact runtime outcomes for all four supplied model IDs, including one exact-route rejection and several model-specific default differences.",
+  "rights": {
+    "authorized_by": ["user requested continued capability-card, modality and strategy development"],
+    "credentials_or_permissions": ["no new external call required for this classification step"],
+    "asset_rights": [],
+    "scope": "classification of already observed model capabilities",
+    "invalidators": ["user changes model set or account context"],
+    "verdict": "pass"
+  },
+  "capability": {
+    "required_claim_ids": ["C-002", "C-004", "C-009", "C-013", "C-014", "C-016"],
+    "relation_classes": ["conditional_deterministic", "conditional_deterministic_path_failure", "probabilistic"],
+    "strongest_evidence": "E2E for admitted edges",
+    "verified_domain": {
+      "t2v": ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-0-pro-fast-251015", "doubao-seedance-1-0-pro-250528"],
+      "single_image_i2v": ["doubao-seedance-1-5-pro-251215"]
+    },
+    "unverified_assumptions": ["quality ranking", "stable latency ranking", "Fast 251015 I2V", "Pro 250528 I2V E2E", "first-last-frame modes", "explicit audio-enable semantics"],
+    "alternative_existing_paths": ["family-level documentation inheritance — rejected as insufficient for exact-version executable edges"],
+    "verdict": "pass_with_unknown_edges_kept_out"
+  },
+  "intent": {
+    "user_goal": "Use models reliably while knowing which capabilities are facts versus hypotheses.",
+    "why_this_action_serves_the_goal": "It permits safe routing on proven hard capabilities without prematurely optimizing on unmeasured quality claims.",
+    "is_it_necessary": true,
+    "lower_cost_or_lower_risk_equal_effect_options": [],
+    "verdict": "pass"
+  },
+  "effect": {
+    "expected_state_changes": ["repository strategy metadata only"],
+    "quota_or_cost": ["none"],
+    "repository_mutations": ["adds executable-model graph"],
+    "external_calls": [],
+    "public_or_private_asset_changes": [],
+    "irreversible_effects": [],
+    "cleanup_obligations": ["update graph when an invalidator or new E2E edge occurs"],
+    "useful_output": "a routing-safe distinction between executable, documented-only, unknown and currently rejected edges",
+    "verdict": "pass"
+  },
+  "epistemic_review": {
+    "is_this_a_possibility_graph_edge_or_executable_graph_edge": "explicitly separates both",
+    "what_exact_claim_is_being_tested_or_used": "already recorded C-series claims; no new experiment",
+    "what_failure_would_falsify": "future failure inside unchanged verified premises would trigger re-evaluation of that exact edge",
+    "what_failure_would_not_falsify": "failure outside tested modality/domain",
+    "does_existing_evidence_make_retesting_unnecessary": true,
+    "if_retesting_is_needed_why": "only when invalidators fire or an unknown edge becomes load-bearing"
+  },
+  "decision_result": "approved"
+}
