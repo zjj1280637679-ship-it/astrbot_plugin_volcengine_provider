@@ -16,7 +16,7 @@ def main() -> None:
     assert model_id == "missing"
     assert missing == {"id": "missing"}
 
-    # Explicit empty list: this *is* current feedback.  It must survive
+    # Explicit empty list: this *is* current feedback. It must survive
     # normalization even though [] is falsey in Python.
     model_id, empty = normalize_ark_model_metadata(
         {
@@ -53,20 +53,30 @@ def main() -> None:
     assert host["modalities"]["input"] == ["image", "audio"]
     assert host["modalities"]["output"] == ["text"]
 
-    # A list containing only an unknown/future modality is still an explicitly
-    # supplied list.  The current adapter cannot advertise the unknown symbol,
-    # but it must not resurrect stale known icons either.
+    # Unknown/future modality tokens are information, not something the current
+    # adapter is entitled to erase. AstrBot 4.26/4.27 can simply ignore names it
+    # does not understand while a future host may consume them.
     _, future_only = normalize_ark_model_metadata(
         {
             "id": "future",
             "modalities": {
-                "input_modalities": ["future_modality"],
+                "input_modalities": ["future_modality", "image", "future_modality"],
             },
         }
     )
     assert future_only == {
         "id": "future",
-        "modalities": {"input": []},
+        "modalities": {"input": ["future_modality", "image"]},
+    }
+
+    future_host = {
+        "id": "future",
+        "modalities": {"input": ["audio"], "output": ["text"]},
+    }
+    future_merged = _merge_source_feedback(future_host, future_only)
+    assert future_merged["modalities"] == {
+        "input": ["future_modality", "image"],
+        "output": ["text"],
     }
 
     print("LIVE_FEEDBACK_PRESENCE=OK")
