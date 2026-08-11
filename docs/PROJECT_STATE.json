@@ -10,6 +10,7 @@
     "AstrBot already owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and Dashboard rendering.",
     "AstrBot capability icons are incomplete feedback, not a complete model-capability truth table.",
     "Different AstrBot provider types have materially different Dashboard layouts and user paths.",
+    "AstrBot chat-completion providers use a Source workbench/model-panel path while non-chat provider types use a different card-grid path in the Dashboard.",
     "End-to-end modality availability depends on the complete QQ/NapCat/AstrBot/adapter/provider/model path, not only model capability."
   ],
   "expected_outcomes": [
@@ -30,8 +31,17 @@
     "dashboard_ui_scope": "owned_source_condition_plus_temporary_ui_key_save_translation",
     "migration": "preserve_user_intent_not_model_fact"
   },
+  "validation_progress": {
+    "provider_card_matrix_dry_run": "passed",
+    "provider_config_service_matrix_astrbot_4_26_1": "passed",
+    "provider_config_service_matrix_astrbot_4_27_2": "passed",
+    "real_dashboard_browser_probe": "in_progress",
+    "real_volcengine_api_full_matrix": "pending_after_ui_reachability",
+    "note": "Early browser-probe failures occurred before plugin execution in Dashboard build tooling; the harness is being aligned to AstrBot's pinned Dashboard CI toolchain rather than changing production code."
+  },
   "active_validation_frontier": {
     "name": "real_volcengine_api_x_provider_card_path_x_dashboard_ui_layout_matrix_e2e",
+    "current_stage": "real_astrbot_dashboard_browser_reachability",
     "reason": "Code-level and schema-level correctness do not prove that all legitimate user paths are reachable through AstrBot's different provider-card layouts.",
     "dimensions": [
       "provider_card_type",
@@ -49,6 +59,7 @@
     "docs/DESIGN_DECISIONS.md",
     "docs/CAPABILITY_BOUNDARY.md",
     "docs/E2E_MATRIX.md",
+    "docs/DECISION_INDEX.json",
     "docs/ADR/",
     "capabilities/SEMANTICS.json"
   ],
