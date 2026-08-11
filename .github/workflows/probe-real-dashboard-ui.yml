@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/probe-real-dashboard-ui.yml
       - tests/e2e/provider_card_matrix/browser_probe.py
+      - tests/e2e/provider_card_matrix/browser_matrix.py
 
 permissions:
   contents: read
@@ -107,6 +108,13 @@ jobs:
           ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
         run: python tests/e2e/provider_card_matrix/browser_probe.py
+      - name: Run real provider-card UI matrix
+        env:
+          ASTRBOT_E2E_URL: http://127.0.0.1:6185
+          ASTRBOT_E2E_USERNAME: e2e-admin
+          ASTRBOT_E2E_PASSWORD: E2e-password-123
+          ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
+        run: python tests/e2e/provider_card_matrix/browser_matrix.py
       - name: Capture final AstrBot log
         if: always()
         run: cp /tmp/astrbot-e2e.log e2e-artifacts/startup.log || true
