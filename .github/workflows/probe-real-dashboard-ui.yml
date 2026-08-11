@@ -10,6 +10,8 @@ on:
       - tests/e2e/provider_card_matrix/browser_probe.py
       - tests/e2e/provider_card_matrix/browser_matrix.py
       - tests/test_model_card_ui_scope.py
+      - tests/test_dashboard_save_boundary.py
+      - tests/test_dashboard_bridge_compat.py
       - registry.py
       - providers.py
       - capabilities/**
@@ -66,8 +68,6 @@ jobs:
 
           source = Path('AstrBot/data/cmd_config.json')
           target = Path('e2e-artifacts/config-before-run.redacted.json')
-          # AstrBot may write JSON with a UTF-8 BOM; utf-8-sig accepts both BOM
-          # and ordinary UTF-8 without changing the redaction/output semantics.
           data = json.loads(source.read_text(encoding='utf-8-sig'))
 
           def redact(value, key=''):
