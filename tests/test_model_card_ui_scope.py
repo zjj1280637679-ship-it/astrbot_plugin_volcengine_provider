@@ -37,7 +37,16 @@ def main() -> None:
         {"id": "foreign-A", "type": "openai_chat_completion"},
     ]
     payload = {
-        "config_schema": {"provider": {"items": {}}},
+        "config_schema": {
+            "provider": {
+                "items": {},
+                "config_template": {
+                    "ark-template": {"id": "volcengine-ark", "type": ARK_PROVIDER_TYPE},
+                    "plan-template": {"id": "volcengine-agent-plan", "type": AGENT_PLAN_PROVIDER_TYPE},
+                    "foreign-template": {"id": "openai", "type": "openai_chat_completion"},
+                },
+            },
+        },
         "provider_sources": sources,
         "providers": [
             {
@@ -96,6 +105,11 @@ def main() -> None:
     assert projected_sources[1]["hint"] == _SOURCE_TRANSPORT_UI_HINT
     assert "hint" not in projected_sources[2]
     assert all("hint" not in source for source in sources)
+
+    projected_templates = out["config_schema"]["provider"]["config_template"]
+    assert projected_templates["ark-template"]["hint"] == _SOURCE_TRANSPORT_UI_HINT
+    assert projected_templates["plan-template"]["hint"] == _SOURCE_TRANSPORT_UI_HINT
+    assert "hint" not in projected_templates["foreign-template"]
 
     to_save = dict(projected_sources[0])
     _strip_source_transport_hint(to_save)

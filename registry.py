@@ -81,11 +81,26 @@ def _strip_video_ui_keys(provider_config: dict[str, Any]) -> None:
 def _inject_owned_source_transport_hint(payload: dict[str, Any]) -> dict[str, Any]:
     """Project a current UI-path hint onto owned Sources only.
 
-    The provider-source list is copied before mutation so this explanatory
-    Dashboard projection cannot become an in-memory configuration side effect
-    even on AstrBot builds that return live config objects. Existing host/user
-    hints are preserved rather than overwritten.
+    AstrBot V4 builds new Sources from ``config_schema.provider.config_template``
+    and existing Sources from ``provider_sources``. Both collections are copied
+    before mutation. Existing host/user hints are preserved rather than overwritten.
     """
+
+    # New Sources are built from config_schema.provider.config_template.
+    config_schema = payload.get("config_schema")
+    provider_schema = config_schema.get("provider") if isinstance(config_schema, dict) else None
+    templates = provider_schema.get("config_template") if isinstance(provider_schema, dict) else None
+    if isinstance(templates, dict):
+        copied_templates = copy.deepcopy(templates)
+        provider_schema["config_template"] = copied_templates
+        for template in copied_templates.values():
+            if not isinstance(template, dict):
+                continue
+            source_type = str(template.get("type") or "").strip()
+            if source_type not in OWNED_SOURCE_TYPES:
+                continue
+            if not template.get("hint"):
+                template["hint"] = _SOURCE_TRANSPORT_UI_HINT
 
     provider_sources = payload.get("provider_sources")
     if not isinstance(provider_sources, list):
