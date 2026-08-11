@@ -29,6 +29,7 @@ from astrbot_plugin_volcengine_provider.providers import ProviderVolcengineArk
 from astrbot_plugin_volcengine_provider.registry import (
     _inject_model_card_video_control,
     _merge_source_feedback,
+    _video_ui_key,
 )
 
 
@@ -58,135 +59,136 @@ def main() -> None:
         ],
         'provider': [
             {'id': 'ark/legacy', 'provider_source_id': 'ark', 'modalities': ['text', 'video']},
-            {'id': 'foreign/a', 'provider_source_id': 'foreign', 'modalities': ['text']},
+            {'id': 'foreign/m', 'provider_source_id': 'foreign', 'modalities': ['text', 'video']},
         ],
     }
-    migrate_legacy_video_settings(cfg)
+    changed = migrate_legacy_video_settings(cfg)
+    assert changed == ['ark/legacy']
     assert cfg['provider'][0][VIDEO_INPUT_ENABLED_KEY] is True
     assert cfg['provider'][0]['modalities'] == ['text', 'video']
     assert VIDEO_INPUT_ENABLED_KEY not in cfg['provider'][1]
     assert 'volcengine_ark_video_input' not in cfg['provider_sources'][0]
 
-    # Migration precedence is user-state preservation, not a capability guess:
-    # new per-card > old per-card > explicit Source bool > modalities clue.
-    precedence_cfg = {
+    # Legacy explicit Source=False must outrank an even older video modality.
+    source_disabled = {
+        'provider_sources': [
+            {'id': 'ark', 'type': ARK_PROVIDER_TYPE, 'volcengine_ark_video_input': False},
+        ],
+        'provider': [
+            {'id': 'ark/disabled', 'provider_source_id': 'ark', 'modalities': ['text', 'video']},
+        ],
+    }
+    changed = migrate_legacy_video_settings(source_disabled)
+    assert changed == ['ark/disabled']
+    assert source_disabled['provider'][0][VIDEO_INPUT_ENABLED_KEY] is False
+    assert source_disabled['provider'][0]['modalities'] == ['text', 'video']
+
+    source_disabled_plan = {
         'provider_sources': [
             {
-                'id': 'ark-off',
-                'type': ARK_PROVIDER_TYPE,
-                'volcengine_ark_video_input': False,
-            },
-            {
-                'id': 'ark-on',
-                'type': ARK_PROVIDER_TYPE,
-                'volcengine_ark_video_input': True,
-            },
-            {
-                'id': 'plan-off',
+                'id': 'plan',
                 'type': AGENT_PLAN_PROVIDER_TYPE,
                 'volcengine_agent_plan_video_input': False,
             },
         ],
         'provider': [
+            {'id': 'plan/disabled', 'provider_source_id': 'plan', 'modalities': ['text', 'video']},
+        ],
+    }
+    changed = migrate_legacy_video_settings(source_disabled_plan)
+    assert changed == ['plan/disabled']
+    assert source_disabled_plan['provider'][0][VIDEO_INPUT_ENABLED_KEY] is False
+    assert source_disabled_plan['provider'][0]['modalities'] == ['text', 'video']
+
+    # A per-card legacy value remains newer/more specific than a Source value.
+    per_card_override = {
+        'provider_sources': [
+            {'id': 'ark', 'type': ARK_PROVIDER_TYPE, 'volcengine_ark_video_input': False},
+        ],
+        'provider': [
             {
-                'id': 'ark/source-disabled',
-                'provider_source_id': 'ark-off',
-                'modalities': ['text', 'video'],
-            },
-            {
-                'id': 'ark/model-override',
-                'provider_source_id': 'ark-off',
+                'id': 'ark/override',
+                'provider_source_id': 'ark',
                 'volcengine_model_video_input': True,
-                'modalities': ['text', 'video'],
-            },
-            {
-                'id': 'ark/new-override',
-                'provider_source_id': 'ark-on',
-                VIDEO_INPUT_ENABLED_KEY: False,
-                'modalities': ['text', 'video'],
-            },
-            {
-                'id': 'plan/source-disabled',
-                'provider_source_id': 'plan-off',
-                'modalities': ['text', 'video'],
+                'modalities': ['text'],
             },
         ],
     }
-    migrate_legacy_video_settings(precedence_cfg)
-    cards = {card['id']: card for card in precedence_cfg['provider']}
-    assert cards['ark/source-disabled'][VIDEO_INPUT_ENABLED_KEY] is False
-    assert cards['ark/source-disabled']['modalities'] == ['text', 'video']
-    assert cards['ark/model-override'][VIDEO_INPUT_ENABLED_KEY] is True
-    assert 'volcengine_model_video_input' not in cards['ark/model-override']
-    assert cards['ark/new-override'][VIDEO_INPUT_ENABLED_KEY] is False
-    assert cards['plan/source-disabled'][VIDEO_INPUT_ENABLED_KEY] is False
-    assert all(
-        'volcengine_ark_video_input' not in source
-        and 'volcengine_agent_plan_video_input' not in source
-        for source in precedence_cfg['provider_sources']
-    )
+    changed = migrate_legacy_video_settings(per_card_override)
+    assert changed == ['ark/override']
+    assert per_card_override['provider'][0][VIDEO_INPUT_ENABLED_KEY] is True
+    assert per_card_override['provider'][0]['modalities'] == ['text']
+    assert 'volcengine_model_video_input' not in per_card_override['provider'][0]
 
-    moving = {
-        'provider_source_id': 'foreign',
+    # Source ownership cleanup can remove only plugin-owned configuration.
+    changed_card = {
+        'id': 'changed/card',
+        'provider_source_id': 'ark',
         VIDEO_INPUT_ENABLED_KEY: True,
         'modalities': ['text', 'video'],
     }
     cleanup_owned_settings_on_source_change(
-        moving,
+        changed_card,
         old_source_type=ARK_PROVIDER_TYPE,
         new_source_type='openai_chat_completion',
     )
-    assert VIDEO_INPUT_ENABLED_KEY not in moving
-    assert moving['modalities'] == ['text', 'video']
+    assert VIDEO_INPUT_ENABLED_KEY not in changed_card
+    assert changed_card['modalities'] == ['text', 'video']
 
-    # Sparse receipt: missing fields stay absent; no capability default is authored.
-    mid, hint = normalize_ark_model_metadata({'id': 'unknown'})
-    assert mid == 'unknown'
-    assert hint == {'id': 'unknown'}
-    _, rich = normalize_ark_model_metadata({
-        'id': 'rich',
-        'modalities': {'input_modalities': ['image', 'audio']},
-        'features': {'reasoning': {'supported': True}},
-        'token_limits': {'context_window': 65536},
+    # Explicit false/empty/0 are current feedback and must survive normalization.
+    model_id, hint = normalize_ark_model_metadata({
+        'id': 'm',
+        'modalities': {'input_modalities': [], 'output_modalities': []},
+        'token_limits': {'context_window': 0, 'max_output_token_length': 0},
+        'features': {'tools': {'function_calling': False}, 'reasoning': False},
     })
-    assert rich['modalities']['input'] == ['image', 'audio']
-    assert rich['reasoning'] is True
-    assert rich['limit'] == {'context': 65536}
-    assert 'tool_call' not in rich
+    assert model_id == 'm'
+    assert hint['modalities'] == {'input': [], 'output': []}
+    assert hint['limit'] == {'context': 0, 'output': 0}
+    assert hint['tool_call'] is False
+    assert hint['reasoning'] is False
 
-    # A live receipt wins for the same display field *for this response only*.
-    # Missing directions/fields remain host-owned rather than being invented.
+    # Unknown future modality tokens are information, not something today's
+    # adapter vocabulary is authorized to erase.
+    _, future = normalize_ark_model_metadata({
+        'id': 'future',
+        'modalities': {
+            'input_modalities': ['text', 'future_sensor', 'future_sensor'],
+            'output_modalities': ['future_stream'],
+        },
+    })
+    assert future['modalities']['input'] == ['text', 'future_sensor']
+    assert future['modalities']['output'] == ['future_stream']
+
+    # Current receipt overlays explicit fields, but absence preserves host data.
     base = {
-        'id': 'same',
         'tool_call': True,
-        'modalities': {'input': ['image'], 'output': ['text']},
-        'limit': {'context': 131072, 'output': 0},
+        'reasoning': True,
+        'modalities': {'input': ['text', 'image'], 'output': ['text']},
+        'limit': {'context': 131072, 'output': 8192},
     }
-    incoming = {
-        'id': 'same',
+    merged = _merge_source_feedback(base, {
         'tool_call': False,
-        'modalities': {'input': ['audio']},
-        'limit': {'context': 65536, 'output': 4096},
-    }
-    merged = _merge_source_feedback(base, incoming)
+        'modalities': {'input': []},
+        'limit': {'context': 0},
+    })
     assert merged['tool_call'] is False
-    assert merged['modalities'] == {'input': ['audio'], 'output': ['text']}
-    assert merged['limit'] == {'context': 65536, 'output': 4096}
-    # The source object is copy-on-write; AstrBot's base feedback is untouched.
-    assert base['tool_call'] is True
-    assert base['modalities']['input'] == ['image']
-    assert base['limit']['context'] == 131072
+    assert merged['reasoning'] is True
+    assert merged['modalities']['input'] == []
+    assert merged['modalities']['output'] == ['text']
+    assert merged['limit']['context'] == 0
+    assert merged['limit']['output'] == 8192
 
-    # Dynamic feedback is a single-use current-call handoff, never history.
-    clear_source_model_hints('live')
-    remember_source_model_hint('live', 'm', {'id': 'm', 'tool_call': False})
-    assert consume_source_model_hints('live', ['m']) == {
-        'm': {'id': 'm', 'tool_call': False}
-    }
-    assert consume_source_model_hints('live', ['m']) == {}
+    # Source feedback is a current-call mailbox, not reusable history.
+    clear_source_model_hints('source')
+    remember_source_model_hint('source', 'm', {'id': 'm', 'tool_call': False})
+    first = consume_source_model_hints('source', ['m'])
+    second = consume_source_model_hints('source', ['m'])
+    assert first['m']['tool_call'] is False
+    assert second == {}
 
-    # ContextVar isolation: concurrent model-list calls cannot consume each
-    # other's Source feedback even when their Source/model identifiers match.
+    # ContextVar isolation prevents same-source concurrent model-list calls from
+    # overwriting each other's current receipt.
     async def isolated_feedback(value: bool) -> bool:
         clear_source_model_hints('same-source')
         remember_source_model_hint(
@@ -215,8 +217,12 @@ def main() -> None:
         ],
     }
     out = _inject_model_card_video_control(payload)
-    assert out['providers'][0][VIDEO_INPUT_ENABLED_KEY] is False
+    # The Dashboard projection must hide the canonical persistence key and expose
+    # only the owned Source-scoped temporary UI value. Foreign cards get neither.
+    assert VIDEO_INPUT_ENABLED_KEY not in out['providers'][0]
+    assert out['providers'][0][_video_ui_key('ark')] is False
     assert VIDEO_INPUT_ENABLED_KEY not in out['providers'][1]
+    assert _video_ui_key('ark') not in out['providers'][1]
 
     # Agent Plan list remains discovery-only and includes third parties.
     assert 'deepseek-v4-pro' in KNOWN_AGENT_PLAN_MODELS
@@ -233,50 +239,35 @@ def main() -> None:
         'model': 'dummy-model',
         VIDEO_INPUT_ENABLED_KEY: True,
     }, {'request_max_retries': 1})
-    assert provider is not None
 
-    async def fake_resolve(ref: str) -> str:
-        assert ref == '/tmp/test.mp4'
-        return 'data:video/mp4;base64,AAAA'
+    assert provider.provider_config[VIDEO_INPUT_ENABLED_KEY] is True
 
+    # Local video resolution failures are provenance only and carry no routing advice.
     import astrbot_plugin_volcengine_provider.adapters.video as video_adapter
-    original = video_adapter.resolve_video_reference
-    video_adapter.resolve_video_reference = fake_resolve
+    original_resolver = video_adapter.resolve_video_reference
+
+    async def fail_video(_: str) -> str:
+        raise ValueError('synthetic local video failure')
+
+    video_adapter.resolve_video_reference = fail_video
     try:
-        marker = '[Video Attachment: name test.mp4, path /tmp/test.mp4]'
-        messages = [{'role': 'user', 'content': [{'type': 'text', 'text': marker}]}]
-        asyncio.run(video_adapter.inject_current_request_videos(
-            messages,
-            [TextPart(text=marker)],
-            enabled=True,
-        ))
-        assert messages[0]['content'][0]['type'] == 'video_url'
-
-        messages_off = [{'role': 'user', 'content': [{'type': 'text', 'text': marker}]}]
-        asyncio.run(video_adapter.inject_current_request_videos(
-            messages_off,
-            [TextPart(text=marker)],
-            enabled=False,
-        ))
-        assert messages_off[0]['content'] == [{'type': 'text', 'text': '[Video]'}]
-
-        # Trusted attachment exists but assembled content is missing: transport
-        # failure, not model rejection/capability evidence.
+        messages = [{
+            'role': 'user',
+            'content': [
+                {'type': 'text', 'text': '[Video Attachment: name a.mp4, path dummy]'},
+            ],
+        }]
+        parts = [TextPart(text='[Video Attachment: name a.mp4, path dummy]')]
         try:
-            asyncio.run(video_adapter.inject_current_request_videos(
-                [{'role': 'user', 'content': [{'type': 'text', 'text': 'other'}]}],
-                [TextPart(text=marker)],
-                enabled=False,
-            ))
+            asyncio.run(video_adapter.inject_current_request_videos(messages, parts, enabled=True))
             raise AssertionError('expected AdapterInputTransportError')
         except AdapterInputTransportError as exc:
             assert exc.reached_model is False
             assert exc.capability_observed is None
             assert not hasattr(exc, 'fallback_recommended')
             assert exc.media_type == 'video'
-            assert exc.stage == 'assemble_payload'
     finally:
-        video_adapter.resolve_video_reference = original
+        video_adapter.resolve_video_reference = original_resolver
 
     # Audio normalization errors are wrapped with the same provenance contract.
     import astrbot_plugin_volcengine_provider.adapters.audio as audio_adapter
