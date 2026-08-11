@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "project": "astrbot_plugin_volcengine_provider",
+  "active_release": "0.1.15",
+  "active_branch": "refactor/0.1.15-feedback-boundary",
+  "status": "release_candidate_under_product_path_e2e_validation",
+  "objective_conditions": [
+    "Volcengine Ark is both a first-party platform for Doubao/Seed models and a serving platform for third-party/open models.",
+    "Model capability and platform behavior can change independently of plugin releases.",
+    "AstrBot already owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and Dashboard rendering.",
+    "AstrBot capability icons are incomplete feedback, not a complete model-capability truth table.",
+    "Different AstrBot provider types have materially different Dashboard layouts and user paths.",
+    "End-to-end modality availability depends on the complete QQ/NapCat/AstrBot/adapter/provider/model path, not only model capability."
+  ],
+  "expected_outcomes": [
+    "Expose implemented Volcengine request transport paths without converting them into permanent model-capability claims.",
+    "Preserve current upstream feedback without persisting stale plugin feedback as truth.",
+    "Keep provider-specific UI and configuration isolated from foreign providers.",
+    "Preserve explicit user intent during migration.",
+    "Distinguish local input-transport failure from upstream/model rejection without owning AstrBot routing decisions.",
+    "Validate every legitimate provider-card path through real Dashboard UI layout and real Volcengine API E2E."
+  ],
+  "current_strategy": {
+    "video_control": "per_model_card_request_transport_switch",
+    "astrbot_modalities_mutation": false,
+    "dynamic_ark_feedback": "source_scoped_single_use_context_isolated",
+    "historical_dynamic_feedback_persistence": false,
+    "model_id_capability_priors": false,
+    "routing_fallback_ownership": "astrbot",
+    "dashboard_ui_scope": "owned_source_condition_plus_temporary_ui_key_save_translation",
+    "migration": "preserve_user_intent_not_model_fact"
+  },
+  "active_validation_frontier": {
+    "name": "real_volcengine_api_x_provider_card_path_x_dashboard_ui_layout_matrix_e2e",
+    "reason": "Code-level and schema-level correctness do not prove that all legitimate user paths are reachable through AstrBot's different provider-card layouts.",
+    "dimensions": [
+      "provider_card_type",
+      "dashboard_ui_layout",
+      "save_reload_lifecycle",
+      "real_volcengine_api",
+      "runtime_input_path",
+      "feedback_display",
+      "foreign_provider_isolation"
+    ]
+  },
+  "authoritative_docs": [
+    "AGENTS.md",
+    "docs/AI_ONBOARDING.md",
+    "docs/DESIGN_DECISIONS.md",
+    "docs/CAPABILITY_BOUNDARY.md",
+    "docs/E2E_MATRIX.md",
+    "docs/ADR/",
+    "capabilities/SEMANTICS.json"
+  ],
+  "warning": "This file is explanatory project state only. It must never be read as a runtime control plane or capability authority."
+}
