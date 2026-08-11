@@ -15,6 +15,7 @@ OPTIONAL_METHODS = (
     "list_provider_source_models",
     "create_provider",
     "update_provider",
+    "upsert_provider_source",
 )
 
 
@@ -37,6 +38,26 @@ def main() -> None:
     }
 
     try:
+        # Source-hint persistence cleanup is optional. If this host lacks the
+        # Source upsert boundary, retain the model-card transport UI but do not
+        # project a Source hint that cannot be safely stripped on save.
+        if hasattr(ProviderConfigService, "upsert_provider_source"):
+            delattr(ProviderConfigService, "upsert_provider_source")
+        acquired = registry.acquire_owned_dashboard_bridge()
+        assert acquired is True
+        assert getattr(
+            ProviderConfigService.get_provider_schema,
+            "_volcengine_provider_schema_wrapper",
+            False,
+        )
+        registry.release_owned_dashboard_bridge()
+        if originals.get("upsert_provider_source") is not None:
+            setattr(
+                ProviderConfigService,
+                "upsert_provider_source",
+                originals["upsert_provider_source"],
+            )
+
         # If create/update are unavailable, do NOT expose the transport UI:
         # showing a setting whose save semantics cannot be completed is worse
         # than a local UI degradation.  The independent live-feedback bridge

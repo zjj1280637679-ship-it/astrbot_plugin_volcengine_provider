@@ -57,6 +57,7 @@ class FakeService:
             ],
         }
         self.provider_manager = FakeManager(self.config["provider"])
+        self.source_upserts: list[tuple[str, dict]] = []
 
 
 def _has_ui_key(config: dict) -> bool:
@@ -70,11 +71,43 @@ async def exercise() -> None:
     while registry._DASHBOARD_LEASE_COUNT > 0:
         registry.release_owned_dashboard_bridge()
 
+    original_source_upsert = ProviderConfigService.upsert_provider_source
+    async def record_source_upsert(self, source_id: str, config: dict) -> None:
+        self.source_upserts.append((source_id, copy.deepcopy(config)))
+
+    ProviderConfigService.upsert_provider_source = record_source_upsert
     assert registry.acquire_owned_dashboard_bridge() is True
     try:
         service = FakeService()
         ark_ui = registry._video_ui_key("ark-A")
         foreign_ui = registry._video_ui_key("foreign-A")
+
+        # The Dashboard-only native Source hint is removed before the
+        # host persistence boundary. Unrelated host/user hints are preserved.
+        await ProviderConfigService.upsert_provider_source(
+            service,
+            "ark-A",
+            {
+                "id": "ark-A",
+                "type": ARK_PROVIDER_TYPE,
+                "hint": registry._SOURCE_TRANSPORT_UI_HINT,
+            },
+        )
+        source_id, source_saved = service.source_upserts[-1]
+        assert source_id == "ark-A"
+        assert "hint" not in source_saved
+
+        await ProviderConfigService.upsert_provider_source(
+            service,
+            "foreign-A",
+            {
+                "id": "foreign-A",
+                "type": "openai_chat_completion",
+                "hint": "host-or-user-hint",
+            },
+        )
+        _, foreign_source_saved = service.source_upserts[-1]
+        assert foreign_source_saved["hint"] == "host-or-user-hint"
 
         # New owned card: Dashboard-only True becomes the canonical transport
         # setting before ProviderManager sees the config; the UI key disappears.
@@ -159,6 +192,7 @@ async def exercise() -> None:
     finally:
         while registry._DASHBOARD_LEASE_COUNT > 0:
             registry.release_owned_dashboard_bridge()
+        ProviderConfigService.upsert_provider_source = original_source_upsert
 
 
 if __name__ == "__main__":

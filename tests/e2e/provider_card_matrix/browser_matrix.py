@@ -38,6 +38,7 @@ DUMMY_API_KEY = "e2e-dummy-key"
 VIDEO_LABEL = "视频请求通道（当前模型卡）"
 TEMP_UI_PREFIX = "_volcengine_video_transport_ui_"
 CANONICAL_VIDEO_KEY = "volcengine_video_input_enabled"
+SOURCE_HINT_MARKER = "视频请求通道是逐模型卡的请求转发设置"
 
 
 @dataclass(frozen=True)
@@ -149,6 +150,18 @@ def canonical_raw_field_visible(rows: list[dict[str, Any]]) -> bool:
         or row.get("name", "").startswith(f"{CANONICAL_VIDEO_KEY} ")
         for row in rows
     )
+
+
+async def source_transport_hint_visible(page: Page, *, wait: bool) -> bool:
+    locator = page.locator(
+        ".provider-config-shell .v-alert", has_text=SOURCE_HINT_MARKER
+    ).first
+    if wait:
+        try:
+            await expect(locator).to_be_visible(timeout=5_000)
+        except Exception:
+            return False
+    return await locator.is_visible()
 
 
 async def login(page: Page) -> None:
@@ -374,6 +387,13 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
 
         await save_source(page)
         result["stages"]["source_save"] = True
+        result["source_transport_hint_visible"] = (
+            await source_transport_hint_visible(page, wait=case.owned)
+        )
+        if not case.owned and result["source_transport_hint_visible"]:
+            result["errors"].append(
+                "foreign Source leaked Volcengine transport guidance"
+            )
         await page.screenshot(
             path=str(case_dir / "02-source-saved.png"), full_page=True
         )
@@ -506,9 +526,21 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
         # that model card; create-then-edit is a hidden detour, not an equivalent
         # user path.
         if case.owned:
-            if result["model_create_video_control_count"] != 1:
+            direct_create_path = result["model_create_video_control_count"] == 1
+            guided_edit_path = (
+                result.get("source_transport_hint_visible") is True
+                and result["model_edit_video_control_count"] == 1
+            )
+            result["model_create_transport_path"] = (
+                "direct"
+                if direct_create_path
+                else "native_source_hint_then_edit"
+                if guided_edit_path
+                else "unreachable"
+            )
+            if not (direct_create_path or guided_edit_path):
                 result["errors"].append(
-                    "owned model create dialog does not expose exactly one video transport control"
+                    "owned video transport setting has neither a direct create control nor a native discoverable save-then-edit path"
                 )
             if result["model_edit_video_control_count"] != 1:
                 result["errors"].append(

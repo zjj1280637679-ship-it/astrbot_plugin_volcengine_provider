@@ -36,6 +36,11 @@ PLUGIN_MODULE_MARKER = "astrbot_plugin_volcengine_provider"
 # cards too.  These keys exist only in Dashboard payloads and are stripped at
 # the save boundary; one condition-scoped key is generated per owned Source.
 _VIDEO_UI_KEY_PREFIX = "_volcengine_video_transport_ui_"
+_SOURCE_TRANSPORT_UI_HINT = (
+    "视频请求通道是逐模型卡的请求转发设置，不是模型能力结论。"
+    "如果当前 AstrBot Dashboard 在新建模型卡时未显示该开关，请先保存模型卡，"
+    "再点击该模型卡进入编辑设置；若未来 Dashboard 已在新建页直接显示，可直接在那里设置。"
+)
 
 _DASHBOARD_LEASE_COUNT = 0
 _SCHEMA_WRAPPER: Callable[..., Any] | None = None
@@ -46,6 +51,8 @@ _CREATE_WRAPPER: Callable[..., Any] | None = None
 _CREATE_ORIGINAL: Callable[..., Any] | None = None
 _UPDATE_WRAPPER: Callable[..., Any] | None = None
 _UPDATE_ORIGINAL: Callable[..., Any] | None = None
+_SOURCE_UPSERT_WRAPPER: Callable[..., Any] | None = None
+_SOURCE_UPSERT_ORIGINAL: Callable[..., Any] | None = None
 
 
 def _video_ui_key(source_id: str) -> str:
@@ -69,6 +76,40 @@ def _strip_video_ui_keys(provider_config: dict[str, Any]) -> None:
         if isinstance(key, str) and key.startswith(_VIDEO_UI_KEY_PREFIX)
     ]:
         provider_config.pop(key, None)
+
+
+def _inject_owned_source_transport_hint(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project a current UI-path hint onto owned Sources only.
+
+    The provider-source list is copied before mutation so this explanatory
+    Dashboard projection cannot become an in-memory configuration side effect
+    even on AstrBot builds that return live config objects. Existing host/user
+    hints are preserved rather than overwritten.
+    """
+
+    provider_sources = payload.get("provider_sources")
+    if not isinstance(provider_sources, list):
+        return payload
+
+    copied_sources = copy.deepcopy(provider_sources)
+    payload["provider_sources"] = copied_sources
+    types = source_types({"provider_sources": copied_sources})
+    for source in copied_sources:
+        if not isinstance(source, dict):
+            continue
+        source_id = str(source.get("id") or "").strip()
+        if not source_id or types.get(source_id) not in OWNED_SOURCE_TYPES:
+            continue
+        if not source.get("hint"):
+            source["hint"] = _SOURCE_TRANSPORT_UI_HINT
+    return payload
+
+
+def _strip_source_transport_hint(source_config: dict[str, Any]) -> None:
+    """Remove only this plugin's short-lived explanatory Source hint."""
+
+    if source_config.get("hint") == _SOURCE_TRANSPORT_UI_HINT:
+        source_config.pop("hint", None)
 
 
 def _apply_video_ui_transport_setting(
@@ -281,6 +322,7 @@ def acquire_owned_dashboard_bridge() -> bool:
     global _DASHBOARD_LEASE_COUNT
     global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
     global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL
+    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL
 
     if _DASHBOARD_LEASE_COUNT:
         _DASHBOARD_LEASE_COUNT += 1
@@ -311,6 +353,11 @@ def acquire_owned_dashboard_bridge() -> bool:
         marker="_volcengine_model_save_wrapper",
         original="_volcengine_model_save_original",
     )
+    source_upsert_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "upsert_provider_source", None),
+        marker="_volcengine_source_save_wrapper",
+        original="_volcengine_source_save_original",
+    )
 
     installed = False
     can_install_transport_ui = (
@@ -318,10 +365,16 @@ def acquire_owned_dashboard_bridge() -> bool:
         and create_current is not None
         and update_current is not None
     )
+    can_install_source_hint = (
+        can_install_transport_ui and source_upsert_current is not None
+    )
 
     if can_install_transport_ui:
         def schema_wrapper(self) -> dict[str, Any]:
-            return _inject_model_card_video_control(schema_current(self))
+            result = _inject_model_card_video_control(schema_current(self))
+            if can_install_source_hint:
+                result = _inject_owned_source_transport_hint(result)
+            return result
 
         schema_wrapper._volcengine_provider_schema_wrapper = True  # type: ignore[attr-defined]
         schema_wrapper._volcengine_provider_schema_original = schema_current  # type: ignore[attr-defined]
@@ -421,6 +474,25 @@ def acquire_owned_dashboard_bridge() -> bool:
         _UPDATE_ORIGINAL, _UPDATE_WRAPPER = update_current, update_wrapper
         installed = True
 
+    if can_install_source_hint:
+        async def source_upsert_wrapper(
+            self,
+            source_id: str,
+            config: dict[str, Any],
+        ) -> Any:
+            normalized = dict(config)
+            _strip_source_transport_hint(normalized)
+            return await source_upsert_current(self, source_id, normalized)
+
+        source_upsert_wrapper._volcengine_source_save_wrapper = True  # type: ignore[attr-defined]
+        source_upsert_wrapper._volcengine_source_save_original = source_upsert_current  # type: ignore[attr-defined]
+        ProviderConfigService.upsert_provider_source = source_upsert_wrapper  # type: ignore[method-assign]
+        _SOURCE_UPSERT_ORIGINAL, _SOURCE_UPSERT_WRAPPER = (
+            source_upsert_current,
+            source_upsert_wrapper,
+        )
+        installed = True
+
     if installed:
         _DASHBOARD_LEASE_COUNT = 1
     return installed
@@ -430,6 +502,7 @@ def release_owned_dashboard_bridge() -> None:
     global _DASHBOARD_LEASE_COUNT
     global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
     global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL
+    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL
 
     if _DASHBOARD_LEASE_COUNT <= 0:
         return
@@ -467,11 +540,18 @@ def release_owned_dashboard_bridge() -> None:
             is _UPDATE_WRAPPER
         ):
             ProviderConfigService.update_provider = _UPDATE_ORIGINAL  # type: ignore[method-assign]
+        if (
+            _SOURCE_UPSERT_WRAPPER is not None
+            and getattr(ProviderConfigService, "upsert_provider_source", None)
+            is _SOURCE_UPSERT_WRAPPER
+        ):
+            ProviderConfigService.upsert_provider_source = _SOURCE_UPSERT_ORIGINAL  # type: ignore[method-assign]
 
     _SCHEMA_WRAPPER = _SCHEMA_ORIGINAL = None
     _MODELS_WRAPPER = _MODELS_ORIGINAL = None
     _CREATE_WRAPPER = _CREATE_ORIGINAL = None
     _UPDATE_WRAPPER = _UPDATE_ORIGINAL = None
+    _SOURCE_UPSERT_WRAPPER = _SOURCE_UPSERT_ORIGINAL = None
 
 
 # 0.1.14 import compatibility.

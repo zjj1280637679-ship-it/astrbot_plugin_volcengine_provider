@@ -13,9 +13,12 @@ from astrbot_plugin_volcengine_provider.capabilities import (
     normalize_owned_model_card_for_save,
 )
 from astrbot_plugin_volcengine_provider.registry import (
+    _SOURCE_TRANSPORT_UI_HINT,
     _VIDEO_UI_KEY_PREFIX,
     _apply_video_ui_transport_setting,
     _inject_model_card_video_control,
+    _inject_owned_source_transport_hint,
+    _strip_source_transport_hint,
     _video_ui_key,
 )
 
@@ -54,6 +57,7 @@ def main() -> None:
     }
 
     out = _inject_model_card_video_control(payload)
+    out = _inject_owned_source_transport_hint(out)
     items = out["config_schema"]["provider"]["items"]
 
     ark_ui = _video_ui_key("ark-A")
@@ -83,6 +87,22 @@ def main() -> None:
         str(key).startswith(_VIDEO_UI_KEY_PREFIX)
         for key in foreign_card
     )
+
+    # Source guidance is a Dashboard-only current UI-path hint. Owned
+    # Sources receive it, foreign Sources do not, and the input list used to
+    # build the projection remains unmodified.
+    projected_sources = out["provider_sources"]
+    assert projected_sources[0]["hint"] == _SOURCE_TRANSPORT_UI_HINT
+    assert projected_sources[1]["hint"] == _SOURCE_TRANSPORT_UI_HINT
+    assert "hint" not in projected_sources[2]
+    assert all("hint" not in source for source in sources)
+
+    to_save = dict(projected_sources[0])
+    _strip_source_transport_hint(to_save)
+    assert "hint" not in to_save
+    custom_hint = {"hint": "host-or-user-hint"}
+    _strip_source_transport_hint(custom_hint)
+    assert custom_hint["hint"] == "host-or-user-hint"
 
     # The visible value is the user's newest edit and must beat the hidden
     # canonical value in the same Dashboard payload.  UI keys never persist.
