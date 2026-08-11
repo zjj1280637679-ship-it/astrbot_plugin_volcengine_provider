@@ -1,4 +1,9 @@
-"""Plugin-owned Provider registration and narrow AstrBot Dashboard bridge."""
+"""Plugin-owned Provider registration and narrow AstrBot Dashboard bridge.
+
+Dashboard integration is capability-detected at runtime. Missing optional
+Dashboard APIs may reduce UI/feedback integration, but must never prevent the
+Provider adapters themselves from registering or loading.
+"""
 
 from __future__ import annotations
 
@@ -135,8 +140,58 @@ def _overlay_source_scoped_model_hints(
     return result
 
 
-def acquire_owned_dashboard_bridge() -> None:
-    """Install reversible model-card UI/save and Source-feedback wrappers."""
+def _unwrap_owned_wrapper(
+    candidate: object,
+    *,
+    marker: str,
+    original: str,
+) -> Callable[..., Any] | None:
+    """Return an unwrapped host method, or None when that API is unavailable."""
+
+    if not callable(candidate):
+        return None
+    if getattr(candidate, marker, False):
+        unwrapped = getattr(candidate, original, None)
+        return unwrapped if callable(unwrapped) else None
+    return candidate
+
+
+def _provider_sources_for_service(service: Any) -> list[dict[str, Any]]:
+    config = getattr(service, "config", {})
+    if not hasattr(config, "get"):
+        return []
+    sources = config.get("provider_sources", [])
+    return sources if isinstance(sources, list) else []
+
+
+def _existing_provider_config(service: Any, provider_id: str) -> dict[str, Any]:
+    """Read one persisted model card without requiring a specific manager API."""
+
+    manager = getattr(service, "provider_manager", None)
+    getter = getattr(manager, "get_provider_config_by_id", None)
+    if callable(getter):
+        existing = getter(provider_id)
+        if isinstance(existing, dict):
+            return existing
+
+    config = getattr(service, "config", {})
+    providers = config.get("provider", []) if hasattr(config, "get") else []
+    if isinstance(providers, list):
+        for provider in providers:
+            if not isinstance(provider, dict):
+                continue
+            if str(provider.get("id") or "") == provider_id:
+                return provider
+    return {}
+
+
+def acquire_owned_dashboard_bridge() -> bool:
+    """Install only Dashboard wrappers supported by this AstrBot build.
+
+    The Provider adapters are the required feature. Dashboard schema/model-list
+    and create/update hooks are optional integration points: if a host build
+    omits any of them, only that enhancement is skipped.
+    """
 
     global _DASHBOARD_LEASE_COUNT
     global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
@@ -144,110 +199,134 @@ def acquire_owned_dashboard_bridge() -> None:
 
     if _DASHBOARD_LEASE_COUNT:
         _DASHBOARD_LEASE_COUNT += 1
-        return
+        return True
 
-    from astrbot.dashboard.services.config_service import ProviderConfigService
+    try:
+        from astrbot.dashboard.services.config_service import ProviderConfigService
+    except (ImportError, ModuleNotFoundError):
+        return False
 
-    schema_current = ProviderConfigService.get_provider_schema
-    if getattr(schema_current, "_volcengine_provider_schema_wrapper", False):
-        schema_current = getattr(schema_current, "_volcengine_provider_schema_original")
+    schema_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "get_provider_schema", None),
+        marker="_volcengine_provider_schema_wrapper",
+        original="_volcengine_provider_schema_original",
+    )
+    models_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "list_provider_source_models", None),
+        marker="_volcengine_source_models_wrapper",
+        original="_volcengine_source_models_original",
+    )
+    create_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "create_provider", None),
+        marker="_volcengine_model_save_wrapper",
+        original="_volcengine_model_save_original",
+    )
+    update_current = _unwrap_owned_wrapper(
+        getattr(ProviderConfigService, "update_provider", None),
+        marker="_volcengine_model_save_wrapper",
+        original="_volcengine_model_save_original",
+    )
 
-    models_current = ProviderConfigService.list_provider_source_models
-    if getattr(models_current, "_volcengine_source_models_wrapper", False):
-        models_current = getattr(models_current, "_volcengine_source_models_original")
+    installed = False
 
-    create_current = ProviderConfigService.create_provider
-    if getattr(create_current, "_volcengine_model_save_wrapper", False):
-        create_current = getattr(create_current, "_volcengine_model_save_original")
+    if schema_current is not None:
+        def schema_wrapper(self) -> dict[str, Any]:
+            return _inject_model_card_video_control(schema_current(self))
 
-    update_current = ProviderConfigService.update_provider
-    if getattr(update_current, "_volcengine_model_save_wrapper", False):
-        update_current = getattr(update_current, "_volcengine_model_save_original")
+        schema_wrapper._volcengine_provider_schema_wrapper = True  # type: ignore[attr-defined]
+        schema_wrapper._volcengine_provider_schema_original = schema_current  # type: ignore[attr-defined]
+        ProviderConfigService.get_provider_schema = schema_wrapper  # type: ignore[method-assign]
+        _SCHEMA_ORIGINAL, _SCHEMA_WRAPPER = schema_current, schema_wrapper
+        installed = True
 
-    def schema_wrapper(self) -> dict[str, Any]:
-        return _inject_model_card_video_control(schema_current(self))
+    if models_current is not None:
+        async def models_wrapper(self, source_id: str) -> dict[str, Any]:
+            result = await models_current(self, source_id)
+            if not isinstance(result, dict):
+                return result
+            return _overlay_source_scoped_model_hints(self, source_id, result)
 
-    async def models_wrapper(self, source_id: str) -> dict[str, Any]:
-        return _overlay_source_scoped_model_hints(
+        models_wrapper._volcengine_source_models_wrapper = True  # type: ignore[attr-defined]
+        models_wrapper._volcengine_source_models_original = models_current  # type: ignore[attr-defined]
+        ProviderConfigService.list_provider_source_models = models_wrapper  # type: ignore[method-assign]
+        _MODELS_ORIGINAL, _MODELS_WRAPPER = models_current, models_wrapper
+        installed = True
+
+    if create_current is not None:
+        async def create_wrapper(
             self,
-            source_id,
-            await models_current(self, source_id),
-        )
+            config: dict[str, Any],
+            source_id: str | None = None,
+        ) -> None:
+            normalized = dict(config)
+            if source_id:
+                normalized["provider_source_id"] = source_id
+            normalize_owned_model_card_for_save(
+                normalized,
+                _provider_sources_for_service(self),
+                default_enabled=False,
+            )
+            await create_current(self, normalized, source_id)
 
-    async def create_wrapper(
-        self,
-        config: dict[str, Any],
-        source_id: str | None = None,
-    ) -> None:
-        normalized = dict(config)
-        if source_id:
-            normalized["provider_source_id"] = source_id
-        normalize_owned_model_card_for_save(
-            normalized,
-            self.config.get("provider_sources", []),
-            default_enabled=False,
-        )
-        await create_current(self, normalized, source_id)
+        create_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
+        create_wrapper._volcengine_model_save_original = create_current  # type: ignore[attr-defined]
+        ProviderConfigService.create_provider = create_wrapper  # type: ignore[method-assign]
+        _CREATE_ORIGINAL, _CREATE_WRAPPER = create_current, create_wrapper
+        installed = True
 
-    async def update_wrapper(
-        self,
-        provider_id: str,
-        config: dict[str, Any],
-    ) -> None:
-        normalized = dict(config)
-        existing = self.provider_manager.get_provider_config_by_id(provider_id)
-        if not isinstance(existing, dict):
-            existing = {}
-        if not normalized.get("provider_source_id") and existing.get("provider_source_id"):
-            normalized["provider_source_id"] = existing["provider_source_id"]
+    if update_current is not None:
+        async def update_wrapper(
+            self,
+            provider_id: str,
+            config: dict[str, Any],
+        ) -> None:
+            normalized = dict(config)
+            existing = _existing_provider_config(self, provider_id)
+            if (
+                not normalized.get("provider_source_id")
+                and existing.get("provider_source_id")
+            ):
+                normalized["provider_source_id"] = existing["provider_source_id"]
 
-        sources = self.config.get("provider_sources", [])
-        types = source_types({"provider_sources": sources})
-        old_source_id = str(existing.get("provider_source_id") or "").strip()
-        new_source_id = str(normalized.get("provider_source_id") or "").strip()
-        old_type = types.get(old_source_id, "")
-        new_type = types.get(new_source_id, "")
+            sources = _provider_sources_for_service(self)
+            types = source_types({"provider_sources": sources})
+            old_source_id = str(existing.get("provider_source_id") or "").strip()
+            new_source_id = str(normalized.get("provider_source_id") or "").strip()
+            old_type = types.get(old_source_id, "")
+            new_type = types.get(new_source_id, "")
 
-        cleanup_owned_settings_on_source_change(
-            normalized,
-            old_source_type=old_type,
-            new_source_type=new_type,
-        )
+            cleanup_owned_settings_on_source_change(
+                normalized,
+                old_source_type=old_type,
+                new_source_type=new_type,
+            )
 
-        if (
-            new_type in OWNED_SOURCE_TYPES
-            and VIDEO_INPUT_ENABLED_KEY not in normalized
-            and old_type in OWNED_SOURCE_TYPES
-            and isinstance(existing.get(VIDEO_INPUT_ENABLED_KEY), bool)
-        ):
-            normalized[VIDEO_INPUT_ENABLED_KEY] = existing[VIDEO_INPUT_ENABLED_KEY]
+            if (
+                new_type in OWNED_SOURCE_TYPES
+                and VIDEO_INPUT_ENABLED_KEY not in normalized
+                and old_type in OWNED_SOURCE_TYPES
+                and isinstance(existing.get(VIDEO_INPUT_ENABLED_KEY), bool)
+            ):
+                normalized[VIDEO_INPUT_ENABLED_KEY] = existing[
+                    VIDEO_INPUT_ENABLED_KEY
+                ]
 
-        normalize_owned_model_card_for_save(
-            normalized,
-            sources,
-            default_enabled=False,
-        )
-        await update_current(self, provider_id, normalized)
+            normalize_owned_model_card_for_save(
+                normalized,
+                sources,
+                default_enabled=False,
+            )
+            await update_current(self, provider_id, normalized)
 
-    schema_wrapper._volcengine_provider_schema_wrapper = True  # type: ignore[attr-defined]
-    schema_wrapper._volcengine_provider_schema_original = schema_current  # type: ignore[attr-defined]
-    models_wrapper._volcengine_source_models_wrapper = True  # type: ignore[attr-defined]
-    models_wrapper._volcengine_source_models_original = models_current  # type: ignore[attr-defined]
-    create_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
-    create_wrapper._volcengine_model_save_original = create_current  # type: ignore[attr-defined]
-    update_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
-    update_wrapper._volcengine_model_save_original = update_current  # type: ignore[attr-defined]
+        update_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
+        update_wrapper._volcengine_model_save_original = update_current  # type: ignore[attr-defined]
+        ProviderConfigService.update_provider = update_wrapper  # type: ignore[method-assign]
+        _UPDATE_ORIGINAL, _UPDATE_WRAPPER = update_current, update_wrapper
+        installed = True
 
-    ProviderConfigService.get_provider_schema = schema_wrapper  # type: ignore[method-assign]
-    ProviderConfigService.list_provider_source_models = models_wrapper  # type: ignore[method-assign]
-    ProviderConfigService.create_provider = create_wrapper  # type: ignore[method-assign]
-    ProviderConfigService.update_provider = update_wrapper  # type: ignore[method-assign]
-
-    _SCHEMA_ORIGINAL, _SCHEMA_WRAPPER = schema_current, schema_wrapper
-    _MODELS_ORIGINAL, _MODELS_WRAPPER = models_current, models_wrapper
-    _CREATE_ORIGINAL, _CREATE_WRAPPER = create_current, create_wrapper
-    _UPDATE_ORIGINAL, _UPDATE_WRAPPER = update_current, update_wrapper
-    _DASHBOARD_LEASE_COUNT = 1
+    if installed:
+        _DASHBOARD_LEASE_COUNT = 1
+    return installed
 
 
 def release_owned_dashboard_bridge() -> None:
@@ -261,16 +340,36 @@ def release_owned_dashboard_bridge() -> None:
     if _DASHBOARD_LEASE_COUNT:
         return
 
-    from astrbot.dashboard.services.config_service import ProviderConfigService
+    try:
+        from astrbot.dashboard.services.config_service import ProviderConfigService
+    except (ImportError, ModuleNotFoundError):
+        ProviderConfigService = None  # type: ignore[assignment,misc]
 
-    if _SCHEMA_WRAPPER is not None and ProviderConfigService.get_provider_schema is _SCHEMA_WRAPPER:
-        ProviderConfigService.get_provider_schema = _SCHEMA_ORIGINAL  # type: ignore[method-assign]
-    if _MODELS_WRAPPER is not None and ProviderConfigService.list_provider_source_models is _MODELS_WRAPPER:
-        ProviderConfigService.list_provider_source_models = _MODELS_ORIGINAL  # type: ignore[method-assign]
-    if _CREATE_WRAPPER is not None and ProviderConfigService.create_provider is _CREATE_WRAPPER:
-        ProviderConfigService.create_provider = _CREATE_ORIGINAL  # type: ignore[method-assign]
-    if _UPDATE_WRAPPER is not None and ProviderConfigService.update_provider is _UPDATE_WRAPPER:
-        ProviderConfigService.update_provider = _UPDATE_ORIGINAL  # type: ignore[method-assign]
+    if ProviderConfigService is not None:
+        if (
+            _SCHEMA_WRAPPER is not None
+            and getattr(ProviderConfigService, "get_provider_schema", None)
+            is _SCHEMA_WRAPPER
+        ):
+            ProviderConfigService.get_provider_schema = _SCHEMA_ORIGINAL  # type: ignore[method-assign]
+        if (
+            _MODELS_WRAPPER is not None
+            and getattr(ProviderConfigService, "list_provider_source_models", None)
+            is _MODELS_WRAPPER
+        ):
+            ProviderConfigService.list_provider_source_models = _MODELS_ORIGINAL  # type: ignore[method-assign]
+        if (
+            _CREATE_WRAPPER is not None
+            and getattr(ProviderConfigService, "create_provider", None)
+            is _CREATE_WRAPPER
+        ):
+            ProviderConfigService.create_provider = _CREATE_ORIGINAL  # type: ignore[method-assign]
+        if (
+            _UPDATE_WRAPPER is not None
+            and getattr(ProviderConfigService, "update_provider", None)
+            is _UPDATE_WRAPPER
+        ):
+            ProviderConfigService.update_provider = _UPDATE_ORIGINAL  # type: ignore[method-assign]
 
     _SCHEMA_WRAPPER = _SCHEMA_ORIGINAL = None
     _MODELS_WRAPPER = _MODELS_ORIGINAL = None
@@ -304,7 +403,9 @@ def register_owned_provider(
                 f"Provider type {provider_type_name!r} is already owned by "
                 f"{module or 'an unknown module'}"
             )
-        provider_registry[:] = [item for item in provider_registry if item is not existing]
+        provider_registry[:] = [
+            item for item in provider_registry if item is not existing
+        ]
         provider_cls_map.pop(provider_type_name, None)
 
     return register_provider_adapter(
