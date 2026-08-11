@@ -8,6 +8,7 @@ Provider adapters themselves from registering or loading.
 from __future__ import annotations
 
 import copy
+import hashlib
 from collections.abc import Callable
 from typing import Any
 
@@ -31,6 +32,12 @@ from .capabilities import (
 
 PLUGIN_MODULE_MARKER = "astrbot_plugin_volcengine_provider"
 
+# AstrBot 4.26/4.27 exposes one shared model-card schema.  A canonical plugin
+# field added there without a condition would be rendered on foreign Provider
+# cards too.  These keys exist only in Dashboard payloads and are stripped at
+# the save boundary; one condition-scoped key is generated per owned Source.
+_VIDEO_UI_KEY_PREFIX = "_volcengine_video_transport_ui_"
+
 _DASHBOARD_LEASE_COUNT = 0
 _SCHEMA_WRAPPER: Callable[..., Any] | None = None
 _SCHEMA_ORIGINAL: Callable[..., Any] | None = None
@@ -42,8 +49,57 @@ _UPDATE_WRAPPER: Callable[..., Any] | None = None
 _UPDATE_ORIGINAL: Callable[..., Any] | None = None
 
 
+def _video_ui_key(source_id: str) -> str:
+    """Return a deterministic non-persistent UI key for one Source ID."""
+
+    digest = hashlib.sha256(source_id.encode("utf-8")).hexdigest()[:16]
+    return f"{_VIDEO_UI_KEY_PREFIX}{digest}"
+
+
+def _strip_video_ui_keys(provider_config: dict[str, Any]) -> None:
+    """Remove every Dashboard-only transport field before host persistence."""
+
+    for key in [
+        key
+        for key in provider_config
+        if isinstance(key, str) and key.startswith(_VIDEO_UI_KEY_PREFIX)
+    ]:
+        provider_config.pop(key, None)
+
+
+def _apply_video_ui_transport_setting(
+    provider_config: dict[str, Any],
+    provider_sources: list[dict[str, Any]] | object,
+) -> None:
+    """Translate the current Source's short-lived UI value to the canonical key.
+
+    This is user configuration transport, not model-capability discovery.  UI
+    values from foreign Sources are discarded rather than being promoted into
+    plugin state.
+    """
+
+    source_id = str(provider_config.get("provider_source_id") or "").strip()
+    types = source_types({"provider_sources": provider_sources}) if isinstance(
+        provider_sources, list
+    ) else {}
+    if source_id and types.get(source_id) in OWNED_SOURCE_TYPES:
+        ui_value = provider_config.get(_video_ui_key(source_id))
+        if isinstance(ui_value, bool):
+            # The visible UI value is the user's newest edit, so it intentionally
+            # outranks the hidden canonical value copied into an edit response.
+            provider_config[VIDEO_INPUT_ENABLED_KEY] = ui_value
+    _strip_video_ui_keys(provider_config)
+
+
 def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
-    """Expose a transport toggle only on concrete Volcengine model cards."""
+    """Expose Source-conditioned transport toggles only on owned model cards.
+
+    AstrBot's V4 renderer shows every schema item without a ``condition``.  A
+    single canonical field would therefore leak into unrelated Provider cards.
+    Instead, create one Dashboard-only field per currently configured owned
+    Source, conditioned on that card's ``provider_source_id``.  The save bridge
+    converts it back to ``volcengine_video_input_enabled`` and strips the UI key.
+    """
 
     try:
         items = payload["config_schema"]["provider"]["items"]
@@ -52,19 +108,28 @@ def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(items, dict):
         return payload
 
-    items.setdefault(
-        VIDEO_INPUT_ENABLED_KEY,
-        {
-            "description": "视频请求通道（当前模型卡）",
-            "type": "bool",
-            "hint": (
-                "仅控制火山适配器是否按 Ark video_url 协议尝试发送本轮视频；"
-                "不是模型能力结论。关闭时保留 [Video] 文本占位。"
-            ),
-        },
-    )
-
     types = source_types(payload)
+    owned_source_ids = [
+        source_id
+        for source_id, source_type in types.items()
+        if source_type in OWNED_SOURCE_TYPES
+    ]
+
+    for source_id in owned_source_ids:
+        ui_key = _video_ui_key(source_id)
+        items.setdefault(
+            ui_key,
+            {
+                "description": "视频请求通道（当前模型卡）",
+                "type": "bool",
+                "hint": (
+                    "仅控制火山适配器是否按 Ark video_url 协议尝试发送本轮视频；"
+                    "不是模型能力结论。关闭时保留 [Video] 文本占位。"
+                ),
+                "condition": {"provider_source_id": source_id},
+            },
+        )
+
     providers = payload.get("providers", [])
     if not isinstance(providers, list):
         return payload
@@ -74,7 +139,10 @@ def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
         source_id = str(provider.get("provider_source_id") or "").strip()
         if types.get(source_id) not in OWNED_SOURCE_TYPES:
             continue
+        # The canonical value remains ordinary data but has no shared schema
+        # item, so it is not rendered on foreign cards.
         provider.setdefault(VIDEO_INPUT_ENABLED_KEY, video_input_enabled(provider))
+        provider[_video_ui_key(source_id)] = provider[VIDEO_INPUT_ENABLED_KEY]
     return payload
 
 
@@ -197,9 +265,10 @@ def _existing_provider_config(service: Any, provider_id: str) -> dict[str, Any]:
 def acquire_owned_dashboard_bridge() -> bool:
     """Install only Dashboard wrappers supported by this AstrBot build.
 
-    The Provider adapters are the required feature. Dashboard schema/model-list
-    and create/update hooks are optional integration points: if a host build
-    omits any of them, only that enhancement is skipped.
+    The Provider adapters are the required feature. Dashboard model feedback is
+    independent.  The per-model transport UI is installed only when schema,
+    create and update hooks are all available, so the plugin never exposes a UI
+    control whose save semantics it cannot complete.
     """
 
     global _DASHBOARD_LEASE_COUNT
@@ -237,8 +306,13 @@ def acquire_owned_dashboard_bridge() -> bool:
     )
 
     installed = False
+    can_install_transport_ui = (
+        schema_current is not None
+        and create_current is not None
+        and update_current is not None
+    )
 
-    if schema_current is not None:
+    if can_install_transport_ui:
         def schema_wrapper(self) -> dict[str, Any]:
             return _inject_model_card_video_control(schema_current(self))
 
@@ -264,7 +338,7 @@ def acquire_owned_dashboard_bridge() -> bool:
         _MODELS_ORIGINAL, _MODELS_WRAPPER = models_current, models_wrapper
         installed = True
 
-    if create_current is not None:
+    if can_install_transport_ui:
         async def create_wrapper(
             self,
             config: dict[str, Any],
@@ -273,9 +347,11 @@ def acquire_owned_dashboard_bridge() -> bool:
             normalized = dict(config)
             if source_id:
                 normalized["provider_source_id"] = source_id
+            sources = _provider_sources_for_service(self)
+            _apply_video_ui_transport_setting(normalized, sources)
             normalize_owned_model_card_for_save(
                 normalized,
-                _provider_sources_for_service(self),
+                sources,
                 default_enabled=False,
             )
             await create_current(self, normalized, source_id)
@@ -286,7 +362,6 @@ def acquire_owned_dashboard_bridge() -> bool:
         _CREATE_ORIGINAL, _CREATE_WRAPPER = create_current, create_wrapper
         installed = True
 
-    if update_current is not None:
         async def update_wrapper(
             self,
             provider_id: str,
@@ -313,6 +388,8 @@ def acquire_owned_dashboard_bridge() -> bool:
                 new_source_type=new_type,
             )
 
+            _apply_video_ui_transport_setting(normalized, sources)
+
             if (
                 new_type in OWNED_SOURCE_TYPES
                 and VIDEO_INPUT_ENABLED_KEY not in normalized
@@ -328,6 +405,7 @@ def acquire_owned_dashboard_bridge() -> bool:
                 sources,
                 default_enabled=False,
             )
+            _strip_video_ui_keys(normalized)
             await update_current(self, provider_id, normalized)
 
         update_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
