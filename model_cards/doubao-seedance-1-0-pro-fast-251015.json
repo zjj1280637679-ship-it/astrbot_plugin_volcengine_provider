@@ -1,0 +1,30 @@
+{
+  "model_id": "doubao-seedance-1-0-pro-fast-251015",
+  "card_version": "0.1",
+  "current_account_status": "executable",
+  "modalities": {
+    "text_to_video": {"state": "E2E", "evidence": ["C-009", "D-002"]},
+    "single_image_to_video": {"state": "unknown_exact_version", "evidence": []},
+    "first_last_frame": {"state": "unknown_exact_version", "evidence": []},
+    "native_audio_output": {"state": "not_observed_in_standard_probe", "evidence": ["D-002 media inspection"]}
+  },
+  "tested_request_controls": {
+    "prompt_suffix_ratio_16_9": "E2E",
+    "prompt_suffix_dur_5": "E2E"
+  },
+  "standard_probe_observation": {
+    "request": "text only, --ratio 16:9 --dur 5, no explicit audio/resolution/duration field",
+    "reported_resolution": "1080p",
+    "reported_duration": 5,
+    "reported_fps": 24,
+    "usage_tokens": 246840,
+    "media": {"video": "H.264, ffprobe 1920x1088", "audio": "none"},
+    "wall_seconds_one_sample": 39.76443076133728
+  },
+  "epistemic_limits": [
+    "Do not inherit I2V/first-last-frame support from Pro Fast 250610 or any other suffix.",
+    "The word Fast plus one faster sample is not a Q-level stable latency claim.",
+    "Do not infer a quality ranking from artifact size, resolution, or one seed."
+  ],
+  "probabilistic_unknowns": ["stable latency distribution", "visual quality ranking", "motion adherence", "camera adherence", "I2V behavior"]
+}
