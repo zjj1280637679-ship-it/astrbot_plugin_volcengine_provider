@@ -17,6 +17,7 @@
     "require_evidence_lifetime_declaration": true,
     "require_authority_scope_declaration": true,
     "forbid_unattributed_capability_fact": true,
+    "preserve_unknown_future_feedback_tokens": true,
     "note": "The current implementation does not predict what future providers or AstrBot versions can know. New mechanisms are allowed when their information source and authority are explicit."
   },
   "fields": {
@@ -65,6 +66,7 @@
       "missing_field": "not_reported",
       "explicit_false": "current_feedback_false_not_model_truth",
       "explicit_empty_list": "current_feedback_empty_not_missing",
+      "unknown_modality_token": "preserve_as_information_do_not_interpret_or_filter",
       "display_rule": "explicit_current_fields_may_replace_same_display_field_for_this_response_only",
       "global_metadata_mutation": false,
       "routing_authority": false
@@ -81,13 +83,14 @@
       "reached_model": false,
       "model_capability_observed": null,
       "persist_as_capability": false,
-      "fallback_recommended_by_plugin": false,
+      "routing_advice": null,
       "routing_owner": "AstrBot_or_user"
     },
     "upstream_response": {
       "meaning": "request_reached_upstream_and_upstream_returned_a_response_or_error",
       "reached_model_or_upstream": true,
       "model_capability_inference": "only_if_the_upstream_receipt_explicitly_says_so_and_even_then_it_is_feedback_not_eternal_truth",
+      "routing_advice": null,
       "routing_owner": "AstrBot_or_user"
     }
   },
