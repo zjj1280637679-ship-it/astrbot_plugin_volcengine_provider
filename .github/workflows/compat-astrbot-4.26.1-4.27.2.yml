@@ -38,7 +38,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install AstrBot dependencies
-        run: uv sync --directory AstrBot --frozen
+        run: uv sync --directory AstrBot
 
       - name: Install plugin into AstrBot
         run: |
