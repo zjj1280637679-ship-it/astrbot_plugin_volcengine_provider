@@ -1,0 +1,42 @@
+name: Finalize 0.1.15 feedback docs
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/finalize-0.1.15-feedback-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+
+      - name: Remove obsolete additive-merge wording
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('CHANGELOG.md')
+          text = p.read_text('utf-8')
+          old = "- 普通 Ark `/models` 改为 Source-scoped 稀疏反馈：仅反馈本次回执明确给出的模态、工具、reasoning 和 token limit；缺失保持“未反馈”，不补 `False/0`，不写进全局 `LLM_METADATAS[model_id]`，并以 additive merge 保护 AstrBot 已有反馈。"
+          new = "- 普通 Ark `/models` 改为 Source-scoped 实时稀疏反馈：缺失字段保持“未反馈”，显式 `False` 与显式空列表也作为本轮信息保留；当前回执只在本次 Source 响应中替换同名旧展示值，未回执字段保持宿主管理，并且绝不写入全局 `LLM_METADATAS[model_id]`。"
+          assert old in text
+          p.write_text(text.replace(old, new, 1), 'utf-8')
+          PY
+          rm .github/workflows/finalize-0.1.15-feedback-docs.yml
+
+      - name: Commit final doc cleanup and remove this workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md .github/workflows/finalize-0.1.15-feedback-docs.yml
+          git diff --cached --check
+          git commit -m "docs: remove stale additive feedback wording"
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
