@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "decision_id": "D-002",
+  "decision": "Run one controlled T2V comparison between doubao-seedance-1-5-pro-251215 and the user-listed doubao-seedance-1-0-pro-fast-251015, changing only model_id, to determine whether the exact Fast ID is executable in the current account and to collect comparable runtime/usage metadata.",
+  "trigger": "The exact Fast 251015 ID is visible in the user's model card but is not consistently represented in indexed Volcano Engine materials; model routing cannot safely inherit capabilities from other Fast version suffixes.",
+  "rights": {
+    "authorized_by": ["user instruction to continue the investigation using the supplied API/models"],
+    "credentials_or_permissions": ["HUOSHANYINQINGAPI through GitHub Actions"],
+    "asset_rights": ["text-only synthetic probe; no external reference asset"],
+    "scope": "two short T2V probe generations",
+    "invalidators": ["user revokes testing authorization or API access"],
+    "verdict": "pass"
+  },
+  "capability": {
+    "required_claim_ids": ["C-001", "C-002"],
+    "relation_classes": ["conditional_deterministic", "probabilistic"],
+    "strongest_evidence": "1.5 Pro E2E; Fast 251015 control-plane observation only",
+    "verified_domain": {"baseline_model":"doubao-seedance-1-5-pro-251215"},
+    "unverified_assumptions": ["Fast 251015 accepts the same minimal T2V request", "Fast 251015 is currently enabled for this API key"],
+    "alternative_existing_paths": ["infer from a different Fast suffix — rejected because exact-version inheritance is not justified"],
+    "verdict": "probe_required_for_routing"
+  },
+  "intent": {
+    "user_goal": "Build a reliable model capability/routing card instead of guessing model behavior from family names.",
+    "why_this_action_serves_the_goal": "It resolves an exact-version, load-bearing routing uncertainty with a single-variable experiment.",
+    "is_it_necessary": true,
+    "lower_cost_or_lower_risk_equal_effect_options": ["authoritative account model detail endpoint, if compatible credentials later become available"],
+    "verdict": "pass"
+  },
+  "effect": {
+    "expected_state_changes": ["two video generation tasks", "temporary artifacts and metadata"],
+    "quota_or_cost": ["consumes free daily model token quota on both exact model IDs if both requests succeed"],
+    "repository_mutations": ["adds a controlled probe workflow/trigger"],
+    "external_calls": ["Volcengine Ark video generation create/query/download"],
+    "public_or_private_asset_changes": ["synthetic video artifacts only"],
+    "irreversible_effects": ["consumed generation quota"],
+    "cleanup_obligations": ["probe artifacts may expire; retain only metadata needed for evidence"],
+    "useful_output": "exact Fast 251015 execution result plus comparable task latency, usage and output metadata against a standardized 1.5 baseline",
+    "verdict": "pass"
+  },
+  "epistemic_review": {
+    "is_this_a_possibility_graph_edge_or_executable_graph_edge": "Fast 251015 is a possibility edge until this probe succeeds",
+    "what_exact_claim_is_being_tested_or_used": "Fast 251015 accepts and completes the same minimal 5s 16:9 T2V request as 1.5 Pro",
+    "what_failure_would_falsify": "the exact Fast 251015 path under this account/request shape",
+    "what_failure_would_not_falsify": "other Fast suffixes, other request modalities, or the Seedance Fast product family in general",
+    "does_existing_evidence_make_retesting_unnecessary": false,
+    "if_retesting_is_needed_why": "1.5 is repeated only as a controlled contemporaneous comparison baseline, not to re-prove its basic capability"
+  },
+  "decision_result": "approved"
+}
