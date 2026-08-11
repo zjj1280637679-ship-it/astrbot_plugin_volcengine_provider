@@ -1,0 +1,54 @@
+name: Patch 0.1.15 routing-neutral regressions
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/patch-0.1.15-routing-neutral-tests.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+      - name: Update persistent regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('tests/test_0_1_15_feedback_boundary.py')
+          text = p.read_text('utf-8')
+          assert text.count("            assert exc.fallback_recommended is False\n") == 2
+          text = text.replace("            assert exc.fallback_recommended is False\n", "")
+
+          old = "            assert exc.capability_observed is None\n            assert exc.media_type == 'video'\n"
+          new = "            assert exc.capability_observed is None\n            assert not hasattr(exc, 'fallback_recommended')\n            assert exc.media_type == 'video'\n"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "            assert exc.capability_observed is None\n            assert exc.media_type == 'audio'\n"
+          new = "            assert exc.capability_observed is None\n            assert not hasattr(exc, 'fallback_recommended')\n            assert exc.media_type == 'audio'\n"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "    assert semantics['failure_domains']['input_transport']['reached_model'] is False\n    assert semantics['fields'][VIDEO_INPUT_ENABLED_KEY]['kind'] == 'request_transport_switch'\n"
+          new = "    assert semantics['failure_domains']['input_transport']['reached_model'] is False\n    assert semantics['failure_domains']['input_transport']['routing_advice'] is None\n    assert semantics['future_extension_policy']['preserve_unknown_future_feedback_tokens'] is True\n    assert semantics['fields'][VIDEO_INPUT_ENABLED_KEY]['kind'] == 'request_transport_switch'\n"
+          assert old in text
+          text = text.replace(old, new, 1)
+          p.write_text(text, 'utf-8')
+          PY
+          rm .github/workflows/patch-0.1.15-routing-neutral-tests.yml
+      - name: Commit patch and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/test_0_1_15_feedback_boundary.py .github/workflows/patch-0.1.15-routing-neutral-tests.yml
+          git diff --cached --check
+          git commit -m "test: keep transport provenance routing-neutral"
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
