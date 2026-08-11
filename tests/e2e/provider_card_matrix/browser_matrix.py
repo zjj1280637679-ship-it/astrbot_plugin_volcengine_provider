@@ -200,12 +200,17 @@ async def add_source(page: Page, case: Case) -> str:
     # if it does, dismiss it and reopen the Source menu. This keeps a host
     # onboarding overlay from being misclassified as a provider-card failure.
     await page.wait_for_timeout(1_200)
-    if await dismiss_first_run_dialog(page):
-        await add_button.click()
+    await dismiss_first_run_dialog(page)
 
     menu_item = page.locator(
         ".v-overlay:visible .v-list-item", has_text=case.menu_label
     ).first
+    # Closing the delayed first-run dialog does not necessarily close the
+    # already-open Source menu. Reopen only when the target item is actually
+    # absent; otherwise a second click on the plus button fights the menu
+    # overlay and creates a false UI failure.
+    if not await menu_item.is_visible():
+        await add_button.click()
     await expect(menu_item).to_be_visible(timeout=15_000)
     await menu_item.click()
 
