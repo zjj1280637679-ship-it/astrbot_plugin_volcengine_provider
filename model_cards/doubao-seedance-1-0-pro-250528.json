@@ -1,0 +1,30 @@
+{
+  "model_id": "doubao-seedance-1-0-pro-250528",
+  "card_version": "0.1",
+  "current_account_status": "executable",
+  "modalities": {
+    "text_to_video": {"state": "E2E", "evidence": ["C-013", "D-003"]},
+    "single_image_to_video": {"state": "documented_candidate", "evidence": ["official Ark API/product-family material"], "e2e": false},
+    "first_last_frame": {"state": "documented_candidate_lower_tier", "evidence": ["Volcano Engine developer-community implementation material"], "e2e": false},
+    "native_audio_output": {"state": "not_observed_in_standard_probe", "evidence": ["D-003 media inspection"]}
+  },
+  "tested_request_controls": {
+    "prompt_suffix_ratio_16_9": "E2E",
+    "prompt_suffix_dur_5": "E2E"
+  },
+  "standard_probe_observation": {
+    "request": "text only, --ratio 16:9 --dur 5, no explicit audio/resolution/duration field",
+    "reported_resolution": "1080p",
+    "reported_duration": 5,
+    "reported_fps": 24,
+    "usage_tokens": 246840,
+    "media": {"video": "H.264, ffprobe 1920x1088", "audio": "none"},
+    "wall_seconds_one_sample": 70.75958704948425
+  },
+  "epistemic_limits": [
+    "Official/API documentation is sufficient to keep I2V as a capability candidate, but current-account exact-mode E2E is not yet established.",
+    "The GitHub D-003 job red status was an observer failure (ffprobe missing), not a Seedance failure.",
+    "Do not promote one latency sample or 1080p/token observation into a stable ranking or universal rule."
+  ],
+  "probabilistic_unknowns": ["I2V quality/reliability", "first-last-frame behavior", "motion adherence", "camera adherence", "stable latency", "quality ranking"]
+}
