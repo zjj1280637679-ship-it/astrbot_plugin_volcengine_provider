@@ -1,0 +1,139 @@
+name: Seedance Pro 250528 Exact I2V Probe
+
+on:
+  push:
+    paths:
+      - '.github/seedance-pro-250528-i2v-trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+      MODEL_ID: doubao-seedance-1-0-pro-250528
+      IMAGE_URL: https://raw.githubusercontent.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/main/assets/seedance_test/blond_mma_reference_upload_test.jpg
+    steps:
+      - name: Validate prerequisites
+        shell: bash
+        run: |
+          test -n "$ARK_API_KEY" || { echo 'HUOSHANYINQINGAPI unavailable'; exit 2; }
+          python3 - <<'PY'
+          import os, urllib.request
+          req=urllib.request.Request(os.environ['IMAGE_URL'],headers={'User-Agent':'github-actions'})
+          with urllib.request.urlopen(req,timeout=30) as r:
+              data=r.read(); ct=r.headers.get('Content-Type','')
+          print('reference_content_type=',ct)
+          print('reference_bytes=',len(data))
+          if len(data)<1024 or not ct.startswith('image/'):
+              raise SystemExit('reference image prerequisite failed')
+          open('reference.jpg','wb').write(data)
+          PY
+
+      - name: Run exact Pro 250528 I2V probe
+        shell: bash
+        run: |
+          mkdir -p probe_output
+          mv reference.jpg probe_output/reference.jpg
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          model=os.environ['MODEL_ID']
+          prompt=(
+              'Keep the same adult blond muscular MMA fighter and the same octagon setting from the reference image. '
+              'First-person POV close combat-sports training: he advances toward the camera, throws one controlled jab-cross combination, then resets his guard. '
+              'Natural body mechanics, subtle sweat under overhead lights, cinematic photorealism, no blood, no visible injury. '
+              '--ratio 16:9 --dur 5'
+          )
+          payload={
+              'model':model,
+              'content':[
+                  {'type':'text','text':prompt},
+                  {'type':'image_url','image_url':{'url':os.environ['IMAGE_URL']}}
+              ]
+          }
+          base='https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks'
+          headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          record={
+              'experiment':'D-006 Pro 250528 exact I2V probe',
+              'model':model,
+              'image_url':os.environ['IMAGE_URL'],
+              'prompt':prompt,
+              'payload':payload,
+              'start_unix':time.time()
+          }
+          def save():
+              with open('probe_output/probe_result.json','w',encoding='utf-8') as f:
+                  json.dump(record,f,ensure_ascii=False,indent=2)
+          req=urllib.request.Request(base,data=json.dumps(payload,ensure_ascii=False).encode('utf-8'),headers=headers,method='POST')
+          try:
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  record['create_http_status']=r.status
+                  created=json.loads(r.read().decode('utf-8'))
+          except urllib.error.HTTPError as e:
+              record['create_http_status']=e.code
+              record['create_error_body']=e.read().decode('utf-8','replace')
+              record['final_state']='create_failed'
+              record['end_unix']=time.time(); record['wall_seconds']=record['end_unix']-record['start_unix']; save()
+              print(json.dumps(record,ensure_ascii=False,indent=2)); raise SystemExit(0)
+          record['create_response']=created
+          task_id=created.get('id')
+          if not task_id:
+              record['final_state']='no_task_id'; record['end_unix']=time.time(); record['wall_seconds']=record['end_unix']-record['start_unix']; save(); raise SystemExit(0)
+          record['task_id']=task_id
+          status_url=base+'/'+task_id
+          poll_headers={'Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          last=None
+          for attempt in range(90):
+              req=urllib.request.Request(status_url,headers=poll_headers,method='GET')
+              try:
+                  with urllib.request.urlopen(req,timeout=60) as r:
+                      last=json.loads(r.read().decode('utf-8'))
+              except urllib.error.HTTPError as e:
+                  record['poll_http_status']=e.code; record['poll_error_body']=e.read().decode('utf-8','replace'); record['final_state']='poll_failed'; break
+              status=last.get('status',''); record['last_status']=status; record['poll_count']=attempt+1
+              print(model,'poll',attempt+1,status)
+              if status=='succeeded':
+                  record['final_state']='succeeded'; record['final_response']=last
+                  video_url=((last.get('content') or {}).get('video_url'))
+                  if video_url:
+                      req2=urllib.request.Request(video_url,headers={'User-Agent':'github-actions'})
+                      with urllib.request.urlopen(req2,timeout=180) as r, open('probe_output/output.mp4','wb') as out:
+                          while True:
+                              chunk=r.read(1024*1024)
+                              if not chunk: break
+                              out.write(chunk)
+                      record['downloaded_video_bytes']=os.path.getsize('probe_output/output.mp4')
+                  break
+              if status in ('failed','cancelled'):
+                  record['final_state']=status; record['final_response']=last; break
+              time.sleep(10)
+          else:
+              record['final_state']='timeout'; record['final_response']=last
+          record['end_unix']=time.time(); record['wall_seconds']=record['end_unix']-record['start_unix']; save()
+          print(json.dumps(record,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Record observer status without changing core verdict
+        if: always()
+        shell: bash
+        run: |
+          if [ -f probe_output/output.mp4 ]; then
+            if command -v ffprobe >/dev/null 2>&1; then
+              ffprobe -v error -show_entries format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels -of json probe_output/output.mp4 > probe_output/ffprobe.json
+            else
+              printf '%s\n' '{"observer":"ffprobe","status":"unavailable","core_task_verdict_unchanged":true}' > probe_output/observer_status.json
+            fi
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seedance-pro-250528-i2v-probe
+          path: probe_output/
+          if-no-files-found: error
+          retention-days: 1
