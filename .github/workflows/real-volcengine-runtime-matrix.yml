@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 12
     env:
       ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
-      E2E_ARTIFACT_DIR: e2e-artifacts
+      E2E_ARTIFACT_DIR: ${{ github.workspace }}/e2e-artifacts
     steps:
       - uses: actions/checkout@v4
       - name: Validate secret presence
@@ -45,12 +45,12 @@ jobs:
       - name: Execute raw-vs-plugin runtime attribution matrix
         shell: bash
         run: |
-          mkdir -p e2e-artifacts
+          mkdir -p "$E2E_ARTIFACT_DIR"
           uv run --directory AstrBot python "$GITHUB_WORKSPACE/tests/e2e/real_volcengine_runtime_matrix.py"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: real-volcengine-runtime-matrix
           path: e2e-artifacts
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
