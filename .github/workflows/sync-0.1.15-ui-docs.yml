@@ -1,0 +1,54 @@
+name: Sync 0.1.15 Source-scoped UI docs
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/sync-0.1.15-ui-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+      - name: Update README and changelog
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          readme = Path('README.md')
+          text = readme.read_text('utf-8')
+          old = '- **不污染 AstrBot 的公共能力轴**：图片、音频与工具仍按 AstrBot 原生模型卡配置；AstrBot 当前还没有原生 `video` modality，因此插件只给自己的模型卡增加“视频请求通道”布尔开关，且不把它写入 `modalities`，不给其他 Provider 塞第五个公共选项。'
+          new = '- **不污染 AstrBot 的公共能力轴**：图片、音频与工具仍按 AstrBot 原生模型卡配置；AstrBot 当前还没有原生 `video` modality，因此插件只给自己的模型卡增加“视频请求通道”布尔开关，且不把它写入 `modalities`。由于 AstrBot 4.26/4.27 使用共享模型卡 schema，插件会用 `provider_source_id` 条件生成只属于当前火山 Source 的临时 UI 字段；其他 Provider 不显示它，保存时临时字段会先转换成正式传输设置再删除。'
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '- 视频在 AstrBot 4.27 还没有原生反馈选项，因此插件提供逐模型卡“视频请求通道”；它只控制 Ark `video_url` 是否发送，不写 `modalities`，也不替模型下能力结论。'
+          new = '- 视频在 AstrBot 4.27 还没有原生反馈选项，因此插件提供逐模型卡“视频请求通道”；它只控制 Ark `video_url` 是否发送，不写 `modalities`，也不替模型下能力结论。这个 UI 使用当前火山 `provider_source_id` 作为宿主原生显示条件，外国 Provider 看不到；临时 UI 键不会进入持久配置或请求 payload。'
+          assert old in text
+          text = text.replace(old, new, 1)
+          readme.write_text(text, 'utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text('utf-8')
+          anchor = '## 0.1.15\n\n'
+          bullet = '- 修复共享模型卡 schema 的 UI 外溢风险：不再把 `volcengine_video_input_enabled` 作为无条件公共 schema 项暴露；改为按火山 Source 的 `provider_source_id` 生成临时条件字段，使用 Source ID 的 UTF-8→hex 可逆无碰撞编码，保存边界转换回正式字段并删除，外国 Provider 无可见字段也不能用伪造临时键生成火山状态。\n'
+          assert anchor in text
+          text = text.replace(anchor, anchor + bullet, 1)
+          changelog.write_text(text, 'utf-8')
+          PY
+          rm .github/workflows/sync-0.1.15-ui-docs.yml
+      - name: Commit docs and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md CHANGELOG.md .github/workflows/sync-0.1.15-ui-docs.yml
+          git diff --cached --check
+          git commit -m "docs: document Source-scoped video transport UI"
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
