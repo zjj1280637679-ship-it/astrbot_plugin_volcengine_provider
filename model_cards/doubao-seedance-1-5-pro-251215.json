@@ -1,12 +1,34 @@
 {
   "model_id": "doubao-seedance-1-5-pro-251215",
-  "card_version": "0.1",
+  "card_version": "0.2",
   "current_account_status": "executable",
   "modalities": {
-    "text_to_video": {"state": "E2E", "evidence": ["C-002", "D-002"]},
-    "single_image_to_video": {"state": "E2E", "evidence": ["C-004"]},
+    "text_to_video": {"state": "E2E", "evidence": ["C-002", "D-002"], "tested_duration_seconds": [5]},
+    "single_image_to_video": {"state": "E2E", "evidence": ["C-004"], "tested_duration_seconds": [5]},
     "first_last_frame": {"state": "documented_candidate", "evidence": ["official/developer product material"], "e2e": false},
     "native_audio_output": {"state": "E2E_observed", "evidence": ["C-011", "evidence/audio-control-observations.md"]}
+  },
+  "duration_and_output_domain": {
+    "text_to_video_no_image": {
+      "5_seconds": "E2E",
+      "maximum_seconds": 12,
+      "maximum_evidence": "user/control-plane condition",
+      "boundary_e2e": false,
+      "notes": "The 12-second maximum applies to no-image T2V only. It must not be propagated to image-conditioned modes."
+    },
+    "single_image_to_video": {
+      "5_seconds": "E2E",
+      "maximum_seconds": null,
+      "maximum_evidence": "unknown",
+      "notes": "Do not infer 12 seconds from the no-image T2V domain."
+    },
+    "first_last_frame": {
+      "maximum_seconds": null,
+      "maximum_evidence": "mode itself not E2E"
+    },
+    "observed_standard_t2v_resolution": {"reported": "720p", "encoded_dimensions": "1280x720", "universal_default_claim": false},
+    "observed_fps": 24,
+    "observed_output_format": "mp4"
   },
   "tested_request_controls": {
     "prompt_suffix_ratio_16_9": "E2E",
@@ -26,6 +48,12 @@
     "media": {"video": "H.264 1280x720", "audio": "AAC 44.1kHz stereo"},
     "wall_seconds_one_sample": 60.13133716583252
   },
+  "epistemic_limits": [
+    "No-image T2V 12-second maximum is a modality-bounded control-plane condition, not an all-modalities model property.",
+    "I2V maximum duration remains unknown beyond the 5-second E2E domain.",
+    "Pro 250528 is now also E2E for single-image I2V; 1.5 Pro is not the only executable I2V route.",
+    "Do not generalize the 720p/108900-token observation into a universal cost/default rule."
+  ],
   "probabilistic_unknowns": [
     "identity consistency reliability",
     "POV adherence rate",
@@ -38,7 +66,7 @@
   ],
   "production_notes": [
     "Use generate_audio=false explicitly when silence is required; omission produced audio in the controlled baseline.",
-    "This is the only exact supplied model with E2E single-image I2V evidence in this project.",
-    "Do not generalize the 720p/108900-token observation into a universal cost/default rule."
+    "Current hard single-image I2V routes include both 1.5 Pro 251215 and 1.0 Pro 250528.",
+    "Treat duration as exact_model × modality; never copy the no-image 12-second boundary into I2V without evidence."
   ]
 }
