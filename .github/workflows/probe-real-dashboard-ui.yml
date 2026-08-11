@@ -22,19 +22,24 @@ jobs:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --directory AstrBot
-      - uses: actions/setup-node@v4
+      - name: Setup pnpm exactly as AstrBot v4.27.2 Dashboard CI
+        uses: pnpm/action-setup@v6.0.9
         with:
-          node-version: '22'
+          version: 10.28.2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.13.0'
+          cache: pnpm
+          cache-dependency-path: AstrBot/dashboard/pnpm-lock.yaml
       - name: Build AstrBot Dashboard
+        working-directory: AstrBot/dashboard
+        run: pnpm install --frozen-lockfile && pnpm run build
+      - name: Install built Dashboard into AstrBot package
         run: |
-          corepack enable
-          cd AstrBot/dashboard
-          pnpm install --frozen-lockfile
-          pnpm build
-          mkdir -p ../astrbot/dashboard/dist
-          rsync -a --delete dist/ ../astrbot/dashboard/dist/
-          mkdir -p ../astrbot/dashboard/dist/assets
-          printf '4.27.2' > ../astrbot/dashboard/dist/assets/version
+          mkdir -p AstrBot/astrbot/dashboard/dist
+          rsync -a --delete AstrBot/dashboard/dist/ AstrBot/astrbot/dashboard/dist/
+          mkdir -p AstrBot/astrbot/dashboard/dist/assets
+          printf '4.27.2' > AstrBot/astrbot/dashboard/dist/assets/version
       - name: Initialize AstrBot and install plugin
         run: |
           uv run --directory AstrBot astrbot init
