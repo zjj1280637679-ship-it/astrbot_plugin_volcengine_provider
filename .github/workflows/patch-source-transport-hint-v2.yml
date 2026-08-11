@@ -20,7 +20,7 @@ jobs:
           ref: refactor/0.1.15-feedback-boundary
           fetch-depth: 0
 
-      - name: Reuse v1 patcher with corrected acquire/release targeting
+      - name: Reuse v1 patcher with corrected targeting and test fixture
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -77,6 +77,24 @@ jobs:
           if patcher.count(release_old) != 1:
               raise SystemExit(f'v1 release block count={patcher.count(release_old)}')
           patcher = patcher.replace(release_old, release_new)
+
+          storage_old = '''text = replace_once(
+              text,
+              '        self.updated: list[tuple[str, dict]] = []\\n',
+              '        self.updated: list[tuple[str, dict]] = []\\n'
+              '        self.source_upserts: list[tuple[str, dict]] = []\\n',
+              'save test source-upsert storage',
+          )'''
+          storage_new = '''text = replace_once(
+              text,
+              '        self.provider_manager = FakeManager(self.config["provider"])\\n',
+              '        self.provider_manager = FakeManager(self.config["provider"])\\n'
+              '        self.source_upserts: list[tuple[str, dict]] = []\\n',
+              'save test source-upsert storage',
+          )'''
+          if patcher.count(storage_old) != 1:
+              raise SystemExit(f'v1 save storage block count={patcher.count(storage_old)}')
+          patcher = patcher.replace(storage_old, storage_new)
 
           exec(compile(patcher, '<source-hint-patcher-v2>', 'exec'), {})
           PY
