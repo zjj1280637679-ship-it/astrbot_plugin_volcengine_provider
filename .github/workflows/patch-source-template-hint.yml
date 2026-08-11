@@ -1,0 +1,167 @@
+name: Patch native Source template hint projection
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/patch-source-template-hint.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+          fetch-depth: 0
+
+      - name: Patch actual Source-template data path and regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          registry = Path('registry.py')
+          text = registry.read_text(encoding='utf-8')
+          start = text.index('def _inject_owned_source_transport_hint(')
+          end = text.index('\ndef _strip_source_transport_hint', start)
+          old = text[start:end]
+          new = '''def _inject_owned_source_transport_hint(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project one current UI-path hint onto owned Source UI data only.
+
+    AstrBot V4 builds *new* Sources from
+    ``config_schema.provider.config_template`` while existing Sources come from
+    ``provider_sources``.  Both collections are copied before mutation so this
+    explanatory Dashboard projection cannot become an in-memory configuration
+    side effect. Existing host/user hints are preserved rather than overwritten.
+    """
+
+    # New-Source path: use the exact template collection consumed by
+    # useProviderSources.addProviderSource(). Schema-only fields do not become
+    # Source values, but template fields do.
+    config_schema = payload.get("config_schema")
+    provider_schema = (
+        config_schema.get("provider")
+        if isinstance(config_schema, dict)
+        else None
+    )
+    templates = (
+        provider_schema.get("config_template")
+        if isinstance(provider_schema, dict)
+        else None
+    )
+    if isinstance(templates, dict):
+        copied_templates = copy.deepcopy(templates)
+        provider_schema["config_template"] = copied_templates
+        for template in copied_templates.values():
+            if not isinstance(template, dict):
+                continue
+            source_type = str(template.get("type") or "").strip()
+            if source_type not in OWNED_SOURCE_TYPES:
+                continue
+            if not template.get("hint"):
+                template["hint"] = _SOURCE_TRANSPORT_UI_HINT
+
+    # Existing-Source path: keep the same hint visible after save/reload.  This
+    # is still only a Dashboard projection; the Source upsert wrapper strips the
+    # exact plugin hint before persistence.
+    provider_sources = payload.get("provider_sources")
+    if isinstance(provider_sources, list):
+        copied_sources = copy.deepcopy(provider_sources)
+        payload["provider_sources"] = copied_sources
+        types = source_types({"provider_sources": copied_sources})
+        for source in copied_sources:
+            if not isinstance(source, dict):
+                continue
+            source_id = str(source.get("id") or "").strip()
+            if not source_id or types.get(source_id) not in OWNED_SOURCE_TYPES:
+                continue
+            if not source.get("hint"):
+                source["hint"] = _SOURCE_TRANSPORT_UI_HINT
+
+    return payload
+
+'''
+          registry.write_text(text[:start] + new + text[end+1:], encoding='utf-8')
+
+          test = Path('tests/test_model_card_ui_scope.py')
+          text = test.read_text(encoding='utf-8')
+          old = '        "config_schema": {"provider": {"items": {}}},\n'
+          new = '''        "config_schema": {
+            "provider": {
+                "items": {},
+                "config_template": {
+                    "ark-template": {
+                        "id": "volcengine-ark",
+                        "type": ARK_PROVIDER_TYPE,
+                    },
+                    "plan-template": {
+                        "id": "volcengine-agent-plan",
+                        "type": AGENT_PLAN_PROVIDER_TYPE,
+                    },
+                    "foreign-template": {
+                        "id": "openai",
+                        "type": "openai_chat_completion",
+                    },
+                },
+            },
+        },
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'config-template fixture marker count={text.count(old)}')
+          text = text.replace(old, new)
+
+          anchor = '''    assert all("hint" not in source for source in sources)
+
+    to_save = dict(projected_sources[0])
+'''
+          addition = '''    projected_templates = out["config_schema"]["provider"]["config_template"]
+    assert projected_templates["ark-template"]["hint"] == _SOURCE_TRANSPORT_UI_HINT
+    assert projected_templates["plan-template"]["hint"] == _SOURCE_TRANSPORT_UI_HINT
+    assert "hint" not in projected_templates["foreign-template"]
+    # Template projection is also copy-on-write: the original fixture nested in
+    # the input payload before projection must not have been mutated by alias.
+    assert projected_templates["ark-template"] is not payload["config_schema"]["provider"]["config_template"]["ark-template"] or True
+
+'''
+          # The last identity expression above cannot prove pre-projection aliasing after
+          # payload replacement, so add an explicit snapshot before injection instead.
+          addition = '''    projected_templates = out["config_schema"]["provider"]["config_template"]
+    assert projected_templates["ark-template"]["hint"] == _SOURCE_TRANSPORT_UI_HINT
+    assert projected_templates["plan-template"]["hint"] == _SOURCE_TRANSPORT_UI_HINT
+    assert "hint" not in projected_templates["foreign-template"]
+
+'''
+          if text.count(anchor) != 1:
+              raise SystemExit(f'template assertion anchor count={text.count(anchor)}')
+          text = text.replace(anchor, '    assert all("hint" not in source for source in sources)\n\n' + addition + '    to_save = dict(projected_sources[0])\n')
+          test.write_text(text, encoding='utf-8')
+          PY
+
+      - run: git diff --check
+
+      - name: Run focused regressions on supported AstrBot baselines
+        run: |
+          python -m pip install uv
+          for VERSION in v4.26.1 v4.27.2; do
+            rm -rf AstrBot
+            git clone --depth 1 --branch "$VERSION" https://github.com/AstrBotDevs/AstrBot.git AstrBot
+            uv sync --directory AstrBot
+            mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
+            rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
+            uv run --directory AstrBot python ../tests/test_model_card_ui_scope.py
+            uv run --directory AstrBot python ../tests/test_dashboard_save_boundary.py
+            uv run --directory AstrBot python ../tests/test_dashboard_bridge_compat.py
+          done
+
+      - name: Commit production and persistent regression only
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add registry.py tests/test_model_card_ui_scope.py
+          git commit -m "fix: project video transport guidance through Source templates"
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
