@@ -1,0 +1,29 @@
+name: Sync main before 0.1.15 release
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/sync-main-before-0.1.15.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+          fetch-depth: 0
+      - name: Merge current main without touching release logic
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-ff origin/main -m "merge: sync main before 0.1.15 release"
+          git rm .github/workflows/sync-main-before-0.1.15.yml
+          git commit --amend --no-edit
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
