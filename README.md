@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.15-e85d3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.16-e85d3f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp%20%7C%20webchat-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -105,6 +105,14 @@ QQ Record
 
 如果音频/视频在 QQ/NapCat/AstrBot 媒体解析或 Ark payload 组装阶段失败，插件会把它标成 `input_transport`：这表示有效请求**尚未到达模型**，模型能力仍未知。若火山 API 已返回模态拒绝或其他上游错误，则继续沿 AstrBot/OpenAI SDK 原生错误链处理。插件只区分失败发生在哪一层，不把一次失败写成永久能力结论，也不自行接管 fallback。
 
+## 0.1.16：运行证据不是产品接口替身
+
+- **交互不等于判断。** 一次请求成功只说明该条件下路径成功，一次请求失败也只说明该条件下存在失败；没有额外证据时，两者都不能升级成模型永久能力结论。
+- **raw Ark 测试只负责下游协议归因。** 直接发送 WAV、MP4/data URL 或其他合成 fixture，可以帮助判断 Ark payload 是否成立，但不能替代 `QQ → NapCat/OneBot → AstrBot → MediaResolver → plugin adapter → Ark/model` 的真实产品接口。
+- **不要为了测试绿灯改坏 QQ。** 一个不等价裸媒体 fixture 如果失败，首先检查测试条件是否等价；禁止为了让 CI 通过而放宽生产 adapter，导致“直接 API 测试成功、QQ 实际不可用”。
+- **历史媒体验收按影响重验。** 已验证的 QQ 定向音频/视频链记录在 `docs/TEST_HISTORY.md`；只有媒体 adapter、AstrBot 媒体契约、Ark 音视频 payload 或 QQ/NapCat 输入语义发生相关变化时，才按 `docs/REGRESSION_SCOPE.md` 重新跑完整 QQ 等价链。
+- **当前运行证据用于归因，不写成真理。** 普通 Ark 当前 `/models`、文本和同字节 PNG 图片已经完成 raw-vs-plugin 对照；Agent Plan 在使用普通 Ark 凭据时 raw/plugin 同时落在同一认证边界。这些结果只说明当前运行条件，不触发模型能力数据库或插件自有 fallback。
+- 项目的 AI/维护入口见 `AGENTS.md`、`docs/AI_RULES.md`、`docs/KNOWLEDGE_BOUNDARY.md`、`docs/TEST_HISTORY.md`、`docs/REGRESSION_SCOPE.md` 与 `docs/PROJECT_STATE.json`。这些文件只负责解释和导航，不是运行时控制面。
 
 ## 0.1.15：请求通道不是能力真值表
 
@@ -132,15 +140,19 @@ adapters/
   └─ logging.py   OpenAI SDK 音视频日志脱敏
 
 metadata/
-  ├─ common.py    写入 AstrBot LLM_METADATAS 的公共句柄
-  ├─ ark.py       /models 回执 → AstrBot 模型事实
-  └─ agent_plan.py 官方套餐/控制台事实快照与来源时间
+  ├─ ark.py        当前 /models 回执 → Source-scoped 单次反馈
+  └─ agent_plan.py Agent Plan model-name 候选；不维护 model-ID 能力先验
+
+capabilities/
+  ├─ SEMANTICS.json      机器可读语义边界
+  ├─ model_scope.py      逐模型卡视频请求传输设置与迁移语义
+  └─ source_hints.py     当前 Source 回执的临时展示上下文
 
 compatibility/astrbot.py
   └─ 只放可删除的 AstrBot 临时兼容 shim
 
 registry.py
-  └─ AstrBot 当前缺失的 Provider 注册所有权 / schema 桥
+  └─ Provider 注册保护 + 当前 AstrBot Dashboard/schema 兼容桥
 ```
 
 这次还收紧了初始化粒度：普通 `import astrbot_plugin_volcengine_provider.metadata.ark`、`adapters.audio` 等工具模块不会再隐式注册 Provider；只有 AstrBot 的插件入口 `main.py` 明确加载 `providers.py` 时才产生注册副作用。为了兼容已有调用，`from astrbot_plugin_volcengine_provider import ProviderVolcengineArk` 仍可使用，但改为按需惰性加载。
@@ -149,7 +161,7 @@ registry.py
 
 0.1.14 没有新增 retry、模型轮换、媒体下载器或第二套生命周期。相反，架构测试明确禁止 metadata、logging、media adapter 反向依赖 Provider/retry/key pool；Agent Plan 外部事实还显式记录了核对日期与来源类型。
 
-最新发布矩阵同时在 AstrBot `4.26.1` 与 `4.27.2` 验证 Provider 注册、标准 WAV 快路径、真实合成 Tencent Silk、视频可信附件边界、普通 Ark `/models`、模型元数据和真实 Chat Completions，因此最低版本仍保持 `>=4.26.1`。
+历史兼容矩阵曾同时在 AstrBot `4.26.1` 与 `4.27.2` 验证 Provider 注册、标准 WAV 快路径、真实合成 Tencent Silk、视频可信附件边界、普通 Ark `/models` 与真实 Chat Completions，因此最低版本仍保持 `>=4.26.1`。0.1.16 对媒体路径是否需要完整重验，按 `docs/REGRESSION_SCOPE.md` 的依赖影响判断，而不是用不等价裸 fixture 替代。
 
 ## 插件不会替你做的决定
 
@@ -195,23 +207,32 @@ registry.py
 
 普通 API 与 Agent Plan 共用同一个视频句柄和同一个音频规范化句柄，只在固定 Base URL 与本地模型前缀上分叉。这样你只需要审计一套多模态协议，不会遇到两份状态机分别漂移。
 
-模型元数据遵循“上游明确声明才自动勾选”的规则：
+当前 `/models` 反馈遵循“上游明确返回什么，就只展示本轮明确返回的什么”的规则：
 
 - `modalities.input_modalities` / `output_modalities`；
 - `token_limits.context_window` / `max_output_token_length`；
 - `features.tools.function_calling`；
-- 明确的思考能力或最大思考长度字段。
+- 明确的思考能力字段。
 
-AstrBot 当前的公共 `modalities` 仍只有文本、图片、音频与工具，没有原生视频能力轴。插件因此只在自身生命周期内给两个火山 Provider 类型补充专属“视频输入”字段，不修改公共 `modalities`、AstrBot 源码或 Dashboard 文件；未来宿主提供原生 video capability 后，这层桥可以直接收缩或移除。
+这些字段是当前 Source 的单次反馈，不自动持久化成模型卡能力真值，也不授权插件自动开关运行路径。AstrBot 当前的公共 `modalities` 仍只有文本、图片、音频与工具，没有原生视频能力轴；插件因此只对自己的模型卡提供专属“视频请求通道”传输设置，不修改公共 `modalities`、AstrBot 源码或 Dashboard 文件。未来宿主提供原生 video capability 后，这层桥可以直接收缩或移除。
 
-## 已完成的真实验收
+## 已完成的真实验收与当前证据
 
-- 普通 API 与 Agent Plan 均使用 4 秒红蓝顺序视频完成 Chat Completions 真请求，返回 HTTP 200，并正确识别颜色顺序。
-- 一条曾触发 WAV 格式错误的真实 QQ Tencent Silk 语音，已被规范化为 16 kHz、单声道、16-bit PCM WAV。
-- 同一语音通过普通方舟模型完成真实 Chat Completions 请求并返回 HTTP 200。
-- 视频 URL 与音频 Base64 在 DEBUG 请求日志中分别显示为 `[REDACTED_VIDEO_URL]` 与 `[REDACTED_AUDIO_BASE64]`。
+### 历史产品链证据
 
-真实额度测试默认跳过，只有你显式注入临时环境变量时才运行。测试代码不会主动读取正式配置或保存密钥。
+- 普通 API 与 Agent Plan 曾使用同一个 4 秒红蓝顺序视频完成 Chat Completions 真请求，返回 HTTP 200，并正确识别颜色顺序。
+- 一条曾触发 WAV 格式错误的真实 QQ Tencent Silk 语音，曾被规范化为 16 kHz、单声道、16-bit PCM WAV；同一语音的合规 WAV 通过普通方舟 Chat Completions 返回 HTTP 200。
+- AstrBot `4.26.1` 与 `4.27.2` 的兼容矩阵曾覆盖真实合成 Tencent Silk、视频可信附件桥、Provider 注册等宿主路径。
+
+这些是历史条件下的验证资产；何时必须重验见 `docs/TEST_HISTORY.md` 与 `docs/REGRESSION_SCOPE.md`。
+
+### 0.1.16 当前运行归因证据
+
+- 当前普通 Ark `/models`、文本以及同字节 PNG 图片完成 raw-vs-plugin 对照；这些结果用于确认下游协议/插件路径，而不是生成永久模型能力表。
+- 当前普通 Ark 凭据调用 Agent Plan 时，raw 与插件路径同时落在同一认证/账户边界，因此不会为了让 CI 变绿而修改 Agent Plan Provider。
+- 直接 WAV/视频等裸 fixture 若与 QQ 输入条件不等价，不作为 QQ 产品链是否可用的单独裁决依据。
+
+真实额度测试默认跳过，只有显式注入临时环境变量时才运行。测试代码不会主动读取正式配置或保存密钥。
 
 ## 隐私、日志与费用
 
