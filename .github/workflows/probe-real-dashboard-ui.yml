@@ -60,7 +60,9 @@ jobs:
 
           source = Path('AstrBot/data/cmd_config.json')
           target = Path('e2e-artifacts/config-before-run.redacted.json')
-          data = json.loads(source.read_text(encoding='utf-8'))
+          # AstrBot may write JSON with a UTF-8 BOM; utf-8-sig accepts both BOM
+          # and ordinary UTF-8 without changing the redaction/output semantics.
+          data = json.loads(source.read_text(encoding='utf-8-sig'))
 
           def redact(value, key=''):
               lowered = key.lower()
