@@ -16,89 +16,149 @@ jobs:
     env:
       ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
       MODEL_ID: doubao-seedance-1-5-pro-251215
-      IMAGE_URL: https://raw.githubusercontent.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/main/assets/seedance_tests/qqshow_smug_frame_20260812.jpg
+      IMAGE_URL: https://raw.githubusercontent.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/main/assets/seedance_test/qqshow_smug_reference.jpg
     steps:
-      - name: Validate prerequisites
+      - name: Validate secret presence
         shell: bash
         run: |
-          test -n "$ARK_API_KEY" || { echo 'HUOSHANYINQINGAPI unavailable'; exit 2; }
-          mkdir -p output
+          if [ -z "$ARK_API_KEY" ]; then
+            echo "HUOSHANYINQINGAPI is unavailable to this workflow"
+            exit 2
+          fi
+          echo "Secret is available (value intentionally not printed)."
+
+      - name: Verify reference image URL
+        shell: bash
+        run: |
           python3 - <<'PY'
           import os, urllib.request
-          req=urllib.request.Request(os.environ['IMAGE_URL'],headers={'User-Agent':'github-actions'})
-          with urllib.request.urlopen(req,timeout=30) as r:
-              data=r.read(); ct=r.headers.get('Content-Type','')
-          print('reference content-type:',ct)
-          print('reference bytes:',len(data))
-          if len(data)<1024 or not ct.startswith('image/'):
-              raise SystemExit('reference image prerequisite failed')
-          open('output/reference.jpg','wb').write(data)
+          url = os.environ['IMAGE_URL']
+          req = urllib.request.Request(url, headers={'User-Agent':'github-actions'})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              content_type = r.headers.get('Content-Type','')
+              data = r.read()
+          print('reference content-type:', content_type)
+          print('reference bytes:', len(data))
+          if len(data) < 1024:
+              raise SystemExit('Reference image download unexpectedly small')
+          if not content_type.startswith('image/'):
+              raise SystemExit('Reference URL did not return an image')
+          open('reference_download_test.jpg','wb').write(data)
           PY
 
-      - name: Create and poll Seedance task
+      - name: Create Seedance image-to-video task
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          prompt = (
+              "Keep the exact same chibi character and full-body composition from the reference image. "
+              "The character keeps both arms crossed. Fixed camera, plain light background. "
+              "He gently tilts his head, raises one eyebrow, forms a subtle smug mischievous smile, holds it briefly, then returns very close to the starting pose. "
+              "Only tiny secondary motion in hair, robe hem and tail. No walking, no camera movement, no zoom, no new objects, no text, no costume change, no extra limbs, no morphing, no scene change. "
+              "--ratio 9:16 --dur 5"
+          )
+          payload = {
+              'model': os.environ['MODEL_ID'],
+              'content': [
+                  {'type':'text','text':prompt},
+                  {'type':'image_url','image_url':{'url':os.environ['IMAGE_URL']}}
+              ],
+              'duration': 5,
+              'generate_audio': False,
+          }
+          req = urllib.request.Request(
+              'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
+              data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+              headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['ARK_API_KEY']},
+              method='POST',
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  data=json.loads(r.read().decode('utf-8'))
+          except urllib.error.HTTPError as e:
+              body=e.read().decode('utf-8','replace')
+              print(f'Create task HTTP {e.code}: {body}')
+              raise
+          print(json.dumps(data, ensure_ascii=False))
+          task_id=data.get('id')
+          if not task_id:
+              raise SystemExit('No task id returned')
+          with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as f:
+              f.write(f'TASK_ID={task_id}\n')
+          with open('seedance_i2v_task.json','w',encoding='utf-8') as f:
+              json.dump({'task_id':task_id,'model':os.environ['MODEL_ID'],'image_url':os.environ['IMAGE_URL'],'prompt':prompt},f,ensure_ascii=False,indent=2)
+          PY
+
+      - name: Poll task and download video
         shell: bash
         run: |
           python3 - <<'PY'
           import json, os, time, urllib.request, urllib.error
-          prompt=(
-              'Preserve the exact same chibi character design, face, black medium-length hair, golden eyes, red-and-black demon horns, small goatee, red traditional robe with gold embroidery, black shoes, white socks, orange-red fox tail, and full-body composition from the reference image. '
-              'Create a cute looping chat-sticker motion with a fixed camera and plain light background. The character keeps the arms crossed. '
-              'Action: start almost still; gently tilt the head a little, raise one eyebrow with a smug confident expression, let the corner of the mouth curl into a subtle mischievous smirk, hold the smug look briefly, then smoothly return very close to the starting pose by the end. '
-              'Only tiny natural secondary motion in hair, robe hem and tail. No walking, no large body movement, no camera movement, no zoom, no new objects, no text, no costume changes, no extra limbs, no morphing, no scene change. '
-              '--ratio 9:16 --dur 5'
-          )
-          payload={
-              'model':os.environ['MODEL_ID'],
-              'content':[
-                  {'type':'text','text':prompt},
-                  {'type':'image_url','image_url':{'url':os.environ['IMAGE_URL']}}
-              ],
-              'generate_audio':False
-          }
-          base='https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks'
-          headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['ARK_API_KEY']}
-          record={'model':os.environ['MODEL_ID'],'prompt':prompt,'image_url':os.environ['IMAGE_URL'],'payload':payload,'start_unix':time.time()}
-          req=urllib.request.Request(base,data=json.dumps(payload,ensure_ascii=False).encode('utf-8'),headers=headers,method='POST')
-          try:
-              with urllib.request.urlopen(req,timeout=60) as r:
-                  created=json.loads(r.read().decode('utf-8')); record['create_http_status']=r.status
-          except urllib.error.HTTPError as e:
-              record['create_http_status']=e.code; record['create_error_body']=e.read().decode('utf-8','replace'); record['final_state']='create_failed'
-              json.dump(record,open('output/task.json','w'),ensure_ascii=False,indent=2); print(json.dumps(record,ensure_ascii=False,indent=2)); raise SystemExit(1)
-          task_id=created.get('id'); record['create_response']=created; record['task_id']=task_id
-          if not task_id: raise SystemExit('No task id returned')
-          status_url=base+'/'+task_id; poll_headers={'Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          task_id=os.environ['TASK_ID']
+          headers={'Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          status_url=f'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/{task_id}'
+          def find_video_url(obj):
+              if isinstance(obj,dict):
+                  for key in ('video_url','videoUrl'):
+                      v=obj.get(key)
+                      if isinstance(v,str) and v.startswith(('http://','https://')):
+                          return v
+                  for v in obj.values():
+                      x=find_video_url(v)
+                      if x:return x
+              elif isinstance(obj,list):
+                  for v in obj:
+                      x=find_video_url(v)
+                      if x:return x
+              return None
+          last=None
           for attempt in range(90):
-              with urllib.request.urlopen(urllib.request.Request(status_url,headers=poll_headers,method='GET'),timeout=60) as r:
-                  data=json.loads(r.read().decode('utf-8'))
-              status=data.get('status',''); print('poll',attempt+1,status); record['poll_count']=attempt+1; record['last_status']=status
+              req=urllib.request.Request(status_url,headers=headers,method='GET')
+              try:
+                  with urllib.request.urlopen(req,timeout=60) as r:
+                      data=json.loads(r.read().decode('utf-8'))
+              except urllib.error.HTTPError as e:
+                  body=e.read().decode('utf-8','replace')
+                  print(f'Poll HTTP {e.code}: {body}')
+                  raise
+              last=data
+              status=data.get('status','')
+              print(f'poll {attempt+1}: {status}')
               if status=='succeeded':
-                  record['final_state']='succeeded'; record['final_response']=data
-                  video_url=((data.get('content') or {}).get('video_url'))
-                  if not video_url: raise SystemExit('Succeeded but no video_url')
+                  video_url=find_video_url(data)
+                  if not video_url:
+                      print(json.dumps(data,ensure_ascii=False,indent=2))
+                      raise SystemExit('Task succeeded but no video_url found')
+                  with open('seedance_i2v_result.json','w',encoding='utf-8') as f:
+                      json.dump(data,f,ensure_ascii=False,indent=2)
                   req2=urllib.request.Request(video_url,headers={'User-Agent':'github-actions'})
-                  with urllib.request.urlopen(req2,timeout=180) as r, open('output/qqshow_smug_5s.mp4','wb') as out:
+                  with urllib.request.urlopen(req2,timeout=120) as r, open('qqshow_smug_5s.mp4','wb') as out:
                       while True:
                           chunk=r.read(1024*1024)
-                          if not chunk: break
+                          if not chunk:break
                           out.write(chunk)
-                  record['downloaded_video_bytes']=os.path.getsize('output/qqshow_smug_5s.mp4')
-                  break
+                  size=os.path.getsize('qqshow_smug_5s.mp4')
+                  print('Downloaded video bytes:',size)
+                  if size<1024:raise SystemExit('Downloaded video unexpectedly small')
+                  raise SystemExit(0)
               if status in ('failed','cancelled'):
-                  record['final_state']=status; record['final_response']=data; break
+                  print(json.dumps(data,ensure_ascii=False,indent=2))
+                  raise SystemExit(f'Generation ended with status={status}')
               time.sleep(10)
-          else:
-              record['final_state']='timeout'
-          record['end_unix']=time.time(); record['wall_seconds']=record['end_unix']-record['start_unix']
-          with open('output/task.json','w',encoding='utf-8') as f: json.dump(record,f,ensure_ascii=False,indent=2)
-          print(json.dumps(record,ensure_ascii=False,indent=2))
-          if record.get('final_state')!='succeeded': raise SystemExit('generation did not succeed')
+          if last:print(json.dumps(last,ensure_ascii=False,indent=2))
+          raise SystemExit('Timed out waiting for Seedance')
           PY
 
-      - name: Upload result
+      - name: Upload result for ChatGPT transfer
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: seedance-qqshow-smug-sticker
-          path: output/
-          if-no-files-found: error
+          path: |
+            reference_download_test.jpg
+            qqshow_smug_5s.mp4
+            seedance_i2v_task.json
+            seedance_i2v_result.json
+          if-no-files-found: warn
           retention-days: 1
