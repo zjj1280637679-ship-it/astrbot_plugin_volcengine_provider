@@ -1,0 +1,40 @@
+name: Patch browser matrix Source menu state
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/patch-browser-matrix-menu-state.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+          fetch-depth: 0
+      - name: Patch Source menu state handling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/e2e/provider_card_matrix/browser_matrix.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''    await page.wait_for_timeout(1_200)\n    if await dismiss_first_run_dialog(page):\n        await add_button.click()\n\n    menu_item = page.locator(\n        ".v-overlay:visible .v-list-item", has_text=case.menu_label\n    ).first\n    await expect(menu_item).to_be_visible(timeout=15_000)\n'''
+          new = '''    await page.wait_for_timeout(1_200)\n    await dismiss_first_run_dialog(page)\n\n    menu_item = page.locator(\n        ".v-overlay:visible .v-list-item", has_text=case.menu_label\n    ).first\n    # Closing the delayed first-run dialog does not necessarily close the\n    # already-open Source menu. Reopen only when the target item is actually\n    # absent; otherwise a second click on the plus button fights the menu\n    # overlay and creates a false UI failure.\n    if not await menu_item.is_visible():\n        await add_button.click()\n    await expect(menu_item).to_be_visible(timeout=15_000)\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'unexpected Source-menu snippet count={text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit harness fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/e2e/provider_card_matrix/browser_matrix.py
+          git commit -m "test: preserve already-open Source menu after first-run dialog"
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
