@@ -6,6 +6,7 @@ on:
       - refactor/0.1.15-feedback-boundary
     paths:
       - .github/workflows/probe-real-dashboard-ui.yml
+      - tests/e2e/provider_card_matrix/browser_probe.py
 
 permissions:
   contents: read
@@ -47,23 +48,56 @@ jobs:
           rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
           uv run --directory AstrBot astrbot conf set dashboard.username e2e-admin
           uv run --directory AstrBot astrbot conf set dashboard.password E2e-password-123
+      - name: Capture secret-free pre-run evidence
+        run: |
+          mkdir -p e2e-artifacts
+          find AstrBot/data/plugins/astrbot_plugin_volcengine_provider -maxdepth 3 -type f -printf '%P\n' | sort > e2e-artifacts/plugin-tree.txt
+          test -f AstrBot/data/plugins/astrbot_plugin_volcengine_provider/main.py
+          test -f AstrBot/data/plugins/astrbot_plugin_volcengine_provider/metadata.yaml
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          source = Path('AstrBot/data/cmd_config.json')
+          target = Path('e2e-artifacts/config-before-run.redacted.json')
+          data = json.loads(source.read_text(encoding='utf-8'))
+
+          def redact(value, key=''):
+              lowered = key.lower()
+              if any(word in lowered for word in ('password', 'secret', 'token', 'api_key', 'apikey', 'key')):
+                  return '<redacted>'
+              if isinstance(value, dict):
+                  return {k: redact(v, str(k)) for k, v in value.items()}
+              if isinstance(value, list):
+                  return [redact(item, key) for item in value]
+              return value
+
+          target.write_text(json.dumps(redact(data), ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
+          PY
       - name: Install Playwright Chromium
         run: |
           python -m pip install playwright
           python -m playwright install --with-deps chromium
-      - name: Start AstrBot
+      - name: Start AstrBot and verify plugin runtime
         run: |
           nohup uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-e2e.log 2>&1 &
           echo $! >/tmp/astrbot-e2e.pid
+          ready=0
           for i in $(seq 1 90); do
             if curl -fsS http://127.0.0.1:6185/ >/dev/null 2>&1; then
-              echo 'AstrBot Dashboard is up'
-              exit 0
+              ready=1
+              break
             fi
             sleep 1
           done
-          cat /tmp/astrbot-e2e.log
-          exit 1
+          cp /tmp/astrbot-e2e.log e2e-artifacts/startup.log || true
+          if [ "$ready" != "1" ]; then
+            cat /tmp/astrbot-e2e.log
+            exit 1
+          fi
+          echo 'AstrBot Dashboard is up'
+          grep -E 'Loading plugin astrbot_plugin_volcengine_provider|Plugin astrbot_plugin_volcengine_provider|Volcengine providers registered' /tmp/astrbot-e2e.log > e2e-artifacts/plugin-runtime.log
+          grep -q 'Volcengine providers registered' /tmp/astrbot-e2e.log
       - name: Run real Dashboard browser probe
         env:
           ASTRBOT_E2E_URL: http://127.0.0.1:6185
@@ -71,6 +105,9 @@ jobs:
           ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
         run: python tests/e2e/provider_card_matrix/browser_probe.py
+      - name: Capture final AstrBot log
+        if: always()
+        run: cp /tmp/astrbot-e2e.log e2e-artifacts/startup.log || true
       - name: Show AstrBot log on failure
         if: failure()
         run: cat /tmp/astrbot-e2e.log || true
@@ -79,4 +116,4 @@ jobs:
         with:
           name: real-dashboard-ui-probe
           path: e2e-artifacts
-          if-no-files-found: ignore
+          if-no-files-found: error
