@@ -1,5 +1,5 @@
 {
-  "schema_version": "0.2",
+  "schema_version": "0.3",
   "project": "astrbot_plugin_volcengine_provider",
   "claims": [
     {
@@ -7,7 +7,7 @@
       "claim": "The configured GitHub Actions secret can authenticate requests to the Volcengine Ark video-generation API.",
       "relation": "conditional_deterministic",
       "status": "E2E",
-      "domain": {"secret_name": "HUOSHANYINQINGAPI", "tested_models": ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-0-pro-fast-251015"]},
+      "domain": {"secret_name": "HUOSHANYINQINGAPI", "tested_models": ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-0-pro-fast-251015", "doubao-seedance-1-0-pro-250528"]},
       "premises": ["repository Actions can read the secret", "the secret remains valid", "Volcengine service is reachable"],
       "invalidators": ["secret rotation/revocation", "permission changes", "API authentication contract changes"]
     },
@@ -96,7 +96,7 @@
       "domain": {"experiment": "D-002", "duration_seconds": 5, "ratio": "16:9", "same_prompt_and_payload_except_model": true},
       "premises": ["returned task metadata accurately describes each completed task"],
       "invalidators": ["different request shape", "different model version", "service default changes"],
-      "notes": "This is an observed default difference, not a universal cost formula or stable efficiency ranking.",
+      "notes": "Observed defaults only; not a universal cost formula or stable efficiency ranking.",
       "evidence_file": "evidence/D-002-controlled-model-probe.md"
     },
     {
@@ -107,7 +107,7 @@
       "domain": {"experiment": "D-002", "mode": "text_to_video", "generate_audio_field_supplied": false},
       "premises": ["same exact model/request domain"],
       "invalidators": ["request shape change", "model/version change", "service default change"],
-      "notes": "Establishes default positive audio behavior in this tested domain; does not yet establish explicit enable/disable parameter semantics.",
+      "notes": "Establishes default positive audio behavior in this tested domain; explicit enable/disable semantics remain unproven.",
       "evidence_file": "evidence/D-002-controlled-model-probe.md"
     },
     {
@@ -120,6 +120,49 @@
       "invalidators": [],
       "next_evidence_needed": "repeated contemporaneous controlled samples only if latency ranking becomes load-bearing",
       "evidence_file": "evidence/D-002-controlled-model-probe.md"
+    },
+    {
+      "id": "C-013",
+      "claim": "The exact model ID doubao-seedance-1-0-pro-250528 accepts and completes the standardized minimal 5-second 16:9 text-to-video request in the current account.",
+      "relation": "conditional_deterministic",
+      "status": "E2E",
+      "domain": {"experiment": "D-003", "mode": "text_to_video", "prompt_controls": ["--ratio 16:9", "--dur 5"], "no_top_level_generation_controls": true},
+      "premises": ["valid API credential", "sufficient quota", "model remains available"],
+      "invalidators": ["model/version retirement", "account entitlement change", "request contract change", "service outage"],
+      "evidence_file": "evidence/D-003-remaining-models-probe.md"
+    },
+    {
+      "id": "C-014",
+      "claim": "The exact route doubao-seedance-1-0-lite-t2v-250428 + current account + current Bearer inference API rejected task creation with InvalidEndpointOrModel.NotFound.",
+      "relation": "conditional_deterministic_path_failure",
+      "status": "F",
+      "domain": {"experiment": "D-003", "mode": "text_to_video", "exact_model_id": "doubao-seedance-1-0-lite-t2v-250428"},
+      "premises": ["same current account/API path"],
+      "invalidators": ["account entitlement changes", "model endpoint/version changes", "service routing changes"],
+      "notes": "Provider message merges 'does not exist' and 'no access'; experiment cannot identify which cause is true and cannot generalize to the Lite family.",
+      "evidence_file": "evidence/D-003-remaining-models-probe.md"
+    },
+    {
+      "id": "C-015",
+      "claim": "The D-003 Pro 250528 GitHub job's red conclusion was caused by the optional ffprobe observer being absent on the hosted runner after Seedance generation and MP4 download had already succeeded.",
+      "relation": "deterministic_forward",
+      "status": "T",
+      "domain": {"runner": "GitHub hosted ubuntu-24.04 in D-003", "observer": "ffprobe"},
+      "premises": ["workflow log accurately records step order and exit code"],
+      "invalidators": ["runner image/tool availability changes"],
+      "notes": "Observer failure must not overwrite the core task verdict.",
+      "evidence_file": "evidence/D-003-remaining-models-probe.md"
+    },
+    {
+      "id": "C-016",
+      "claim": "Under the same standardized 5-second 16:9 text-only request family, Pro 250528 and Fast 251015 each reported 1080p and 246840 tokens and produced video-only MP4s, while 1.5 Pro reported 720p and 108900 tokens and produced an AAC-audio MP4.",
+      "relation": "conditional_deterministic_observation",
+      "status": "T",
+      "domain": {"experiments": ["D-002", "D-003"], "request_family": "same standardized text prompt and no top-level generation controls"},
+      "premises": ["task metadata and local media inspection are accurate"],
+      "invalidators": ["different request shape", "service default changes", "model version changes"],
+      "notes": "Useful for current routing hypotheses; still not a universal provider pricing or output-default law.",
+      "evidence_files": ["evidence/D-002-controlled-model-probe.md", "evidence/D-003-remaining-models-probe.md"]
     }
   ]
 }
