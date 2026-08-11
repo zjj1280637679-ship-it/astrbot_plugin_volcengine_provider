@@ -1,0 +1,56 @@
+name: Real Volcengine Runtime Matrix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/real-volcengine-runtime-matrix.yml
+      - tests/e2e/real_volcengine_runtime_matrix.py
+      - providers.py
+      - adapters/**
+      - capabilities/**
+      - metadata/**
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+      E2E_ARTIFACT_DIR: e2e-artifacts
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate secret presence
+        shell: bash
+        run: |
+          if [ -z "$ARK_API_KEY" ]; then
+            echo "HUOSHANYINQINGAPI is unavailable; runtime evidence cannot be collected."
+            exit 2
+          fi
+          echo "Runtime secret is available; value will not be printed."
+      - run: git clone --depth 1 --branch v4.27.2 https://github.com/AstrBotDevs/AstrBot.git AstrBot
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install AstrBot runtime exactly from v4.27.2
+        run: uv sync --directory AstrBot
+      - name: Compile runtime matrix
+        run: python -m py_compile tests/e2e/real_volcengine_runtime_matrix.py
+      - name: Execute raw-vs-plugin runtime attribution matrix
+        shell: bash
+        run: |
+          mkdir -p e2e-artifacts
+          uv run --directory AstrBot python "$GITHUB_WORKSPACE/tests/e2e/real_volcengine_runtime_matrix.py"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-volcengine-runtime-matrix
+          path: e2e-artifacts
+          if-no-files-found: warn
+          retention-days: 7
