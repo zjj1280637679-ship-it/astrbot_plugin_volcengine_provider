@@ -1,11 +1,13 @@
-"""Real Volcengine runtime evidence with raw-vs-plugin attribution.
+"""Real Volcengine downstream protocol evidence with raw-vs-plugin attribution.
 
-The matrix does not convert one run into permanent model-capability truth. For
-each supplier card it compares a minimal raw upstream request with the request
-through the plugin provider. This distinguishes an upstream/account/model
-condition from a plugin-path regression before any production change is made.
+This matrix intentionally tests only interfaces for which a raw upstream
+comparison is meaningful: model listing, text, image, and endpoint/account
+attribution. It does NOT use a direct WAV/MP4 fixture as a release verdict for
+QQ audio/video compatibility. Those product paths are QQ/NapCat/AstrBot media
+paths and are governed by docs/TEST_HISTORY.md + docs/REGRESSION_SCOPE.md.
 
-Secrets are never printed or written to artifacts.
+One run is current evidence, never permanent model-capability truth. Secrets are
+never printed or written to artifacts.
 """
 
 from __future__ import annotations
@@ -14,15 +16,12 @@ import asyncio
 import base64
 import io
 import json
-import math
 import os
-import struct
 import sys
 import tempfile
 import traceback
 import urllib.error
 import urllib.request
-import wave
 from pathlib import Path
 from typing import Any
 
@@ -53,7 +52,12 @@ def safe_error(exc: BaseException) -> dict[str, Any]:
     }
 
 
-def raw_request(url: str, *, method: str = "GET", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+def raw_request(
+    url: str,
+    *,
+    method: str = "GET",
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     headers = {"Authorization": f"Bearer {API_KEY}"}
     data = None
     if payload is not None:
@@ -67,8 +71,17 @@ def raw_request(url: str, *, method: str = "GET", payload: dict[str, Any] | None
             return {
                 "success": True,
                 "status": response.status,
-                "body_shape": sorted(parsed.keys()) if isinstance(parsed, dict) else type(parsed).__name__,
-                "data_count": len(parsed.get("data", [])) if isinstance(parsed, dict) and isinstance(parsed.get("data"), list) else None,
+                "body_shape": (
+                    sorted(parsed.keys())
+                    if isinstance(parsed, dict)
+                    else type(parsed).__name__
+                ),
+                "data_count": (
+                    len(parsed.get("data", []))
+                    if isinstance(parsed, dict)
+                    and isinstance(parsed.get("data"), list)
+                    else None
+                ),
             }
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", "replace")[:4000]
@@ -83,7 +96,11 @@ def raw_request(url: str, *, method: str = "GET", payload: dict[str, Any] | None
             "error": {
                 "code": error_obj.get("code") if isinstance(error_obj, dict) else None,
                 "type": error_obj.get("type") if isinstance(error_obj, dict) else None,
-                "message": str(error_obj.get("message", ""))[:2000] if isinstance(error_obj, dict) else body[:2000],
+                "message": (
+                    str(error_obj.get("message", ""))[:2000]
+                    if isinstance(error_obj, dict)
+                    else body[:2000]
+                ),
             },
         }
     except Exception as exc:
@@ -101,7 +118,8 @@ def classify(raw_success: bool, plugin_success: bool) -> str:
 
 
 def make_test_png() -> tuple[Path, str]:
-    """Create one deterministic local image using AstrBot's own Pillow precedent."""
+    """Create deterministic image bytes using AstrBot's Pillow test precedent."""
+
     image = PILImage.new("RGB", (32, 32), (245, 245, 245))
     for x in range(8, 24):
         for y in range(8, 24):
@@ -114,31 +132,6 @@ def make_test_png() -> tuple[Path, str]:
     path = Path(name)
     path.write_bytes(data)
     return path, f"data:image/png;base64,{base64.b64encode(data).decode('ascii')}"
-
-
-def make_test_wav() -> tuple[Path, str]:
-    """Create Ark's final 16 kHz mono PCM16 WAV without relying on ffmpeg."""
-    sample_rate = 16_000
-    duration_seconds = 0.35
-    frame_count = int(sample_rate * duration_seconds)
-    amplitude = 5000
-    frequency = 440.0
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        frames = bytearray()
-        for index in range(frame_count):
-            sample = int(amplitude * math.sin(2 * math.pi * frequency * index / sample_rate))
-            frames.extend(struct.pack("<h", sample))
-        wav_file.writeframes(bytes(frames))
-    data = buf.getvalue()
-    fd, name = tempfile.mkstemp(prefix="volcengine-e2e-audio-", suffix=".wav")
-    os.close(fd)
-    path = Path(name)
-    path.write_bytes(data)
-    return path, base64.b64encode(data).decode("ascii")
 
 
 async def plugin_models(provider: Any) -> dict[str, Any]:
@@ -158,13 +151,11 @@ async def plugin_text(
     *,
     marker: str,
     image_urls: list[str] | None = None,
-    audio_urls: list[str] | None = None,
 ) -> dict[str, Any]:
     try:
         response = await provider.text_chat(
             prompt=f"Reply with exactly {marker}",
             image_urls=image_urls or [],
-            audio_urls=audio_urls or [],
             request_max_retries=1,
         )
         text = str(getattr(response, "completion_text", "") or "")
@@ -185,7 +176,9 @@ async def plugin_text(
 
 async def main() -> None:
     if not API_KEY:
-        raise SystemExit("ARK_API_KEY is unavailable; no runtime capability conclusion may be drawn")
+        raise SystemExit(
+            "ARK_API_KEY is unavailable; no current runtime conclusion may be drawn"
+        )
 
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     settings = {"request_max_retries": 1}
@@ -221,9 +214,13 @@ async def main() -> None:
     plan = ProviderVolcengineAgentPlan(plan_config, settings)
 
     result: dict[str, Any] = {
-        "schema_version": 3,
-        "evidence_level": "L5_current_real_upstream_run",
-        "timestamp_note": "workflow runtime; do not persist as permanent capability truth",
+        "schema_version": 4,
+        "evidence_level": "L5_current_downstream_protocol_attribution",
+        "claim_scope": (
+            "Ark/provider protocol attribution only; not QQ audio/video product "
+            "compatibility"
+        ),
+        "timestamp_note": "workflow runtime; never persist as capability truth",
         "cards": {},
     }
 
@@ -236,7 +233,9 @@ async def main() -> None:
         method="POST",
         payload={
             "model": ARK_DEFAULT_MODEL,
-            "messages": [{"role": "user", "content": "Reply with exactly RAW_ARK_OK"}],
+            "messages": [
+                {"role": "user", "content": "Reply with exactly RAW_ARK_OK"}
+            ],
             "stream": False,
         },
     )
@@ -255,7 +254,10 @@ async def main() -> None:
                         "role": "user",
                         "content": [
                             {"type": "text", "text": "Reply with exactly RAW_IMAGE_OK"},
-                            {"type": "image_url", "image_url": {"url": image_data_url}},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": image_data_url},
+                            },
                         ],
                     }
                 ],
@@ -270,52 +272,24 @@ async def main() -> None:
     finally:
         image_path.unlink(missing_ok=True)
 
-    audio_path, audio_base64 = make_test_wav()
-    try:
-        raw_ark_audio = await asyncio.to_thread(
-            raw_request,
-            f"{ARK_API_BASE}/chat/completions",
-            method="POST",
-            payload={
-                "model": ARK_DEFAULT_MODEL,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Reply with exactly RAW_AUDIO_OK"},
-                            {
-                                "type": "input_audio",
-                                "input_audio": {"data": audio_base64, "format": "wav"},
-                            },
-                        ],
-                    }
-                ],
-                "stream": False,
-            },
-        )
-        plugin_ark_audio = await plugin_text(
-            ark,
-            marker="PLUGIN_AUDIO_OK",
-            audio_urls=[str(audio_path)],
-        )
-    finally:
-        audio_path.unlink(missing_ok=True)
-
     result["cards"]["volcengine_ark"] = {
         "provider_type": "chat_completion",
         "configured_model": ARK_DEFAULT_MODEL,
         "raw_models": raw_models,
         "plugin_models": ark_models,
-        "models_attribution": classify(bool(raw_models.get("success")), bool(ark_models.get("success"))),
+        "models_attribution": classify(
+            bool(raw_models.get("success")), bool(ark_models.get("success"))
+        ),
         "raw_text": raw_ark_text,
         "plugin_text": plugin_ark_text,
-        "text_attribution": classify(bool(raw_ark_text.get("success")), bool(plugin_ark_text.get("success"))),
+        "text_attribution": classify(
+            bool(raw_ark_text.get("success")), bool(plugin_ark_text.get("success"))
+        ),
         "raw_image": raw_ark_image,
         "plugin_image": plugin_ark_image,
-        "image_attribution": classify(bool(raw_ark_image.get("success")), bool(plugin_ark_image.get("success"))),
-        "raw_audio": raw_ark_audio,
-        "plugin_audio": plugin_ark_audio,
-        "audio_attribution": classify(bool(raw_ark_audio.get("success")), bool(plugin_ark_audio.get("success"))),
+        "image_attribution": classify(
+            bool(raw_ark_image.get("success")), bool(plugin_ark_image.get("success"))
+        ),
     }
 
     plan_models = await plugin_models(plan)
@@ -338,20 +312,25 @@ async def main() -> None:
         "plugin_local_models": plan_models,
         "raw_text": raw_plan_text,
         "plugin_text": plugin_plan_text,
-        "text_attribution": classify(bool(raw_plan_text.get("success")), bool(plugin_plan_text.get("success"))),
+        "text_attribution": classify(
+            bool(raw_plan_text.get("success")), bool(plugin_plan_text.get("success"))
+        ),
     }
 
     result["summary"] = {
         "ark_models": result["cards"]["volcengine_ark"]["models_attribution"],
         "ark_text": result["cards"]["volcengine_ark"]["text_attribution"],
         "ark_image": result["cards"]["volcengine_ark"]["image_attribution"],
-        "ark_audio": result["cards"]["volcengine_ark"]["audio_attribution"],
         "agent_plan_text": result["cards"]["volcengine_agent_plan"]["text_attribution"],
+        "qq_audio_video_product_verdict": "not_claimed_by_this_matrix",
         "production_change_allowed_without_further_attribution": False,
     }
 
     target = ARTIFACT_DIR / "real-volcengine-runtime-matrix.json"
-    target.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    target.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     print(json.dumps(result["summary"], ensure_ascii=False, indent=2, sort_keys=True))
 
 
