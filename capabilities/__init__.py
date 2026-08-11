@@ -16,7 +16,7 @@ from .model_scope import (
 )
 from .source_hints import (
     clear_source_model_hints,
-    get_source_model_hints,
+    consume_source_model_hints,
     remember_source_model_hint,
 )
 from .source_migration import cleanup_owned_settings_on_source_change
@@ -30,7 +30,7 @@ __all__ = [
     "VIDEO_INPUT_ENABLED_KEY",
     "cleanup_owned_settings_on_source_change",
     "clear_source_model_hints",
-    "get_source_model_hints",
+    "consume_source_model_hints",
     "migrate_legacy_video_settings",
     "normalize_owned_model_card_for_save",
     "owned_source_type_for_card",
