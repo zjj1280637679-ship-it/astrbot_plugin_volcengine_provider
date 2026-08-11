@@ -26,7 +26,7 @@ def _release_all() -> None:
 def main() -> None:
     _release_all()
 
-    # Official supported hosts should install whatever bridge APIs they expose.
+    # Official supported hosts should install their available bridge set.
     acquired = registry.acquire_owned_dashboard_bridge()
     assert acquired is True
     registry.release_owned_dashboard_bridge()
@@ -37,26 +37,42 @@ def main() -> None:
     }
 
     try:
-        # A host that lacks the newer model-list/save hooks must still load.
-        for name in (
-            "list_provider_source_models",
-            "create_provider",
-            "update_provider",
-        ):
+        # If create/update are unavailable, do NOT expose the transport UI:
+        # showing a setting whose save semantics cannot be completed is worse
+        # than a local UI degradation.  The independent live-feedback bridge
+        # may still operate if the model-list API exists.
+        for name in ("create_provider", "update_provider"):
             if hasattr(ProviderConfigService, name):
                 delattr(ProviderConfigService, name)
 
         acquired = registry.acquire_owned_dashboard_bridge()
-        assert acquired is True  # get_provider_schema is enough for a partial bridge.
-        assert getattr(
+        assert acquired is True  # list_provider_source_models remains useful.
+        assert not getattr(
             ProviderConfigService.get_provider_schema,
             "_volcengine_provider_schema_wrapper",
             False,
         )
+        assert getattr(
+            ProviderConfigService.list_provider_source_models,
+            "_volcengine_source_models_wrapper",
+            False,
+        )
         registry.release_owned_dashboard_bridge()
 
-        # Even a build with no recognized Dashboard hook must degrade to no-op,
-        # not raise during plugin construction.
+        # With only get_provider_schema left, there is no safe/useful bridge:
+        # the Provider itself must still load and plugin construction must not
+        # raise, but the Dashboard enhancement becomes a no-op.
+        if hasattr(ProviderConfigService, "list_provider_source_models"):
+            delattr(ProviderConfigService, "list_provider_source_models")
+        assert registry.acquire_owned_dashboard_bridge() is False
+        assert registry._DASHBOARD_LEASE_COUNT == 0
+        assert not getattr(
+            ProviderConfigService.get_provider_schema,
+            "_volcengine_provider_schema_wrapper",
+            False,
+        )
+
+        # Even a build with no recognized Dashboard hook must also be a no-op.
         if hasattr(ProviderConfigService, "get_provider_schema"):
             delattr(ProviderConfigService, "get_provider_schema")
         assert registry.acquire_owned_dashboard_bridge() is False
