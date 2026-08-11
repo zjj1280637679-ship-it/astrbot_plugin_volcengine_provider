@@ -37,6 +37,24 @@
       "migration_semantics": "preserve_previous_user_transport_intent_only"
     }
   },
+  "dashboard_transport_ui": {
+    "canonical_field_in_shared_schema": false,
+    "visibility_selector": "provider_source_id",
+    "owned_sources_only": true,
+    "temporary_key_prefix": "_volcengine_video_transport_ui_",
+    "temporary_key_encoding": "utf8_hex_reversible_injective",
+    "persistent": false,
+    "save_boundary_action": "translate_current_owned_source_ui_value_to_volcengine_video_input_enabled_then_strip_all_temporary_ui_keys",
+    "foreign_provider_visibility": false,
+    "foreign_ui_key_can_create_plugin_state": false,
+    "requires_host_apis": [
+      "get_provider_schema",
+      "create_provider",
+      "update_provider"
+    ],
+    "missing_required_host_api": "disable_transport_ui_only",
+    "note": "AstrBot 4.26/4.27 uses one shared model-card schema. An unconditional plugin field would leak into unrelated Provider cards, so the UI shim is Source-conditioned and short-lived."
+  },
   "live_model_feedback": {
     "ordinary_ark_models_receipt": {
       "source": "current_ordinary_ark_/models_receipt",
