@@ -42,7 +42,7 @@ jobs:
           printf '4.27.2' > AstrBot/astrbot/dashboard/dist/assets/version
       - name: Initialize AstrBot and install plugin
         run: |
-          uv run --directory AstrBot astrbot init
+          uv run --directory AstrBot astrbot init -y
           mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
           rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
           uv run --directory AstrBot astrbot conf set dashboard.username e2e-admin
