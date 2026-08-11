@@ -23,7 +23,7 @@ from .capabilities import (
     OWNED_SOURCE_TYPES,
     VIDEO_INPUT_ENABLED_KEY,
     cleanup_owned_settings_on_source_change,
-    get_source_model_hints,
+    consume_source_model_hints,
     normalize_owned_model_card_for_save,
     source_types,
     video_input_enabled,
@@ -85,7 +85,14 @@ def _is_owned_source(service: Any, source_id: str) -> bool:
 
 
 def _merge_source_feedback(base: object, hint: object) -> dict[str, Any]:
-    """Add sparse Ark feedback without erasing AstrBot feedback."""
+    """Overlay one *current* Ark receipt onto one Dashboard response only.
+
+    This function does not mutate AstrBot's process-global metadata.  Fields
+    absent from the current receipt remain AstrBot-owned.  Fields explicitly
+    present in the current receipt replace the same display field for this
+    Source response, including explicit ``False`` and current modality lists;
+    otherwise stale information would outrank a newer receipt.
+    """
 
     merged = copy.deepcopy(base) if isinstance(base, dict) else {}
     if not isinstance(hint, dict):
@@ -93,31 +100,31 @@ def _merge_source_feedback(base: object, hint: object) -> dict[str, Any]:
 
     for key, value in hint.items():
         if key == "modalities" and isinstance(value, dict):
-            current = merged.setdefault("modalities", {})
+            current = merged.get("modalities")
             if not isinstance(current, dict):
                 current = {}
-                merged["modalities"] = current
+            else:
+                current = copy.deepcopy(current)
             for direction in ("input", "output"):
-                incoming = value.get(direction)
-                if not isinstance(incoming, list):
-                    continue
-                existing = current.get(direction)
-                existing_list = list(existing) if isinstance(existing, list) else []
-                current[direction] = list(dict.fromkeys([*existing_list, *incoming]))
+                if direction in value and isinstance(value[direction], list):
+                    current[direction] = copy.deepcopy(value[direction])
+            merged["modalities"] = current
             continue
 
         if key == "limit" and isinstance(value, dict):
-            current = merged.setdefault("limit", {})
+            current = merged.get("limit")
             if not isinstance(current, dict):
                 current = {}
-                merged["limit"] = current
+            else:
+                current = copy.deepcopy(current)
             for name, incoming in value.items():
-                if not current.get(name) and incoming:
-                    current[name] = copy.deepcopy(incoming)
+                current[name] = copy.deepcopy(incoming)
+            merged["limit"] = current
             continue
 
-        if key not in merged or merged[key] in (None, ""):
-            merged[key] = copy.deepcopy(value)
+        # ``False`` is still a live feedback value.  Do not use truthiness or
+        # preserve an older host/display value over an explicit current receipt.
+        merged[key] = copy.deepcopy(value)
     return merged
 
 
@@ -126,12 +133,14 @@ def _overlay_source_scoped_model_hints(
     source_id: str,
     result: dict[str, Any],
 ) -> dict[str, Any]:
-    if not _is_owned_source(service, source_id):
-        return result
     models = [str(model) for model in result.get("models", []) or []]
-    hints = get_source_model_hints(source_id, models)
-    if not hints:
+
+    # Consume first even when the Source changed ownership between get_models()
+    # and this wrapper.  The mailbox is current-call data, never reusable history.
+    hints = consume_source_model_hints(source_id, models)
+    if not _is_owned_source(service, source_id) or not hints:
         return result
+
     metadata = result.setdefault("model_metadata", {})
     if not isinstance(metadata, dict):
         return result
@@ -243,6 +252,9 @@ def acquire_owned_dashboard_bridge() -> bool:
         async def models_wrapper(self, source_id: str) -> dict[str, Any]:
             result = await models_current(self, source_id)
             if not isinstance(result, dict):
+                # Consume any current-call handoff even if a custom AstrBot build
+                # returns an unexpected shape; never leave it as future history.
+                consume_source_model_hints(source_id)
                 return result
             return _overlay_source_scoped_model_hints(self, source_id, result)
 
