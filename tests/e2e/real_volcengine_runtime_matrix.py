@@ -14,12 +14,15 @@ import asyncio
 import base64
 import io
 import json
+import math
 import os
+import struct
 import sys
 import tempfile
 import traceback
 import urllib.error
 import urllib.request
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -113,6 +116,31 @@ def make_test_png() -> tuple[Path, str]:
     return path, f"data:image/png;base64,{base64.b64encode(data).decode('ascii')}"
 
 
+def make_test_wav() -> tuple[Path, str]:
+    """Create Ark's final 16 kHz mono PCM16 WAV without relying on ffmpeg."""
+    sample_rate = 16_000
+    duration_seconds = 0.35
+    frame_count = int(sample_rate * duration_seconds)
+    amplitude = 5000
+    frequency = 440.0
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        frames = bytearray()
+        for index in range(frame_count):
+            sample = int(amplitude * math.sin(2 * math.pi * frequency * index / sample_rate))
+            frames.extend(struct.pack("<h", sample))
+        wav_file.writeframes(bytes(frames))
+    data = buf.getvalue()
+    fd, name = tempfile.mkstemp(prefix="volcengine-e2e-audio-", suffix=".wav")
+    os.close(fd)
+    path = Path(name)
+    path.write_bytes(data)
+    return path, base64.b64encode(data).decode("ascii")
+
+
 async def plugin_models(provider: Any) -> dict[str, Any]:
     try:
         models = await provider.get_models()
@@ -130,11 +158,13 @@ async def plugin_text(
     *,
     marker: str,
     image_urls: list[str] | None = None,
+    audio_urls: list[str] | None = None,
 ) -> dict[str, Any]:
     try:
         response = await provider.text_chat(
             prompt=f"Reply with exactly {marker}",
             image_urls=image_urls or [],
+            audio_urls=audio_urls or [],
             request_max_retries=1,
         )
         text = str(getattr(response, "completion_text", "") or "")
@@ -191,13 +221,12 @@ async def main() -> None:
     plan = ProviderVolcengineAgentPlan(plan_config, settings)
 
     result: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "evidence_level": "L5_current_real_upstream_run",
         "timestamp_note": "workflow runtime; do not persist as permanent capability truth",
         "cards": {},
     }
 
-    # Ordinary Ark: compare raw /models with the plugin's normalized current receipt.
     raw_models = await asyncio.to_thread(raw_request, f"{ARK_API_BASE}/models")
     ark_models = await plugin_models(ark)
 
@@ -213,9 +242,6 @@ async def main() -> None:
     )
     plugin_ark_text = await plugin_text(ark, marker="PLUGIN_ARK_OK")
 
-    # Image: AstrBot's own OpenAI-source tests use Pillow-generated image input.
-    # Use the same bytes for a minimal raw data-URL request and for the plugin's
-    # normal local-path media resolver, so differences are attributable.
     image_path, image_data_url = make_test_png()
     try:
         raw_ark_image = await asyncio.to_thread(
@@ -244,6 +270,37 @@ async def main() -> None:
     finally:
         image_path.unlink(missing_ok=True)
 
+    audio_path, audio_base64 = make_test_wav()
+    try:
+        raw_ark_audio = await asyncio.to_thread(
+            raw_request,
+            f"{ARK_API_BASE}/chat/completions",
+            method="POST",
+            payload={
+                "model": ARK_DEFAULT_MODEL,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Reply with exactly RAW_AUDIO_OK"},
+                            {
+                                "type": "input_audio",
+                                "input_audio": {"data": audio_base64, "format": "wav"},
+                            },
+                        ],
+                    }
+                ],
+                "stream": False,
+            },
+        )
+        plugin_ark_audio = await plugin_text(
+            ark,
+            marker="PLUGIN_AUDIO_OK",
+            audio_urls=[str(audio_path)],
+        )
+    finally:
+        audio_path.unlink(missing_ok=True)
+
     result["cards"]["volcengine_ark"] = {
         "provider_type": "chat_completion",
         "configured_model": ARK_DEFAULT_MODEL,
@@ -256,9 +313,11 @@ async def main() -> None:
         "raw_image": raw_ark_image,
         "plugin_image": plugin_ark_image,
         "image_attribution": classify(bool(raw_ark_image.get("success")), bool(plugin_ark_image.get("success"))),
+        "raw_audio": raw_ark_audio,
+        "plugin_audio": plugin_ark_audio,
+        "audio_attribution": classify(bool(raw_ark_audio.get("success")), bool(plugin_ark_audio.get("success"))),
     }
 
-    # Agent Plan deliberately has no probed /models route in production code.
     plan_models = await plugin_models(plan)
     raw_plan_text = await asyncio.to_thread(
         raw_request,
@@ -286,6 +345,7 @@ async def main() -> None:
         "ark_models": result["cards"]["volcengine_ark"]["models_attribution"],
         "ark_text": result["cards"]["volcengine_ark"]["text_attribution"],
         "ark_image": result["cards"]["volcengine_ark"]["image_attribution"],
+        "ark_audio": result["cards"]["volcengine_ark"]["audio_attribution"],
         "agent_plan_text": result["cards"]["volcengine_agent_plan"]["text_attribution"],
         "production_change_allowed_without_further_attribution": False,
     }
