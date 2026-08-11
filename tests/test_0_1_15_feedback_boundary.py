@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "AstrBot" / "data" / "plugins"))
 
 from astrbot.core.agent.message import TextPart
 from astrbot_plugin_volcengine_provider.capabilities import (
+    AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
     VIDEO_INPUT_ENABLED_KEY,
     cleanup_owned_settings_on_source_change,
@@ -59,6 +60,65 @@ def main() -> None:
     assert cfg['provider'][0]['modalities'] == ['text', 'video']
     assert VIDEO_INPUT_ENABLED_KEY not in cfg['provider'][1]
     assert 'volcengine_ark_video_input' not in cfg['provider_sources'][0]
+
+    # Migration precedence is user-state preservation, not a capability guess:
+    # new per-card > old per-card > explicit Source bool > modalities clue.
+    precedence_cfg = {
+        'provider_sources': [
+            {
+                'id': 'ark-off',
+                'type': ARK_PROVIDER_TYPE,
+                'volcengine_ark_video_input': False,
+            },
+            {
+                'id': 'ark-on',
+                'type': ARK_PROVIDER_TYPE,
+                'volcengine_ark_video_input': True,
+            },
+            {
+                'id': 'plan-off',
+                'type': AGENT_PLAN_PROVIDER_TYPE,
+                'volcengine_agent_plan_video_input': False,
+            },
+        ],
+        'provider': [
+            {
+                'id': 'ark/source-disabled',
+                'provider_source_id': 'ark-off',
+                'modalities': ['text', 'video'],
+            },
+            {
+                'id': 'ark/model-override',
+                'provider_source_id': 'ark-off',
+                'volcengine_model_video_input': True,
+                'modalities': ['text', 'video'],
+            },
+            {
+                'id': 'ark/new-override',
+                'provider_source_id': 'ark-on',
+                VIDEO_INPUT_ENABLED_KEY: False,
+                'modalities': ['text', 'video'],
+            },
+            {
+                'id': 'plan/source-disabled',
+                'provider_source_id': 'plan-off',
+                'modalities': ['text', 'video'],
+            },
+        ],
+    }
+    migrate_legacy_video_settings(precedence_cfg)
+    cards = {card['id']: card for card in precedence_cfg['provider']}
+    assert cards['ark/source-disabled'][VIDEO_INPUT_ENABLED_KEY] is False
+    assert cards['ark/source-disabled']['modalities'] == ['text', 'video']
+    assert cards['ark/model-override'][VIDEO_INPUT_ENABLED_KEY] is True
+    assert 'volcengine_model_video_input' not in cards['ark/model-override']
+    assert cards['ark/new-override'][VIDEO_INPUT_ENABLED_KEY] is False
+    assert cards['plan/source-disabled'][VIDEO_INPUT_ENABLED_KEY] is False
+    assert all(
+        'volcengine_ark_video_input' not in source
+        and 'volcengine_agent_plan_video_input' not in source
+        for source in precedence_cfg['provider_sources']
+    )
 
     moving = {
         'provider_source_id': 'foreign',
