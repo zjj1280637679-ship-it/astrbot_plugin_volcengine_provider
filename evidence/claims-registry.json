@@ -1,5 +1,5 @@
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "project": "astrbot_plugin_volcengine_provider",
   "claims": [
     {
@@ -7,134 +7,64 @@
       "claim": "The configured GitHub Actions secret can authenticate requests to the Volcengine Ark video-generation API.",
       "relation": "conditional_deterministic",
       "status": "E2E",
-      "domain": {
-        "secret_name": "HUOSHANYINQINGAPI",
-        "tested_model": "doubao-seedance-1-5-pro-251215"
-      },
-      "premises": [
-        "repository Actions can read the secret",
-        "the secret remains valid",
-        "Volcengine service is reachable"
-      ],
-      "invalidators": [
-        "secret rotation/revocation",
-        "permission changes",
-        "API authentication contract changes"
-      ]
+      "domain": {"secret_name": "HUOSHANYINQINGAPI", "tested_models": ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-0-pro-fast-251015"]},
+      "premises": ["repository Actions can read the secret", "the secret remains valid", "Volcengine service is reachable"],
+      "invalidators": ["secret rotation/revocation", "permission changes", "API authentication contract changes"]
     },
     {
       "id": "C-002",
       "claim": "doubao-seedance-1-5-pro-251215 can generate a text-to-video task that completes and yields a downloadable MP4 through the tested Ark task lifecycle.",
       "relation": "conditional_deterministic",
       "status": "E2E",
-      "domain": {
-        "mode": "text_to_video",
-        "tested_duration_seconds": 5,
-        "tested_output": "1280x720 H.264 MP4"
-      },
-      "premises": [
-        "valid API credential",
-        "sufficient quota",
-        "model remains available",
-        "service accepts the tested request schema"
-      ],
-      "invalidators": [
-        "model/version retirement",
-        "request schema change",
-        "quota/account restriction",
-        "service outage"
-      ]
+      "domain": {"mode": "text_to_video", "tested_duration_seconds": 5},
+      "premises": ["valid API credential", "sufficient quota", "model remains available", "service accepts the tested request schema"],
+      "invalidators": ["model/version retirement", "request schema change", "quota/account restriction", "service outage"]
     },
     {
       "id": "C-003",
       "claim": "A readable local chat-uploaded image can be converted to base64 and written as binary content into the GitHub repository by create_blob -> create_tree -> create_commit -> update_ref.",
       "relation": "conditional_deterministic",
       "status": "T",
-      "domain": {
-        "tested_input_type": "JPEG",
-        "transport_encoding": "base64",
-        "repository": "zjj1280637679-ship-it/astrbot_plugin_volcengine_provider"
-      },
-      "premises": [
-        "the chat file is locally readable",
-        "GitHub connector exposes create_blob with base64 encoding",
-        "repository write permission remains valid"
-      ],
-      "invalidators": [
-        "connector schema change",
-        "repository permission change",
-        "payload outside tested/documented limits"
-      ],
-      "notes": "Earlier create_file-centered failures did not falsify binary upload capability; they falsified only those implementation paths."
+      "domain": {"tested_input_type": "JPEG", "transport_encoding": "base64", "repository": "zjj1280637679-ship-it/astrbot_plugin_volcengine_provider"},
+      "premises": ["the chat file is locally readable", "GitHub connector exposes create_blob with base64 encoding", "repository write permission remains valid"],
+      "invalidators": ["connector schema change", "repository permission change", "payload outside tested/documented limits"],
+      "notes": "Earlier create_file-centered failures falsified only those implementation paths, not binary upload capability."
     },
     {
       "id": "C-004",
       "claim": "A repository-hosted reference image URL can be fetched by the GitHub Actions runner and accepted by doubao-seedance-1-5-pro-251215 as image_url input for image-to-video generation.",
       "relation": "conditional_deterministic",
       "status": "E2E",
-      "domain": {
-        "mode": "single_image_to_video",
-        "tested_reference_transport": "public GitHub raw URL",
-        "tested_duration_seconds": 5
-      },
-      "premises": [
-        "reference URL remains externally fetchable",
-        "valid API credential",
-        "model image-input support remains available"
-      ],
-      "invalidators": [
-        "asset visibility/URL changes",
-        "model input contract changes",
-        "service/account changes"
-      ]
+      "domain": {"mode": "single_image_to_video", "tested_reference_transport": "public GitHub raw URL", "tested_duration_seconds": 5},
+      "premises": ["reference URL remains externally fetchable", "valid API credential", "model image-input support remains available"],
+      "invalidators": ["asset visibility/URL changes", "model input contract changes", "service/account changes"]
     },
     {
       "id": "C-005",
       "claim": "A completed Seedance MP4 can be uploaded as a GitHub Actions Artifact, downloaded through the GitHub connector, and surfaced as a file in the current ChatGPT conversation.",
       "relation": "conditional_deterministic",
       "status": "E2E",
-      "domain": {
-        "tested_artifacts": [
-          "seedance-chat-transfer-test",
-          "seedance-blond-mma-i2v"
-        ],
-        "tested_media_type": "MP4"
-      },
-      "premises": [
-        "artifact has not expired",
-        "GitHub connector retains artifact read access",
-        "conversation runtime can materialize the downloaded file"
-      ],
-      "invalidators": [
-        "artifact expiry before retrieval",
-        "connector capability change",
-        "file-size or runtime policy outside tested domain"
-      ]
+      "domain": {"tested_media_type": "MP4"},
+      "premises": ["artifact has not expired", "GitHub connector retains artifact read access", "conversation runtime can materialize the downloaded file"],
+      "invalidators": ["artifact expiry before retrieval", "connector capability change", "file-size or runtime policy outside tested domain"]
     },
     {
       "id": "C-006",
       "claim": "Failure of one GitHub upload interface does not establish that ChatGPT-to-GitHub binary transfer is impossible when other connector paths exist.",
       "relation": "multi_path_reachable",
       "status": "T",
-      "domain": {
-        "observed_failed_or_misapplied_path": "text-oriented file workflow",
-        "observed_successful_path": "create_blob(base64) -> tree -> commit -> ref"
-      },
+      "domain": {"observed_successful_path": "create_blob(base64) -> tree -> commit -> ref"},
       "premises": [],
       "invalidators": [],
-      "notes": "This is a methodological claim derived from the successful alternative path and prevents invalid reverse/generalized inference."
+      "notes": "Prevents invalid generalization from one failed implementation route."
     },
     {
       "id": "C-007",
       "claim": "Character consistency, camera adherence, motion quality, prompt-handle reliability, and similar model-behavior qualities are probabilistic properties and are not established by one successful generation.",
       "relation": "probabilistic",
       "status": "H",
-      "domain": {
-        "target": "model behavior quality"
-      },
-      "premises": [
-        "generation process is non-deterministic or quality-sensitive"
-      ],
+      "domain": {"target": "model behavior quality"},
+      "premises": ["generation process is non-deterministic or quality-sensitive"],
       "invalidators": [],
       "next_evidence_needed": "repeated controlled benchmark samples"
     },
@@ -143,22 +73,53 @@
       "claim": "Each supplied model ID has a daily free allowance of 2,000,000 tokens.",
       "relation": "conditional_deterministic",
       "status": "H",
-      "domain": {
-        "model_ids": [
-          "doubao-seedance-1-5-pro-251215",
-          "doubao-seedance-1-0-pro-fast-251015",
-          "doubao-seedance-1-0-pro-250528",
-          "doubao-seedance-1-0-lite-t2v-250428"
-        ]
-      },
-      "premises": [
-        "account/model entitlement is as reported by the user"
-      ],
-      "invalidators": [
-        "quota policy change",
-        "account entitlement change"
-      ],
-      "next_evidence_needed": "account/control-plane or usage-interface confirmation; do not spend quota merely to reconfirm if an authoritative account source is available"
+      "domain": {"model_ids": ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-0-pro-fast-251015", "doubao-seedance-1-0-pro-250528", "doubao-seedance-1-0-lite-t2v-250428"]},
+      "premises": ["account/model entitlement is as reported by the user"],
+      "invalidators": ["quota policy change", "account entitlement change"],
+      "next_evidence_needed": "authoritative account/control-plane or usage-interface confirmation if accessible"
+    },
+    {
+      "id": "C-009",
+      "claim": "The exact model ID doubao-seedance-1-0-pro-fast-251015 accepts and completes the controlled minimal 5-second 16:9 text-to-video request in the current account.",
+      "relation": "conditional_deterministic",
+      "status": "E2E",
+      "domain": {"mode": "text_to_video", "prompt_controls": ["--ratio 16:9", "--dur 5"], "no_top_level_generation_controls": true},
+      "premises": ["valid API credential", "sufficient quota", "model remains available"],
+      "invalidators": ["model/version retirement", "account entitlement change", "request contract change", "service outage"],
+      "evidence_file": "evidence/D-002-controlled-model-probe.md"
+    },
+    {
+      "id": "C-010",
+      "claim": "Under the D-002 controlled request shape with no explicit resolution or audio field, Fast 251015 returned reported resolution 1080p and 246840 tokens, while 1.5 Pro 251215 returned reported resolution 720p and 108900 tokens.",
+      "relation": "conditional_deterministic_observation",
+      "status": "T",
+      "domain": {"experiment": "D-002", "duration_seconds": 5, "ratio": "16:9", "same_prompt_and_payload_except_model": true},
+      "premises": ["returned task metadata accurately describes each completed task"],
+      "invalidators": ["different request shape", "different model version", "service default changes"],
+      "notes": "This is an observed default difference, not a universal cost formula or stable efficiency ranking.",
+      "evidence_file": "evidence/D-002-controlled-model-probe.md"
+    },
+    {
+      "id": "C-011",
+      "claim": "For doubao-seedance-1-5-pro-251215 under the D-002 request shape, omitting generate_audio resulted in returned metadata generate_audio=true and the actual MP4 contained an AAC 44.1 kHz stereo audio stream.",
+      "relation": "conditional_deterministic_observation",
+      "status": "E2E",
+      "domain": {"experiment": "D-002", "mode": "text_to_video", "generate_audio_field_supplied": false},
+      "premises": ["same exact model/request domain"],
+      "invalidators": ["request shape change", "model/version change", "service default change"],
+      "notes": "Establishes default positive audio behavior in this tested domain; does not yet establish explicit enable/disable parameter semantics.",
+      "evidence_file": "evidence/D-002-controlled-model-probe.md"
+    },
+    {
+      "id": "C-012",
+      "claim": "Fast 251015 completed the single D-002 sample sooner than 1.5 Pro (about 39.8 s vs 60.1 s), but one sample is insufficient for a stable speed ranking.",
+      "relation": "probabilistic_operational",
+      "status": "T_observation_only",
+      "domain": {"experiment": "D-002", "sample_count_per_model": 1},
+      "premises": ["workflow wall-clock measurements are comparable"],
+      "invalidators": [],
+      "next_evidence_needed": "repeated contemporaneous controlled samples only if latency ranking becomes load-bearing",
+      "evidence_file": "evidence/D-002-controlled-model-probe.md"
     }
   ]
 }
