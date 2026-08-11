@@ -8,7 +8,6 @@ Provider adapters themselves from registering or loading.
 from __future__ import annotations
 
 import copy
-import hashlib
 from collections.abc import Callable
 from typing import Any
 
@@ -50,10 +49,15 @@ _UPDATE_ORIGINAL: Callable[..., Any] | None = None
 
 
 def _video_ui_key(source_id: str) -> str:
-    """Return a deterministic non-persistent UI key for one Source ID."""
+    """Return a reversible non-persistent UI key for one Source ID.
 
-    digest = hashlib.sha256(source_id.encode("utf-8")).hexdigest()[:16]
-    return f"{_VIDEO_UI_KEY_PREFIX}{digest}"
+    UTF-8 hex is injective for Python strings after UTF-8 encoding, unlike a
+    truncated hash.  The longer key exists only in a Dashboard response and is
+    removed before persistence.
+    """
+
+    encoded = source_id.encode("utf-8").hex()
+    return f"{_VIDEO_UI_KEY_PREFIX}{encoded}"
 
 
 def _strip_video_ui_keys(provider_config: dict[str, Any]) -> None:

@@ -21,6 +21,13 @@ from astrbot_plugin_volcengine_provider.registry import (
 
 
 def main() -> None:
+    # Dashboard key encoding is reversible/injective rather than probabilistic.
+    for source_id in ("ark-A", "a/b", "a?b", "火山 方舟", "emoji-🚀"):
+        ui_key = _video_ui_key(source_id)
+        encoded = ui_key.removeprefix(_VIDEO_UI_KEY_PREFIX)
+        assert bytes.fromhex(encoded).decode("utf-8") == source_id
+    assert _video_ui_key("a/b") != _video_ui_key("a?b")
+
     sources = [
         {"id": "ark-A", "type": ARK_PROVIDER_TYPE},
         {"id": "plan-A", "type": AGENT_PLAN_PROVIDER_TYPE},
