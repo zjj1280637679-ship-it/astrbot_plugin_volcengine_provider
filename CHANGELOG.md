@@ -3,6 +3,7 @@
 
 ## 0.1.15
 
+- 修复共享模型卡 schema 的 UI 外溢风险：不再把 `volcengine_video_input_enabled` 作为无条件公共 schema 项暴露；改为按火山 Source 的 `provider_source_id` 生成临时条件字段，使用 Source ID 的 UTF-8→hex 可逆无碰撞编码，保存边界转换回正式字段并删除，外国 Provider 无可见字段也不能用伪造临时键生成火山状态。
 - 普通 Ark 动态反馈改为单次实时回执：请求前清理旧值，使用 `ContextVar` 隔离并发模型列表请求，Dashboard 读取一次即消费；当前回执明确字段只覆盖本次 Source 响应中的同名旧展示值，不写入全局 `LLM_METADATAS`，历史回执不能压过新回执。
 - 新增 `AdapterInputTransportError` 区分本地媒体传递/归一化/Ark payload 组装失败与上游模型回执；前者明确 `reached_model=false`、`capability_observed=null`，只说明输入链路没送达，不作为模型不支持模态的证据，也不由插件自行决定 fallback。
 - 新增 `capabilities/SEMANTICS.json` 机器可读语义契约：允许未来新增能力发现与反馈来源，但必须声明来源、时效和权限，禁止把当前无反馈、历史回执或裸 model ID 升格成永久模型事实。
