@@ -66,6 +66,7 @@
       "missing_field": "not_reported",
       "explicit_false": "current_feedback_false_not_model_truth",
       "explicit_empty_list": "current_feedback_empty_not_missing",
+      "explicit_integer_zero": "current_feedback_zero_not_missing",
       "unknown_modality_token": "preserve_as_information_do_not_interpret_or_filter",
       "display_rule": "explicit_current_fields_may_replace_same_display_field_for_this_response_only",
       "global_metadata_mutation": false,
