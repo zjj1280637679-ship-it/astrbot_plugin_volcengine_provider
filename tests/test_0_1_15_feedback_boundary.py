@@ -272,7 +272,7 @@ def main() -> None:
         except AdapterInputTransportError as exc:
             assert exc.reached_model is False
             assert exc.capability_observed is None
-            assert exc.fallback_recommended is False
+            assert not hasattr(exc, 'fallback_recommended')
             assert exc.media_type == 'video'
             assert exc.stage == 'assemble_payload'
     finally:
@@ -293,7 +293,7 @@ def main() -> None:
         except AdapterInputTransportError as exc:
             assert exc.reached_model is False
             assert exc.capability_observed is None
-            assert exc.fallback_recommended is False
+            assert not hasattr(exc, 'fallback_recommended')
             assert exc.media_type == 'audio'
             assert exc.stage == 'normalize_for_ark'
     finally:
@@ -304,6 +304,8 @@ def main() -> None:
     assert semantics['epistemic_contract']['missing_feedback_means_unsupported'] is False
     assert semantics['live_model_feedback']['ordinary_ark_models_receipt']['persistent'] is False
     assert semantics['failure_domains']['input_transport']['reached_model'] is False
+    assert semantics['failure_domains']['input_transport']['routing_advice'] is None
+    assert semantics['future_extension_policy']['preserve_unknown_future_feedback_tokens'] is True
     assert semantics['fields'][VIDEO_INPUT_ENABLED_KEY]['kind'] == 'request_transport_switch'
 
     print('FEEDBACK_BOUNDARY_0_1_15=OK')
