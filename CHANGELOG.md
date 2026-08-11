@@ -3,6 +3,9 @@
 
 ## 0.1.15
 
+- 普通 Ark 动态反馈改为单次实时回执：请求前清理旧值，使用 `ContextVar` 隔离并发模型列表请求，Dashboard 读取一次即消费；当前回执明确字段只覆盖本次 Source 响应中的同名旧展示值，不写入全局 `LLM_METADATAS`，历史回执不能压过新回执。
+- 新增 `AdapterInputTransportError` 区分本地媒体传递/归一化/Ark payload 组装失败与上游模型回执；前者明确 `reached_model=false`、`capability_observed=null`，只说明输入链路没送达，不作为模型不支持模态的证据，也不由插件自行决定 fallback。
+- 新增 `capabilities/SEMANTICS.json` 机器可读语义契约：允许未来新增能力发现与反馈来源，但必须声明来源、时效和权限，禁止把当前无反馈、历史回执或裸 model ID 升格成永久模型事实。
 - 修正供应商适配能力与模型能力反馈的边界：视频设置改为逐模型卡 `volcengine_video_input_enabled` 请求传输开关，不再存放在 Provider Source，也不读写 AstrBot `modalities`；开关只决定是否尝试发送 `video_url`，不是模型支持/不支持视频的结论。
 - 兼容迁移旧 `volcengine_ark_video_input`、`volcengine_agent_plan_video_input`、`volcengine_model_video_input` 以及旧插件曾写入的 `modalities: video`，但迁移只生成新的插件传输字段，绝不删除或改写宿主 `modalities`。
 - 普通 Ark `/models` 改为 Source-scoped 稀疏反馈：仅反馈本次回执明确给出的模态、工具、reasoning 和 token limit；缺失保持“未反馈”，不补 `False/0`，不写进全局 `LLM_METADATAS[model_id]`，并以 additive merge 保护 AstrBot 已有反馈。
