@@ -1,0 +1,51 @@
+name: Verify 0.1.15 explicit empty feedback
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/verify-0.1.15-explicit-empty-feedback.yml
+
+permissions:
+  contents: read
+
+jobs:
+  feedback:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        astrbot_ref:
+          - v4.26.1
+          - v4.27.2
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout AstrBot ${{ matrix.astrbot_ref }}
+        run: |
+          git clone --depth 1 --branch "${{ matrix.astrbot_ref }}" \
+            https://github.com/AstrBotDevs/AstrBot.git AstrBot
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install AstrBot dependencies
+        run: uv sync --directory AstrBot
+      - name: Install plugin into AstrBot
+        run: |
+          mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
+          rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ \
+            AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
+      - name: Compile and validate semantics
+        run: |
+          uv run --directory AstrBot python -m py_compile \
+            data/plugins/astrbot_plugin_volcengine_provider/metadata/ark.py \
+            data/plugins/astrbot_plugin_volcengine_provider/registry.py
+          python -m json.tool capabilities/SEMANTICS.json >/dev/null
+      - name: Explicit empty feedback regression
+        run: uv run --directory AstrBot python ../tests/test_live_feedback_presence.py
+      - name: Full feedback-boundary regression
+        run: uv run --directory AstrBot python ../tests/test_0_1_15_feedback_boundary.py
+      - name: Dashboard compatibility regression
+        run: uv run --directory AstrBot python ../tests/test_dashboard_bridge_compat.py
