@@ -1,133 +1,124 @@
-# Provider Card × Runtime × Dashboard UI E2E Matrix
+# Provider × Host × Product Evidence Matrix
 
 ## Purpose
 
-Unit tests and service-layer tests can prove that functions behave correctly, but they cannot prove that every legitimate user path is reachable through AstrBot's real provider-card layouts.
+This document defines which validation layer is allowed to prove which claim. The project deliberately separates code correctness, AstrBot integration, Dashboard reachability, downstream Ark protocol behavior, and QQ product compatibility.
 
-This matrix therefore validates three dimensions together:
+A green lower-layer test must not be promoted into a stronger claim than its interface supports.
 
-1. **provider-card/config lifecycle**;
-2. **runtime request path with real Volcengine API where appropriate**;
-3. **Dashboard UI layout and reachability**.
+## Evidence layers
 
-## Why UI layout is part of correctness
+### L2 — local contract/regression
 
-AstrBot does not render every provider as one identical card. Different provider types and Source/model-card flows can use different layouts, sections, conditions, and save paths.
+Validates plugin-owned invariants such as:
 
-A field can be semantically correct in Python yet still be product-broken if it:
+- migration precedence;
+- foreign-provider isolation;
+- temporary UI-key removal;
+- transient `/models` feedback semantics;
+- failure provenance;
+- trusted video-marker behavior.
 
-- appears on the wrong provider type;
-- appears on the Source card instead of the model card;
-- is hidden in a legitimate creation path;
-- appears only when editing but not creating;
-- moves to the wrong section/advanced group;
-- disappears after save/reload;
-- contaminates foreign providers.
+This layer cannot prove AstrBot runtime integration or QQ compatibility.
 
-Therefore the E2E suite must inspect both structure and screenshots.
+### L3 — real AstrBot service integration
 
-## Validation dimensions
+Validates the actual supported host API path, including the declared minimum AstrBot version where relevant:
 
-### Provider/card types
+- Provider registration;
+- `ProviderConfigService` create/update/save boundaries;
+- optional Dashboard API capability detection;
+- host/provider compatibility.
 
-- ordinary Volcengine Ark chat-completion Source;
-- Volcengine Agent Plan / agent-runner Source;
-- foreign OpenAI-compatible chat provider as an isolation reference;
-- at least one non-Volcengine agent-runner reference;
-- legacy migrated cards.
+This layer proves host integration, not model capability.
 
-### UI lifecycle
+### L4 — real Dashboard reachability and presentation evidence
 
-For each applicable card:
+Hard gate:
 
-- create Source;
-- edit Source;
-- create model/card;
-- edit model/card;
-- save;
-- reload/refresh;
-- reopen;
-- compare visible fields, groups, order, defaults, and persisted state.
+- real AstrBot Dashboard can build/start;
+- login succeeds;
+- Provider page is reachable with the plugin loaded.
 
-### Runtime input paths
+Non-blocking presentation evidence:
 
-Where supported by the selected real endpoint and test fixture:
+- screenshots;
+- semantic DOM/visible text;
+- layout snapshots.
 
+Fine Playwright selector choreography is **not** a release authority. Previous failures from welcome overlays, labels, fixed Source IDs, or Vuetify selector assumptions were test-harness evidence, not plugin-runtime evidence.
+
+### L5 — downstream Volcengine protocol attribution
+
+Where a real credential and meaningful fixture exist, compare a minimal raw upstream request with the same logical path through the plugin.
+
+Useful cases:
+
+- ordinary Ark `/models`;
 - text;
 - image;
-- audio;
-- video transport OFF;
-- video transport ON;
-- tools;
-- combinations that represent legitimate AstrBot input paths.
+- endpoint/authentication attribution;
+- a media request only when the fixture actually tests the adapter contract being investigated.
 
-The suite records upstream acceptance/rejection rather than turning every failure into a permanent capability verdict.
+Interpretation:
 
-## UI comparison strategy
+```text
+raw success + plugin success
+  -> downstream protocol and plugin path both worked under current conditions
 
-Use two complementary artifacts.
+raw success + plugin failure
+  -> plugin path is suspect and production code may need investigation
 
-### Structural snapshot
-
-Capture stable semantic structure rather than pixel positions only:
-
-```json
-{
-  "provider_type": "chat_completion",
-  "source_id": "<test-source>",
-  "card_kind": "model",
-  "visible_fields": [],
-  "hidden_fields": [],
-  "field_order": [],
-  "groups": {},
-  "advanced_default": "collapsed"
-}
+raw failure + plugin failure
+  -> upstream/account/model/test-condition boundary remains plausible;
+     do not blame plugin code without further attribution
 ```
 
-Assertions should cover:
+L5 is still not automatically QQ product compatibility.
 
-- field ownership;
-- field visibility;
-- section/group membership;
-- relative order where meaningful;
-- create/edit parity;
-- post-save/reload parity;
-- absence of Volcengine UI on foreign providers.
+### L6 — QQ-equivalent product path
 
-### Browser screenshot
+For QQ media features the product interface is approximately:
 
-Keep a screenshot for human/AI visual review of layout regressions that a structural snapshot may miss. Screenshot differences are evidence for investigation, not an automatic model-capability conclusion.
+```text
+QQ event
+  -> NapCat / OneBot
+  -> AstrBot event/media lifecycle
+  -> MediaResolver
+  -> plugin audio/video last mile
+  -> Ark request
+  -> provider/model response
+```
 
-## Real Volcengine API path
+This is the layer that can validate QQ-oriented audio/video compatibility.
 
-Use repository secrets; never emit secret values to logs or artifacts.
+A generated WAV or MP4 sent directly to a Provider is not equivalent to this path. Production code must not be broadened merely to make a non-equivalent raw fixture pass.
 
-For ordinary Ark:
+## Provider identities
 
-1. create/configure the Source through the same service/UI path used by Dashboard;
-2. create/select the model card;
-3. call real `/models` where available;
-4. inspect raw response shape only in sanitized form;
-5. verify current-response metadata overlay behavior;
-6. issue a minimal real text request;
-7. exercise media paths only with explicit fixtures and bounded cost.
+Both plugin-owned providers currently register as AstrBot `chat_completion` providers:
 
-For Agent Plan, use its real provider/card path separately rather than assuming ordinary Ark layout or request semantics apply.
+- `volcengine_ark_chat_completion`;
+- `volcengine_agent_plan_chat_completion`.
 
-## Required invariants
+Agent Plan is **not** an `agent_runner` card. Tests and UI evidence must follow the actual registered host type rather than an early conceptual model.
 
-### UI isolation
+## Required invariants for 0.1.16
 
-- Foreign providers never display canonical or temporary Volcengine video fields.
-- Temporary UI keys never survive persistence.
-- A forged temporary key on a foreign Source cannot create Volcengine state.
+### Capability/feedback
 
-### Feedback freshness
+- no static model-ID capability oracle;
+- missing feedback remains unknown;
+- explicit current `false`, empty list, and `0` remain current observations when upstream returned them;
+- future/unknown modality tokens are not deleted merely because the current plugin cannot interpret them;
+- current dynamic Ark feedback does not persist into global `LLM_METADATAS[model_id]`.
 
-- A new `/models` request begins without stale plugin feedback from an older request.
-- Current explicit values can replace the same display field for the current Source response.
-- Missing fields do not become negative capability claims.
-- Current feedback is consumed according to the transient contract.
+### Dashboard/config isolation
+
+- foreign providers do not receive the canonical or temporary Volcengine video transport field;
+- temporary UI keys never survive persistence;
+- forged foreign temporary keys cannot create Volcengine state;
+- optional host Dashboard APIs degrade only the enhancement they own.
 
 ### Migration
 
@@ -136,51 +127,45 @@ Precedence:
 1. current per-card `volcengine_video_input_enabled`;
 2. legacy per-card `volcengine_model_video_input`;
 3. legacy explicit Source boolean, including `false`;
-4. historical `modalities: video` only as the final migration clue.
+4. historical `modalities: video` only as the last migration clue.
 
-AstrBot `modalities` itself must remain unchanged.
+AstrBot `modalities` itself remains unchanged.
 
 ### Failure provenance
 
-- local media/input transport failure: record transport domain and `reached_model=false`;
-- upstream rejection: preserve upstream error path;
-- do not add plugin-owned model switching or fallback decisions.
+- local media/input transport failure records `reached_model=false` and no capability verdict;
+- upstream rejection stays on the upstream/AstrBot error path;
+- the plugin does not add model switching or fallback decisions.
 
-## Matrix result format
+## Historical media regression assets
 
-A full release report should be able to summarize at least:
+QQ-oriented audio/video validations are indexed in `docs/TEST_HISTORY.md`. Whether they require a full rerun is decided by `docs/REGRESSION_SCOPE.md`, not by a rule that every release must repeat every historical E2E.
+
+A full QQ-equivalent rerun is required when the relevant media adapter, AstrBot media contract, Ark media payload contract, or QQ/NapCat input semantics change materially.
+
+## 0.1.16 release evidence summary format
 
 ```text
-Provider/Card Matrix
-  Ark Source create/edit            PASS/FAIL
-  Ark model create/edit             PASS/FAIL
-  Agent Plan Source/card            PASS/FAIL
-  Foreign provider isolation        PASS/FAIL
-  Legacy migration                  PASS/FAIL
+Plugin contracts
+  feedback semantics                     PASS/FAIL
+  migration precedence                   PASS/FAIL
+  foreign-provider isolation             PASS/FAIL
+  failure provenance                     PASS/FAIL
 
-Dashboard
-  structural layout snapshots       PASS/FAIL
-  create/edit parity                PASS/FAIL
-  save/reload parity                PASS/FAIL
-  screenshot review                 PASS/FAIL
+AstrBot integration
+  4.26.1 declared-minimum integration    PASS/FAIL
+  4.27.2 integration                     PASS/FAIL
+  Dashboard coarse reachability          PASS/FAIL
 
-Real Volcengine API
-  ordinary Ark /models              PASS/FAIL/SKIP(reason)
-  ordinary Ark text                 PASS/FAIL/SKIP(reason)
-  image path                        PASS/FAIL/SKIP(reason)
-  audio path                        PASS/FAIL/SKIP(reason)
-  video OFF                         PASS/FAIL
-  video ON                          PASS/FAIL/SKIP(reason)
-  Agent Plan real path              PASS/FAIL/SKIP(reason)
+Current downstream attribution
+  ordinary Ark /models                   PASS/FAIL/SKIP(reason)
+  ordinary Ark text                      PASS/FAIL/SKIP(reason)
+  ordinary Ark image                     PASS/FAIL/SKIP(reason)
+  Agent Plan credential/path attribution PASS/FAIL/SKIP(reason)
+
+QQ product regressions
+  audio                                  HISTORICAL_VALID / REVALIDATED / STALE(reason)
+  video                                  HISTORICAL_VALID / REVALIDATED / STALE(reason)
 ```
 
-## Implementation phases
-
-1. schema/card matrix without secrets;
-2. service-level create/save/reload matrix;
-3. Dashboard browser automation and layout snapshots;
-4. real ordinary Ark API matrix;
-5. real Agent Plan path;
-6. media-path expansion where fixtures and endpoint support make the test meaningful.
-
-A `SKIP` must include a reason. It must never be silently counted as a pass.
+A `SKIP` must include a reason. Historical evidence must not be silently upgraded to a current result, but it also must not be silently erased.
