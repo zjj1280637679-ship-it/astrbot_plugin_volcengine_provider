@@ -194,6 +194,15 @@ async def add_source(page: Page, case: Case) -> str:
     ).first
     await expect(add_button).to_be_visible(timeout=10_000)
     await add_button.click()
+
+    # On a fresh AstrBot profile the first-run notice may mount *after* the
+    # Source menu opens. Give that native dialog a bounded chance to appear;
+    # if it does, dismiss it and reopen the Source menu. This keeps a host
+    # onboarding overlay from being misclassified as a provider-card failure.
+    await page.wait_for_timeout(1_200)
+    if await dismiss_first_run_dialog(page):
+        await add_button.click()
+
     menu_item = page.locator(
         ".v-overlay:visible .v-list-item", has_text=case.menu_label
     ).first
