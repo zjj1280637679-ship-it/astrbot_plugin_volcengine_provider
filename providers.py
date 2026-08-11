@@ -82,6 +82,7 @@ AGENT_PLAN_DEFAULT_CONFIG = {
     "custom_headers": {},
 }
 
+
 def _dedupe_nonempty(values) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
@@ -92,7 +93,6 @@ def _dedupe_nonempty(values) -> list[str]:
         seen.add(text)
         result.append(text)
     return result
-
 
 
 def to_agent_plan_public_model(model: object) -> str:
@@ -219,17 +219,18 @@ class ProviderVolcengineArk(_FixedArkEndpointProvider):
         config["model"] = model
         super().__init__(config, provider_settings)
 
-
     async def get_models(self) -> list[str]:
-        """Enumerate visible Ark models and remember sparse Source feedback."""
+        """Enumerate visible Ark models and hand off only this live receipt."""
 
+        scope = source_scope_id(self.provider_config)
+        # Erase the previous receipt *before* network I/O.  A failed refresh must
+        # not leave yesterday's feedback available for a later Dashboard call.
+        clear_source_model_hints(scope)
         try:
             response = await retry_provider_request(
                 "Volcengine Ark",
                 lambda: self.client.models.list(),
             )
-            scope = source_scope_id(self.provider_config)
-            clear_source_model_hints(scope)
             model_ids: list[str] = []
             for model in sorted(
                 response.data,
