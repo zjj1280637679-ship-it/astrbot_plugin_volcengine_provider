@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.1.16
+
+- 将 0.1.15 的能力/反馈边界收敛为可发布状态：继续把 `volcengine_video_input_enabled` 定义为逐模型卡**请求传输开关**，不写入 AstrBot `modalities`，也不把开关、图标、`/models` 回执或一次运行结果升级成模型永久能力事实。
+- 明确“交互不等于判断”：组件可以有足够信息完成接收、翻译、发送或展示，却仍没有足够信息或权限做全局能力裁决；新增 `docs/KNOWLEDGE_BOUNDARY.md` 与 `docs/AI_RULES.md` 固化该认识论边界。
+- 新增 `docs/TEST_HISTORY.md` 与 `docs/REGRESSION_SCOPE.md`：历史 QQ 音频/视频验证不会因为本版没有重复跑同一条高成本链路而被遗忘；只有媒体 adapter、AstrBot MediaResolver/媒体契约、Ark 音视频 payload 或 QQ/NapCat 输入语义发生相关变化时，才要求完整 QQ 等价链重验。
+- 明确裸供应商测试的权限边界：raw Ark 请求用于下游协议归因，不能替代 `QQ -> NapCat/OneBot -> AstrBot -> MediaResolver -> plugin adapter -> Ark/model` 的产品链；禁止为了让不等价的 WAV/MP4 fixture 变绿而放宽生产代码，避免出现“CI 可用但 QQ 不可用”。
+- 普通 Ark 真实运行证据升级为 raw-vs-plugin 对照：当前账户的 `/models`（一次观测返回 129 项）、文本和同字节 PNG 图片路径均完成对照；这些结果作为当前 L5 运行证据保存，不写成永久模型能力表。
+- 当前普通 Ark 凭据调用 Agent Plan 时，raw 与插件路径同时落在同一认证/账户边界，因此只记录为凭据/账户前提，不据此修改 Provider 生产逻辑，也不把失败归因为模型能力。
+- Dashboard 精细 Playwright 卡片矩阵不再作为发布硬门槛：保留真实 AstrBot 生产 Dashboard 构建、登录、Provider 页面可达的粗粒度 L4 证据，以及截图/DOM/可见文本证据采集；避免把欢迎弹窗、显示标签、固定 Source ID 或 Vuetify selector 等测试夹具假设误报成插件故障。
+- 完善 AI/项目可解释性入口：`AGENTS.md`、`docs/AI_ONBOARDING.md`、`docs/PROJECT_STATE.json`、`docs/DECISION_INDEX.json`、ADR、证据等级与测试边界共同暴露“客观条件 -> 目标 -> 当前策略 -> 历史证据 -> 重新验证条件”，但这些文件仍是解释钩子，不是运行时控制面。
+- 本版本没有重新定义已实现的 QQ 音频/视频产品接口；媒体路径按影响分析继承既有验证资产。若未来修改 `adapters/audio.py`、`adapters/video.py`、相关宿主 hook 或媒体依赖，则必须按 `REGRESSION_SCOPE.md` 重新跑对应 QQ 等价链。
 
 ## 0.1.15
 
