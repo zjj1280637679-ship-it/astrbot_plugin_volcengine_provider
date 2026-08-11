@@ -140,6 +140,17 @@ async def visible_config_rows(dialog: Locator) -> list[dict[str, Any]]:
     )
 
 
+def canonical_raw_field_visible(rows: list[dict[str, Any]]) -> bool:
+    """Detect fallback rendering of the hidden canonical config key."""
+
+    return any(
+        row.get("key") == CANONICAL_VIDEO_KEY
+        or row.get("name") == CANONICAL_VIDEO_KEY
+        or row.get("name", "").startswith(f"{CANONICAL_VIDEO_KEY} ")
+        for row in rows
+    )
+
+
 async def login(page: Page) -> None:
     await page.goto(f"{BASE_URL}/#/auth/login", wait_until="networkidle")
     await page.locator('input[autocomplete="username"]').fill(USERNAME)
@@ -150,7 +161,9 @@ async def login(page: Page) -> None:
     )
 
 
-async def dismiss_first_run_dialog(page: Page) -> bool:
+async def dismiss_first_run_dialog(page: Page, *, wait_ms: int = 0) -> bool:
+    if wait_ms:
+        await page.wait_for_timeout(wait_ms)
     dialog = page.locator(".v-dialog:visible", has_text="首次提示").first
     if await dialog.count() == 0:
         return False
@@ -167,12 +180,12 @@ async def dismiss_first_run_dialog(page: Page) -> bool:
 
 
 async def open_providers(page: Page) -> None:
-    await page.goto(f"{BASE_URL}/#/providers", wait_until="networkidle")
+    await page.goto(f"{BASE_URL}/#/providers", wait_until="domcontentloaded")
     await page.locator(".provider-page").wait_for(state="visible", timeout=30_000)
     await page.locator(".provider-workbench").wait_for(
         state="visible", timeout=30_000
     )
-    await dismiss_first_run_dialog(page)
+    await dismiss_first_run_dialog(page, wait_ms=300)
 
 
 async def add_source(page: Page, case: Case) -> str:
@@ -229,6 +242,10 @@ async def fill_dummy_source_key(page: Page) -> None:
 
 
 async def save_source(page: Page) -> None:
+    # The first-run notice is mounted asynchronously on a fresh AstrBot profile
+    # and can appear after Source creation, so dismiss it immediately before the
+    # first destructive click rather than assuming it existed on page entry.
+    await dismiss_first_run_dialog(page, wait_ms=900)
     save = page.locator(".provider-config-actions button").first
     await expect(save).to_be_enabled(timeout=10_000)
     await save.click()
@@ -279,13 +296,11 @@ async def set_video_switch(dialog: Locator, enabled: bool) -> bool:
     if await row.count() != 1:
         return False
     checkbox = row.locator('input[type="checkbox"]').first
-    current = await checkbox.is_checked()
-    if current != enabled:
-        await checkbox.click(force=True)
-        if enabled:
-            await expect(checkbox).to_be_checked(timeout=5_000)
-        else:
-            await expect(checkbox).not_to_be_checked(timeout=5_000)
+    await checkbox.set_checked(enabled, force=True)
+    if enabled:
+        await expect(checkbox).to_be_checked(timeout=5_000)
+    else:
+        await expect(checkbox).not_to_be_checked(timeout=5_000)
     return True
 
 
@@ -361,8 +376,8 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
             for row in create_rows
             if row["key"].startswith(TEMP_UI_PREFIX)
         ]
-        result["model_create_canonical_key_visible"] = any(
-            row["key"] == CANONICAL_VIDEO_KEY for row in create_rows
+        result["model_create_canonical_raw_field_visible"] = canonical_raw_field_visible(
+            create_rows
         )
         await page.screenshot(
             path=str(case_dir / "03-model-create-dialog.png"), full_page=True
@@ -380,24 +395,33 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
             for row in edit_rows
             if row["key"].startswith(TEMP_UI_PREFIX)
         ]
-        result["model_edit_canonical_key_visible"] = any(
-            row["key"] == CANONICAL_VIDEO_KEY for row in edit_rows
+        result["model_edit_canonical_raw_field_visible"] = canonical_raw_field_visible(
+            edit_rows
         )
         await page.screenshot(
             path=str(case_dir / "04-model-edit-dialog.png"), full_page=True
         )
 
         if case.owned:
+            if result["model_edit_canonical_raw_field_visible"]:
+                result["errors"].append(
+                    "owned model edit dialog exposes the canonical transport key as a raw fallback field"
+                )
             toggled = await set_video_switch(edit_dialog, True)
             result["stages"]["video_toggle_available_on_edit"] = toggled
             if not toggled:
                 result["errors"].append(
                     "owned model edit dialog has no video transport control"
                 )
-        elif edit_video:
-            result["errors"].append(
-                "foreign model edit dialog leaked Volcengine video transport control"
-            )
+        else:
+            if edit_video:
+                result["errors"].append(
+                    "foreign model edit dialog leaked Volcengine video transport control"
+                )
+            if result["model_edit_canonical_raw_field_visible"]:
+                result["errors"].append(
+                    "foreign model edit dialog leaked Volcengine canonical transport field"
+                )
 
         await save_model_dialog(edit_dialog)
         result["stages"]["model_edit_save"] = True
@@ -426,11 +450,14 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
         await expect(reopen).to_be_hidden(timeout=10_000)
         result["stages"]["model_reopen_after_save"] = True
 
-        await page.reload(wait_until="networkidle")
+        # Network-idle is not a valid reload completion criterion for the real
+        # Dashboard because background requests may stay active.  The actual UI
+        # shell is the completion signal we care about.
+        await page.reload(wait_until="domcontentloaded", timeout=30_000)
         await page.locator(".provider-workbench").wait_for(
             state="visible", timeout=30_000
         )
-        await dismiss_first_run_dialog(page)
+        await dismiss_first_run_dialog(page, wait_ms=300)
         await select_source(page, actual_source_id)
         post_reload = await open_configured_model(page, case.model_id)
         result["model_edit_rows_after_page_reload"] = await visible_config_rows(
@@ -473,10 +500,15 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
                 result["errors"].append(
                     "owned model edit dialog does not expose exactly one video transport control"
                 )
-        elif result["model_create_video_control_count"] != 0:
-            result["errors"].append(
-                "foreign model create dialog leaked Volcengine video transport control"
-            )
+        else:
+            if result["model_create_video_control_count"] != 0:
+                result["errors"].append(
+                    "foreign model create dialog leaked Volcengine video transport control"
+                )
+            if result["model_create_canonical_raw_field_visible"]:
+                result["errors"].append(
+                    "foreign model create dialog leaked Volcengine canonical transport field"
+                )
 
         result["success"] = not result["errors"]
     except Exception as exc:
