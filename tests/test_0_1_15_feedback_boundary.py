@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import copy
+import json
 import sys
 from pathlib import Path
 
@@ -8,13 +10,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "AstrBot" / "data" / "plugins"))
 
 from astrbot.core.agent.message import TextPart
+from astrbot_plugin_volcengine_provider.adapters.errors import AdapterInputTransportError
 from astrbot_plugin_volcengine_provider.capabilities import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
     VIDEO_INPUT_ENABLED_KEY,
     cleanup_owned_settings_on_source_change,
+    clear_source_model_hints,
+    consume_source_model_hints,
     migrate_legacy_video_settings,
     normalize_owned_model_card_for_save,
+    remember_source_model_hint,
     video_input_enabled,
 )
 from astrbot_plugin_volcengine_provider.metadata.agent_plan import KNOWN_AGENT_PLAN_MODELS
@@ -133,6 +139,7 @@ def main() -> None:
     assert VIDEO_INPUT_ENABLED_KEY not in moving
     assert moving['modalities'] == ['text', 'video']
 
+    # Sparse receipt: missing fields stay absent; no capability default is authored.
     mid, hint = normalize_ark_model_metadata({'id': 'unknown'})
     assert mid == 'unknown'
     assert hint == {'id': 'unknown'}
@@ -147,6 +154,8 @@ def main() -> None:
     assert rich['limit'] == {'context': 65536}
     assert 'tool_call' not in rich
 
+    # A live receipt wins for the same display field *for this response only*.
+    # Missing directions/fields remain host-owned rather than being invented.
     base = {
         'id': 'same',
         'tool_call': True,
@@ -160,9 +169,42 @@ def main() -> None:
         'limit': {'context': 65536, 'output': 4096},
     }
     merged = _merge_source_feedback(base, incoming)
-    assert merged['tool_call'] is True
-    assert merged['modalities']['input'] == ['image', 'audio']
-    assert merged['limit'] == {'context': 131072, 'output': 4096}
+    assert merged['tool_call'] is False
+    assert merged['modalities'] == {'input': ['audio'], 'output': ['text']}
+    assert merged['limit'] == {'context': 65536, 'output': 4096}
+    # The source object is copy-on-write; AstrBot's base feedback is untouched.
+    assert base['tool_call'] is True
+    assert base['modalities']['input'] == ['image']
+    assert base['limit']['context'] == 131072
+
+    # Dynamic feedback is a single-use current-call handoff, never history.
+    clear_source_model_hints('live')
+    remember_source_model_hint('live', 'm', {'id': 'm', 'tool_call': False})
+    assert consume_source_model_hints('live', ['m']) == {
+        'm': {'id': 'm', 'tool_call': False}
+    }
+    assert consume_source_model_hints('live', ['m']) == {}
+
+    # ContextVar isolation: concurrent model-list calls cannot consume each
+    # other's Source feedback even when their Source/model identifiers match.
+    async def isolated_feedback(value: bool) -> bool:
+        clear_source_model_hints('same-source')
+        remember_source_model_hint(
+            'same-source',
+            'same-model',
+            {'id': 'same-model', 'tool_call': value},
+        )
+        await asyncio.sleep(0)
+        result = consume_source_model_hints('same-source', ['same-model'])
+        return result['same-model']['tool_call']
+
+    async def run_isolation() -> list[bool]:
+        return list(await asyncio.gather(
+            isolated_feedback(True),
+            isolated_feedback(False),
+        ))
+
+    assert asyncio.run(run_isolation()) == [True, False]
 
     payload = {
         'config_schema': {'provider': {'items': {}}},
@@ -191,6 +233,7 @@ def main() -> None:
         'model': 'dummy-model',
         VIDEO_INPUT_ENABLED_KEY: True,
     }, {'request_max_retries': 1})
+    assert provider is not None
 
     async def fake_resolve(ref: str) -> str:
         assert ref == '/tmp/test.mp4'
@@ -200,7 +243,6 @@ def main() -> None:
     original = video_adapter.resolve_video_reference
     video_adapter.resolve_video_reference = fake_resolve
     try:
-        import asyncio
         marker = '[Video Attachment: name test.mp4, path /tmp/test.mp4]'
         messages = [{'role': 'user', 'content': [{'type': 'text', 'text': marker}]}]
         asyncio.run(video_adapter.inject_current_request_videos(
@@ -217,8 +259,52 @@ def main() -> None:
             enabled=False,
         ))
         assert messages_off[0]['content'] == [{'type': 'text', 'text': '[Video]'}]
+
+        # Trusted attachment exists but assembled content is missing: transport
+        # failure, not model rejection/capability evidence.
+        try:
+            asyncio.run(video_adapter.inject_current_request_videos(
+                [{'role': 'user', 'content': [{'type': 'text', 'text': 'other'}]}],
+                [TextPart(text=marker)],
+                enabled=False,
+            ))
+            raise AssertionError('expected AdapterInputTransportError')
+        except AdapterInputTransportError as exc:
+            assert exc.reached_model is False
+            assert exc.capability_observed is None
+            assert exc.fallback_recommended is False
+            assert exc.media_type == 'video'
+            assert exc.stage == 'assemble_payload'
     finally:
         video_adapter.resolve_video_reference = original
+
+    # Audio normalization errors are wrapped with the same provenance contract.
+    import astrbot_plugin_volcengine_provider.adapters.audio as audio_adapter
+    original_audio_normalize = audio_adapter.normalize_ark_chat_audio
+
+    async def fail_audio(_: str) -> bytes:
+        raise ValueError('synthetic local audio failure')
+
+    audio_adapter.normalize_ark_chat_audio = fail_audio
+    try:
+        try:
+            asyncio.run(audio_adapter.build_ark_input_audio('dummy'))
+            raise AssertionError('expected AdapterInputTransportError')
+        except AdapterInputTransportError as exc:
+            assert exc.reached_model is False
+            assert exc.capability_observed is None
+            assert exc.fallback_recommended is False
+            assert exc.media_type == 'audio'
+            assert exc.stage == 'normalize_for_ark'
+    finally:
+        audio_adapter.normalize_ark_chat_audio = original_audio_normalize
+
+    semantics = json.loads((ROOT / 'capabilities' / 'SEMANTICS.json').read_text('utf-8'))
+    assert semantics['epistemic_contract']['feedback_is_truth'] is False
+    assert semantics['epistemic_contract']['missing_feedback_means_unsupported'] is False
+    assert semantics['live_model_feedback']['ordinary_ark_models_receipt']['persistent'] is False
+    assert semantics['failure_domains']['input_transport']['reached_model'] is False
+    assert semantics['fields'][VIDEO_INPUT_ENABLED_KEY]['kind'] == 'request_transport_switch'
 
     print('FEEDBACK_BOUNDARY_0_1_15=OK')
 
