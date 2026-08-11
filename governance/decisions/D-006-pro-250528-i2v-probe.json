@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "decision_id": "D-006",
+  "decision": "Run one exact single-image image-to-video probe on doubao-seedance-1-0-pro-250528 using the already verified public GitHub reference image transport and documented prompt-suffix controls.",
+  "trigger": "The current executable model graph has only one E2E I2V route (1.5 Pro). Pro 250528 is already E2E for T2V and official Ark examples/document evidence make image input a strong candidate, but exact current-account I2V remains load-bearing unknown for fallback/routing.",
+  "rights": {
+    "authorized_by": ["user instruction to continue advancing model capability/modality strategy"],
+    "credentials_or_permissions": ["HUOSHANYINQINGAPI through GitHub Actions", "public repository reference-image URL"],
+    "asset_rights": ["reference image already supplied/approved in this conversation and previously used in the project"],
+    "scope": "one 5-second exact-model I2V probe",
+    "invalidators": ["user revokes API or asset-use authorization"],
+    "verdict": "pass"
+  },
+  "capability": {
+    "required_claim_ids": ["C-001", "C-003", "C-013"],
+    "relation_classes": ["conditional_deterministic"],
+    "strongest_evidence": "T2V E2E + official/documented I2V candidate",
+    "verified_domain": {"reference_transport": "public GitHub raw URL", "exact_model_t2v": "E2E"},
+    "unverified_assumptions": ["exact Pro 250528 accepts single-image image_url under current account"],
+    "alternative_existing_paths": ["1.5 Pro I2V is already E2E, but does not answer whether a fallback/second exact model exists"],
+    "verdict": "single_probe_justified"
+  },
+  "intent": {
+    "user_goal": "Build evidence-bounded model capability cards and practical routing/fallback strategy for video generation.",
+    "why_this_action_serves_the_goal": "A second E2E I2V edge materially changes routing resilience; this is not a cosmetic benchmark.",
+    "is_it_necessary": true,
+    "lower_cost_or_lower_risk_equal_effect_options": ["authoritative account/model capability endpoint if compatible control-plane credentials become available"],
+    "verdict": "pass"
+  },
+  "effect": {
+    "expected_state_changes": ["one Ark image-to-video task", "temporary MP4/metadata Artifact"],
+    "quota_or_cost": ["one 5-second Pro 250528 generation against the model quota if accepted"],
+    "repository_mutations": ["one test workflow/trigger plus evidence update"],
+    "external_calls": ["GitHub raw image GET", "Volcengine Ark create/query/download"],
+    "public_or_private_asset_changes": ["no new private asset exposure; uses already-public test reference"],
+    "irreversible_effects": ["consumed inference quota"],
+    "cleanup_obligations": ["retain compact evidence; temporary Artifact may expire"],
+    "useful_output": "exact current-account verdict for Pro 250528 single-image I2V and observed task/output metadata",
+    "verdict": "pass"
+  },
+  "epistemic_review": {
+    "is_this_a_possibility_graph_edge_or_executable_graph_edge": "candidate edge until successful E2E run",
+    "what_exact_claim_is_being_tested_or_used": "Pro 250528 accepts one image_url plus text and completes a 5-second 16:9 I2V task under the current account",
+    "what_failure_would_falsify": "only this exact model/account/request path",
+    "what_failure_would_not_falsify": "1.5 Pro I2V, another Pro version, or other image-input schemas",
+    "does_existing_evidence_make_retesting_unnecessary": false,
+    "if_retesting_is_needed_why": "this exact modality/model/account edge has never been executed; this is first verification"
+  },
+  "decision_result": "approved"
+}
