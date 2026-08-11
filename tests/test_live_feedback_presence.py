@@ -53,6 +53,41 @@ def main() -> None:
     assert host["modalities"]["input"] == ["image", "audio"]
     assert host["modalities"]["output"] == ["text"]
 
+    # Explicit integer zero is also feedback, not absence. It must replace a
+    # stale non-zero display value for this response. Numeric strings are kept
+    # as integer feedback, while JSON booleans are not misread as Python ints.
+    _, zero_limits = normalize_ark_model_metadata(
+        {
+            "id": "zero",
+            "token_limits": {
+                "context_window": 0,
+                "max_output_token_length": "0",
+            },
+        }
+    )
+    assert zero_limits == {
+        "id": "zero",
+        "limit": {"context": 0, "output": 0},
+    }
+    stale_limits = {
+        "id": "zero",
+        "limit": {"context": 131072, "output": 8192},
+    }
+    merged_limits = _merge_source_feedback(stale_limits, zero_limits)
+    assert merged_limits["limit"] == {"context": 0, "output": 0}
+    assert stale_limits["limit"] == {"context": 131072, "output": 8192}
+
+    _, bool_limits = normalize_ark_model_metadata(
+        {
+            "id": "bool-limit",
+            "token_limits": {
+                "context_window": False,
+                "max_output_token_length": True,
+            },
+        }
+    )
+    assert bool_limits == {"id": "bool-limit"}
+
     # Unknown/future modality tokens are information, not something the current
     # adapter is entitled to erase. AstrBot 4.26/4.27 can simply ignore names it
     # does not understand while a future host may consume them.
