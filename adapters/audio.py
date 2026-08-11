@@ -19,6 +19,8 @@ from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 from astrbot.core.utils.media_utils import MediaResolver, describe_media_ref
 
+from .errors import AdapterInputTransportError
+
 ARK_CHAT_AUDIO_MAX_BYTES = 25 * 1024 * 1024
 ARK_CHAT_AUDIO_SAMPLE_RATE = 16_000
 ARK_CHAT_AUDIO_CHANNELS = 1
@@ -157,13 +159,37 @@ async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
         except OSError:
             logger.warning("Failed to clean provider-owned audio temp file")
 
-async def build_ark_input_audio(audio_ref: str) -> dict:
-    """Return one Ark ``input_audio`` block from an AstrBot media reference."""
 
-    wav_data = await normalize_ark_chat_audio(audio_ref)
-    audio_base64 = await asyncio.to_thread(
-        lambda: base64.b64encode(wav_data).decode("ascii")
-    )
+async def build_ark_input_audio(audio_ref: str) -> dict:
+    """Return one Ark ``input_audio`` block from an AstrBot media reference.
+
+    A failure here means the request did not reach the model.  Wrap the local
+    failure with structured provenance instead of letting it masquerade as a
+    negative model-capability observation.
+    """
+
+    try:
+        wav_data = await normalize_ark_chat_audio(audio_ref)
+    except AdapterInputTransportError:
+        raise
+    except ValueError as exc:
+        raise AdapterInputTransportError(
+            str(exc),
+            media_type="audio",
+            stage="normalize_for_ark",
+        ) from exc
+
+    try:
+        audio_base64 = await asyncio.to_thread(
+            lambda: base64.b64encode(wav_data).decode("ascii")
+        )
+    except Exception as exc:
+        raise AdapterInputTransportError(
+            "音频已归一化，但无法序列化为火山方舟 input_audio；未发送请求。",
+            media_type="audio",
+            stage="serialize_input_audio",
+        ) from exc
+
     return {
         "type": "input_audio",
         "input_audio": {
@@ -171,4 +197,3 @@ async def build_ark_input_audio(audio_ref: str) -> dict:
             "format": "wav",
         },
     }
-
