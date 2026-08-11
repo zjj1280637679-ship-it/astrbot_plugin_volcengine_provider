@@ -143,10 +143,13 @@ def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
         source_id = str(provider.get("provider_source_id") or "").strip()
         if types.get(source_id) not in OWNED_SOURCE_TYPES:
             continue
-        # The canonical value remains ordinary data but has no shared schema
-        # item, so it is not rendered on foreign cards.
-        provider.setdefault(VIDEO_INPUT_ENABLED_KEY, video_input_enabled(provider))
-        provider[_video_ui_key(source_id)] = provider[VIDEO_INPUT_ENABLED_KEY]
+        # Dashboard is a projection, not persistence. AstrBotConfig fallback-renders
+        # unknown iterable keys, so the canonical key must not be returned here.
+        # Carry only its value through the short-lived Source-scoped UI switch;
+        # save wrappers translate that switch back to the canonical persistence key.
+        current_value = video_input_enabled(provider)
+        provider.pop(VIDEO_INPUT_ENABLED_KEY, None)
+        provider[_video_ui_key(source_id)] = current_value
     return payload
 
 

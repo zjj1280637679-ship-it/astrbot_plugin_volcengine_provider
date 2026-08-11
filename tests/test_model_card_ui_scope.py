@@ -37,8 +37,18 @@ def main() -> None:
         "config_schema": {"provider": {"items": {}}},
         "provider_sources": sources,
         "providers": [
-            {"id": "ark-A/m", "provider_source_id": "ark-A", "model": "m"},
-            {"id": "plan-A/m", "provider_source_id": "plan-A", "model": "m"},
+            {
+                "id": "ark-A/m",
+                "provider_source_id": "ark-A",
+                "model": "m",
+                VIDEO_INPUT_ENABLED_KEY: True,
+            },
+            {
+                "id": "plan-A/m",
+                "provider_source_id": "plan-A",
+                "model": "m",
+                VIDEO_INPUT_ENABLED_KEY: False,
+            },
             {"id": "foreign-A/m", "provider_source_id": "foreign-A", "model": "m"},
         ],
     }
@@ -61,10 +71,13 @@ def main() -> None:
     assert foreign_ui not in items
 
     ark_card, plan_card, foreign_card = out["providers"]
-    assert ark_card[ark_ui] is False
+    # Dashboard returns only the Source-scoped UI projection. The canonical
+    # persistence key must not be present or AstrBot fallback-renders it as
+    # a second raw field beside the intended switch.
+    assert ark_card[ark_ui] is True
     assert plan_card[plan_ui] is False
-    assert VIDEO_INPUT_ENABLED_KEY in ark_card
-    assert VIDEO_INPUT_ENABLED_KEY in plan_card
+    assert VIDEO_INPUT_ENABLED_KEY not in ark_card
+    assert VIDEO_INPUT_ENABLED_KEY not in plan_card
     assert VIDEO_INPUT_ENABLED_KEY not in foreign_card
     assert not any(
         str(key).startswith(_VIDEO_UI_KEY_PREFIX)
