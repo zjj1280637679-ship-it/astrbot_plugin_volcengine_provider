@@ -1,23 +1,23 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.14-e85d3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.15-e85d3f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp%20%7C%20webchat-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 装上这款插件，QQ 语音会在可靠转换后，连同完整聊天上下文交给你正在使用的火山方舟主模型；本轮发送或引用的视频，也能由同一个模型看懂并继续回应。你不需要另配 STT、转录模型，也不用再搭建一条互相失忆的旁路。
 
-插件同时为 AstrBot 补齐普通 API 与 Agent Plan 两张独立供应商卡：图片、音频与工具继续使用 AstrBot 原生模型能力，视频则使用只属于火山供应商源的开关；密钥、端点与计费互不混线。让你的 AstrBot 不只是“接入火山方舟”，而是真正在 QQ 对话中获得听、看、理解与回应的能力。
+插件同时为 AstrBot 补齐普通 API 与 Agent Plan 两张独立供应商卡：图片、音频与工具继续使用 AstrBot 原生模型能力，视频则使用逐模型卡的火山请求通道开关；密钥、端点与计费互不混线。让你的 AstrBot 不只是“接入火山方舟”，而是真正在 QQ 对话中获得听、看、理解与回应的能力。
 
 交流与反馈：**QQ 群 916646029**
 
 ## 你会得到什么
 
 - **QQ 语音真正交给主模型理解**：Silk、AMR 等 QQ 常见输入会先规范化成可靠 WAV，再随完整上下文进入同一个聊天模型；不是旁路转录，也不需要另配 STT。
-- **当前视频直接进入火山协议**：在对应火山供应商源开启“视频输入”后，本次发送或引用的视频会转换为官方 `video_url` 内容块，让主模型在同一轮对话里看见动态内容。
+- **当前视频直接进入火山协议**：在当前火山模型卡开启“视频请求通道”后，本次发送或引用的视频会转换为官方 `video_url` 内容块，让主模型在同一轮对话里看见动态内容。
 - **听、看、回答仍是一条主对话**：语音、视频、图片、文字和工具结果共享 AstrBot 组装的完整上下文，不会拆成互相失忆的多个模型流程。
-- **不污染 AstrBot 的公共能力轴**：图片、音频与工具仍按 AstrBot 原生模型卡配置；AstrBot 当前还没有原生 `video` modality，因此插件只给自己的两种火山供应商源增加“视频输入”布尔开关，不给其他 Provider 塞第五个公共选项。
+- **不污染 AstrBot 的公共能力轴**：图片、音频与工具仍按 AstrBot 原生模型卡配置；AstrBot 当前还没有原生 `video` modality，因此插件只给自己的模型卡增加“视频请求通道”布尔开关，且不把它写入 `modalities`，不给其他 Provider 塞第五个公共选项。
 - **两条不会混线的计费通道**：普通 API 与 Agent Plan 分别使用独立供应商类型、固定端点和独立密钥。
 - **完整的模型选择**：普通 API 在线读取当前密钥真正可见的模型；Agent Plan 提供带 `agentplan/` 前缀的套餐模型候选。
 - **失败时不装懂**：附件进入插件后若解析或验证失败，本次请求会明确停止，不会把没看见、没听见伪装成理解成功。
@@ -59,10 +59,10 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 1. 新增 `volcengine_ark_chat_completion`。
 2. 填写你的普通方舟推理 API Key。
 3. 获取模型列表，或手动填写官方模型 ID / 推理接入点 ID（`ep-...`）。
-4. 打开具体模型的编辑卡，按该模型实际能力配置图片、音频与工具；需要视频时，在这张火山供应商源的高级设置里开启“视频输入”。
-5. 保存后，把这张模型卡选为当前聊天模型并测试。旧版已经保存的 `modalities: video` 会继续作为兼容回退读取。
+4. 打开具体模型的编辑卡，按该模型实际能力配置图片、音频与工具；需要视频时，在当前火山模型卡开启“视频请求通道”；它只是传输设置，不是模型能力结论。
+5. 保存后，把这张模型卡选为当前聊天模型并测试。旧版视频字段和旧插件曾写入的 `modalities: video` 会一次性迁移为新的逐模型卡传输开关；AstrBot `modalities` 本身保持不动。
 
-普通通道会使用你当前填写的推理 Key 调用同一 `api_base` 下的 `/models`，不会再用离线白名单把结果截成少数几项。若上游返回模型能力、上下文或输出限制，插件会把这些字段转换为 AstrBot 原生模型元数据；上游没有明确声明的能力则不替你猜。
+普通通道会使用你当前填写的推理 Key 调用同一 `api_base` 下的 `/models`，不会再用离线白名单把结果截成少数几项。若 `/models` 明确返回模态、工具、reasoning、上下文或输出限制，插件只把这些字段作为当前 Source 的补充反馈；缺失字段保持未反馈，并且不会覆盖 AstrBot 已有反馈。
 
 ## 接通 Agent Plan
 
@@ -70,9 +70,9 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 2. 填写你的 **Agent Plan 专属 API Key**；不要填普通方舟或 Coding Plan Key。
 3. 选择一个带 `agentplan/` 的套餐模型。
 4. 如果你希望使用控制台托管路由，可以选择 `agentplan/ark-code-latest`；它代表可变路由，不是固定模型。
-5. 图片、音频与工具继续按模型真实能力配置；需要视频时，在这张 Agent Plan 供应商源的高级设置里开启“视频输入”。旧版 `modalities: video` 配置继续兼容。
+5. 图片、音频与工具继续沿 AstrBot 原生模型卡反馈配置；需要视频时，在当前 Agent Plan 模型卡开启“视频请求通道”。这个开关不作为模型能力先验。
 
-Agent Plan 没有可由专属推理 Key 读取的 OpenAI 风格 `/models`。官方 `ListArkAgentPlanModel` 控制面接口需要权限更广的云账号 AK/SK，而且只返回 ModelID，不能证明模态、工具和长度能力。为了不给你索要不必要的高权限凭据，插件提供经过官方套餐表核对的候选，也允许你手动填写新模型。
+Agent Plan 没有可由专属推理 Key 读取的 OpenAI 风格 `/models`。官方 `ListArkAgentPlanModel` 控制面接口需要权限更广的云账号 AK/SK，而且只返回 ModelID，不能证明模态、工具和长度能力。为了不给你索要不必要的高权限凭据，插件只提供控制台可见 model-name 候选并允许手动填写新模型，不再按 model ID 预填能力。
 
 ## 让模型看懂图片、QQ 语音和视频
 
@@ -99,9 +99,16 @@ QQ Record
 
 ### 视频
 
-在对应火山供应商源开启“视频输入”后，本次消息或本次引用中的受信视频附件会转换为火山官方 `video_url`。HTTP(S) 视频保持远程引用，本地路径、`file://` 与 Base64 引用通过 AstrBot 原生 `MediaResolver` 转成带 MIME 的 data URL。
+在当前火山模型卡开启“视频请求通道”后，本次消息或本次引用中的受信视频附件会转换为火山官方 `video_url`。HTTP(S) 视频保持远程引用，本地路径、`file://` 与 Base64 引用通过 AstrBot 原生 `MediaResolver` 转成带 MIME 的 data URL。
 
 你手打一个像路径的字符串、旧历史里只剩下的附件标记，都不会让插件打开本地文件。需要模型在后续独立回合重新观看时，请重新引用或附加原视频。
+
+
+## 0.1.15：请求通道不是能力真值表
+
+- AstrBot 模型卡上的图片、音频、工具等信息继续由 AstrBot 管理；没有某个标注只代表当前没有反馈，不自动等于不支持。
+- 视频在 AstrBot 4.27 还没有原生反馈选项，因此插件提供逐模型卡“视频请求通道”；它只控制 Ark `video_url` 是否发送，不写 `modalities`，也不替模型下能力结论。
+- 普通 Ark `/models` 只贡献当前 Source 的稀疏补充反馈，不覆盖 AstrBot 已有反馈；Agent Plan 只提供 model-name 候选，不维护跨模型厂商的能力先验表。
 
 ## 0.1.14 的工程结构
 
@@ -152,7 +159,7 @@ registry.py
 - 不把 Responses API 内置工具假装成 Chat Function Calling 工具。
 - 不接管 AstrBot 原生流式、重试、工具结果回传或全局回退策略。
 
-这种谨慎默认意味着：未知模型的新卡先只有文本能力，你再按真实情况手动勾选。对供应商协议来说，少勾一项只会暂时少一种能力，乱勾一项却可能直接让请求失败或走错计费语境。
+这种谨慎默认意味着：未知模型未标注的能力保持“未反馈”，你再按 AstrBot 原生模型卡、已有反馈和实际请求结果调整配置。对供应商协议来说，少勾一项只会暂时少一种能力，乱勾一项却可能直接让请求失败或走错计费语境。
 
 ## 遇到问题时这样检查
 
@@ -166,7 +173,7 @@ registry.py
 
 ### 模型没有看见视频
 
-先确认对应火山供应商源的“视频输入”已开启，再确认视频属于本次消息或本次引用。随后查看 AstrBot 媒体转换日志：如果附件在形成 Provider 句柄之前就失败，聊天 Provider 无法从普通文本中反推出原视频。
+先确认当前火山模型卡的“视频请求通道”已开启，再确认视频属于本次消息或本次引用。随后查看 AstrBot 媒体转换日志：如果附件在形成 Provider 句柄之前就失败，聊天 Provider 无法从普通文本中反推出原视频。
 
 ### 明明选择 Agent Plan 却产生普通 API 调用
 

@@ -98,18 +98,6 @@ async def resolve_video_reference(media_ref: str) -> str:
     return media.to_data_url()
 
 
-def resolve_video_input_enabled(
-    provider_config: dict,
-    video_input_config_key: str,
-) -> bool:
-    """Resolve the Source-owned video switch, retaining only legacy fallback."""
-
-    explicit = provider_config.get(video_input_config_key)
-    if isinstance(explicit, bool):
-        return explicit
-    modalities = provider_config.get("modalities")
-    return isinstance(modalities, list) and "video" in modalities
-
 
 async def inject_current_request_videos(
     messages: list[dict],

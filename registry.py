@@ -1,7 +1,8 @@
-"""Plugin-owned registration and provider-schema extensions."""
+"""Plugin-owned Provider registration and narrow AstrBot Dashboard bridge."""
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 from typing import Any
 
@@ -11,32 +12,33 @@ from astrbot.core.provider.register import (
     register_provider_adapter,
 )
 
+from .capabilities import (
+    AGENT_PLAN_PROVIDER_TYPE,
+    ARK_PROVIDER_TYPE,
+    OWNED_SOURCE_TYPES,
+    VIDEO_INPUT_ENABLED_KEY,
+    cleanup_owned_settings_on_source_change,
+    get_source_model_hints,
+    normalize_owned_model_card_for_save,
+    source_types,
+    video_input_enabled,
+)
+
 PLUGIN_MODULE_MARKER = "astrbot_plugin_volcengine_provider"
 
-ARK_PROVIDER_TYPE = "volcengine_ark_chat_completion"
-AGENT_PLAN_PROVIDER_TYPE = "volcengine_agent_plan_chat_completion"
-# AstrBot does not yet expose video as a native provider modality. Keep the
-# provider-owned switch scoped to each Volcengine source; old model cards that
-# saved ``video`` in ``modalities`` remain readable as a compatibility fallback.
-ARK_VIDEO_INPUT_KEY = "volcengine_ark_video_input"
-AGENT_PLAN_VIDEO_INPUT_KEY = "volcengine_agent_plan_video_input"
-
-_SCHEMA_LEASE_COUNT = 0
-_SCHEMA_WRAPPER: Callable[..., dict[str, Any]] | None = None
-_SCHEMA_ORIGINAL: Callable[..., dict[str, Any]] | None = None
+_DASHBOARD_LEASE_COUNT = 0
+_SCHEMA_WRAPPER: Callable[..., Any] | None = None
+_SCHEMA_ORIGINAL: Callable[..., Any] | None = None
+_MODELS_WRAPPER: Callable[..., Any] | None = None
+_MODELS_ORIGINAL: Callable[..., Any] | None = None
+_CREATE_WRAPPER: Callable[..., Any] | None = None
+_CREATE_ORIGINAL: Callable[..., Any] | None = None
+_UPDATE_WRAPPER: Callable[..., Any] | None = None
+_UPDATE_ORIGINAL: Callable[..., Any] | None = None
 
 
-def _inject_volcengine_video_control_fields(
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    """Expose only Volcengine-owned video switches in AstrBot's shared schema.
-
-    AstrBot 4.27 has no provider-specific schema-extension registry and its
-    native ``modalities`` axis stops at text/image/audio/tool_use. Injecting a
-    fifth common modality would affect every provider card. Instead, add two
-    boolean field definitions; AstrBotConfig renders them only on Volcengine
-    source templates that actually contain the corresponding key.
-    """
+def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
+    """Expose a transport toggle only on concrete Volcengine model cards."""
 
     try:
         items = payload["config_schema"]["provider"]["items"]
@@ -46,78 +48,239 @@ def _inject_volcengine_video_control_fields(
         return payload
 
     items.setdefault(
-        ARK_VIDEO_INPUT_KEY,
+        VIDEO_INPUT_ENABLED_KEY,
         {
-            "description": "视频输入",
+            "description": "视频请求通道（当前模型卡）",
             "type": "bool",
-            "hint": "仅控制火山方舟普通 API 的视频附件输入；关闭时视频会保留为 [Video] 文本占位。",
-            "condition": {"type": ARK_PROVIDER_TYPE},
+            "hint": (
+                "仅控制火山适配器是否按 Ark video_url 协议尝试发送本轮视频；"
+                "不是模型能力结论。关闭时保留 [Video] 文本占位。"
+            ),
         },
     )
-    items.setdefault(
-        AGENT_PLAN_VIDEO_INPUT_KEY,
-        {
-            "description": "视频输入",
-            "type": "bool",
-            "hint": "仅控制火山方舟 Agent Plan 的视频附件输入；关闭时视频会保留为 [Video] 文本占位。",
-            "condition": {"type": AGENT_PLAN_PROVIDER_TYPE},
-        },
-    )
+
+    types = source_types(payload)
+    providers = payload.get("providers", [])
+    if not isinstance(providers, list):
+        return payload
+    for provider in providers:
+        if not isinstance(provider, dict):
+            continue
+        source_id = str(provider.get("provider_source_id") or "").strip()
+        if types.get(source_id) not in OWNED_SOURCE_TYPES:
+            continue
+        provider.setdefault(VIDEO_INPUT_ENABLED_KEY, video_input_enabled(provider))
     return payload
 
 
-def acquire_owned_provider_schema() -> None:
-    """Install one reversible adapter on AstrBot's provider-schema service."""
+def _is_owned_source(service: Any, source_id: str) -> bool:
+    config = getattr(service, "config", {})
+    types = source_types(config if hasattr(config, "get") else {})
+    return types.get(source_id) in OWNED_SOURCE_TYPES
 
-    global _SCHEMA_LEASE_COUNT, _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL
-    if _SCHEMA_LEASE_COUNT:
-        _SCHEMA_LEASE_COUNT += 1
+
+def _merge_source_feedback(base: object, hint: object) -> dict[str, Any]:
+    """Add sparse Ark feedback without erasing AstrBot feedback."""
+
+    merged = copy.deepcopy(base) if isinstance(base, dict) else {}
+    if not isinstance(hint, dict):
+        return merged
+
+    for key, value in hint.items():
+        if key == "modalities" and isinstance(value, dict):
+            current = merged.setdefault("modalities", {})
+            if not isinstance(current, dict):
+                current = {}
+                merged["modalities"] = current
+            for direction in ("input", "output"):
+                incoming = value.get(direction)
+                if not isinstance(incoming, list):
+                    continue
+                existing = current.get(direction)
+                existing_list = list(existing) if isinstance(existing, list) else []
+                current[direction] = list(dict.fromkeys([*existing_list, *incoming]))
+            continue
+
+        if key == "limit" and isinstance(value, dict):
+            current = merged.setdefault("limit", {})
+            if not isinstance(current, dict):
+                current = {}
+                merged["limit"] = current
+            for name, incoming in value.items():
+                if not current.get(name) and incoming:
+                    current[name] = copy.deepcopy(incoming)
+            continue
+
+        if key not in merged or merged[key] in (None, ""):
+            merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def _overlay_source_scoped_model_hints(
+    service: Any,
+    source_id: str,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    if not _is_owned_source(service, source_id):
+        return result
+    models = [str(model) for model in result.get("models", []) or []]
+    hints = get_source_model_hints(source_id, models)
+    if not hints:
+        return result
+    metadata = result.setdefault("model_metadata", {})
+    if not isinstance(metadata, dict):
+        return result
+    for model_id, hint in hints.items():
+        metadata[model_id] = _merge_source_feedback(metadata.get(model_id), hint)
+    return result
+
+
+def acquire_owned_dashboard_bridge() -> None:
+    """Install reversible model-card UI/save and Source-feedback wrappers."""
+
+    global _DASHBOARD_LEASE_COUNT
+    global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
+    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL
+
+    if _DASHBOARD_LEASE_COUNT:
+        _DASHBOARD_LEASE_COUNT += 1
         return
 
     from astrbot.dashboard.services.config_service import ProviderConfigService
 
-    current = ProviderConfigService.get_provider_schema
-    if getattr(current, "_volcengine_provider_schema_wrapper", False):
-        current = getattr(current, "_volcengine_provider_schema_original")
+    schema_current = ProviderConfigService.get_provider_schema
+    if getattr(schema_current, "_volcengine_provider_schema_wrapper", False):
+        schema_current = getattr(schema_current, "_volcengine_provider_schema_original")
 
-    def get_provider_schema_with_volcengine_controls(self) -> dict[str, Any]:
-        payload = current(self)
-        return _inject_volcengine_video_control_fields(payload)
+    models_current = ProviderConfigService.list_provider_source_models
+    if getattr(models_current, "_volcengine_source_models_wrapper", False):
+        models_current = getattr(models_current, "_volcengine_source_models_original")
 
-    get_provider_schema_with_volcengine_controls._volcengine_provider_schema_wrapper = (  # type: ignore[attr-defined]
-        True
-    )
-    get_provider_schema_with_volcengine_controls._volcengine_provider_schema_original = (  # type: ignore[attr-defined]
-        current
-    )
-    ProviderConfigService.get_provider_schema = (  # type: ignore[method-assign]
-        get_provider_schema_with_volcengine_controls
-    )
-    _SCHEMA_ORIGINAL = current
-    _SCHEMA_WRAPPER = get_provider_schema_with_volcengine_controls
-    _SCHEMA_LEASE_COUNT = 1
+    create_current = ProviderConfigService.create_provider
+    if getattr(create_current, "_volcengine_model_save_wrapper", False):
+        create_current = getattr(create_current, "_volcengine_model_save_original")
+
+    update_current = ProviderConfigService.update_provider
+    if getattr(update_current, "_volcengine_model_save_wrapper", False):
+        update_current = getattr(update_current, "_volcengine_model_save_original")
+
+    def schema_wrapper(self) -> dict[str, Any]:
+        return _inject_model_card_video_control(schema_current(self))
+
+    async def models_wrapper(self, source_id: str) -> dict[str, Any]:
+        return _overlay_source_scoped_model_hints(
+            self,
+            source_id,
+            await models_current(self, source_id),
+        )
+
+    async def create_wrapper(
+        self,
+        config: dict[str, Any],
+        source_id: str | None = None,
+    ) -> None:
+        normalized = dict(config)
+        if source_id:
+            normalized["provider_source_id"] = source_id
+        normalize_owned_model_card_for_save(
+            normalized,
+            self.config.get("provider_sources", []),
+            default_enabled=False,
+        )
+        await create_current(self, normalized, source_id)
+
+    async def update_wrapper(
+        self,
+        provider_id: str,
+        config: dict[str, Any],
+    ) -> None:
+        normalized = dict(config)
+        existing = self.provider_manager.get_provider_config_by_id(provider_id)
+        if not isinstance(existing, dict):
+            existing = {}
+        if not normalized.get("provider_source_id") and existing.get("provider_source_id"):
+            normalized["provider_source_id"] = existing["provider_source_id"]
+
+        sources = self.config.get("provider_sources", [])
+        types = source_types({"provider_sources": sources})
+        old_source_id = str(existing.get("provider_source_id") or "").strip()
+        new_source_id = str(normalized.get("provider_source_id") or "").strip()
+        old_type = types.get(old_source_id, "")
+        new_type = types.get(new_source_id, "")
+
+        cleanup_owned_settings_on_source_change(
+            normalized,
+            old_source_type=old_type,
+            new_source_type=new_type,
+        )
+
+        if (
+            new_type in OWNED_SOURCE_TYPES
+            and VIDEO_INPUT_ENABLED_KEY not in normalized
+            and old_type in OWNED_SOURCE_TYPES
+            and isinstance(existing.get(VIDEO_INPUT_ENABLED_KEY), bool)
+        ):
+            normalized[VIDEO_INPUT_ENABLED_KEY] = existing[VIDEO_INPUT_ENABLED_KEY]
+
+        normalize_owned_model_card_for_save(
+            normalized,
+            sources,
+            default_enabled=False,
+        )
+        await update_current(self, provider_id, normalized)
+
+    schema_wrapper._volcengine_provider_schema_wrapper = True  # type: ignore[attr-defined]
+    schema_wrapper._volcengine_provider_schema_original = schema_current  # type: ignore[attr-defined]
+    models_wrapper._volcengine_source_models_wrapper = True  # type: ignore[attr-defined]
+    models_wrapper._volcengine_source_models_original = models_current  # type: ignore[attr-defined]
+    create_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
+    create_wrapper._volcengine_model_save_original = create_current  # type: ignore[attr-defined]
+    update_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
+    update_wrapper._volcengine_model_save_original = update_current  # type: ignore[attr-defined]
+
+    ProviderConfigService.get_provider_schema = schema_wrapper  # type: ignore[method-assign]
+    ProviderConfigService.list_provider_source_models = models_wrapper  # type: ignore[method-assign]
+    ProviderConfigService.create_provider = create_wrapper  # type: ignore[method-assign]
+    ProviderConfigService.update_provider = update_wrapper  # type: ignore[method-assign]
+
+    _SCHEMA_ORIGINAL, _SCHEMA_WRAPPER = schema_current, schema_wrapper
+    _MODELS_ORIGINAL, _MODELS_WRAPPER = models_current, models_wrapper
+    _CREATE_ORIGINAL, _CREATE_WRAPPER = create_current, create_wrapper
+    _UPDATE_ORIGINAL, _UPDATE_WRAPPER = update_current, update_wrapper
+    _DASHBOARD_LEASE_COUNT = 1
 
 
-def release_owned_provider_schema() -> None:
-    """Release one lease and remove only this plugin's active adapter."""
+def release_owned_dashboard_bridge() -> None:
+    global _DASHBOARD_LEASE_COUNT
+    global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
+    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL
 
-    global _SCHEMA_LEASE_COUNT, _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL
-    if _SCHEMA_LEASE_COUNT <= 0:
+    if _DASHBOARD_LEASE_COUNT <= 0:
         return
-    _SCHEMA_LEASE_COUNT -= 1
-    if _SCHEMA_LEASE_COUNT:
+    _DASHBOARD_LEASE_COUNT -= 1
+    if _DASHBOARD_LEASE_COUNT:
         return
 
     from astrbot.dashboard.services.config_service import ProviderConfigService
 
-    if (
-        _SCHEMA_WRAPPER is not None
-        and _SCHEMA_ORIGINAL is not None
-        and ProviderConfigService.get_provider_schema is _SCHEMA_WRAPPER
-    ):
+    if _SCHEMA_WRAPPER is not None and ProviderConfigService.get_provider_schema is _SCHEMA_WRAPPER:
         ProviderConfigService.get_provider_schema = _SCHEMA_ORIGINAL  # type: ignore[method-assign]
-    _SCHEMA_WRAPPER = None
-    _SCHEMA_ORIGINAL = None
+    if _MODELS_WRAPPER is not None and ProviderConfigService.list_provider_source_models is _MODELS_WRAPPER:
+        ProviderConfigService.list_provider_source_models = _MODELS_ORIGINAL  # type: ignore[method-assign]
+    if _CREATE_WRAPPER is not None and ProviderConfigService.create_provider is _CREATE_WRAPPER:
+        ProviderConfigService.create_provider = _CREATE_ORIGINAL  # type: ignore[method-assign]
+    if _UPDATE_WRAPPER is not None and ProviderConfigService.update_provider is _UPDATE_WRAPPER:
+        ProviderConfigService.update_provider = _UPDATE_ORIGINAL  # type: ignore[method-assign]
+
+    _SCHEMA_WRAPPER = _SCHEMA_ORIGINAL = None
+    _MODELS_WRAPPER = _MODELS_ORIGINAL = None
+    _CREATE_WRAPPER = _CREATE_ORIGINAL = None
+    _UPDATE_WRAPPER = _UPDATE_ORIGINAL = None
+
+
+# 0.1.14 import compatibility.
+acquire_owned_provider_schema = acquire_owned_dashboard_bridge
+release_owned_provider_schema = release_owned_dashboard_bridge
 
 
 def register_owned_provider(
@@ -128,14 +291,6 @@ def register_owned_provider(
     default_config_tmpl: dict,
     provider_display_name: str,
 ):
-    """Register once and replace only an older class owned by this plugin.
-
-    AstrBot currently has a process-global registry without plugin ownership or
-    an unregister hook. A plugin reload must therefore remove its own previous
-    metadata before registering the new class.  A foreign collision fails
-    closed instead of silently hijacking another adapter.
-    """
-
     existing = provider_cls_map.get(provider_type_name)
     if existing is not None:
         existing_cls = getattr(existing, "cls_type", None)

@@ -1,29 +1,31 @@
 """AstrBot plugin entrypoint.
 
-Importing ``providers`` registers both provider cards before AstrBot creates
-configured provider instances during cold startup.
+Importing providers registers both Provider types before AstrBot creates
+configured instances. Plugin initialization only migrates old plugin
+video settings; it does not author model capability feedback.
 """
 
 from astrbot.api import logger, star
 
-from . import providers as _providers  # noqa: F401  # provider registration side effect
+from . import providers as _providers  # noqa: F401
 from .adapters.logging import install_video_log_redaction, remove_video_log_redaction
+from .capabilities import migrate_legacy_video_settings
 from .registry import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
-    acquire_owned_provider_schema,
-    release_owned_provider_schema,
+    acquire_owned_dashboard_bridge,
+    release_owned_dashboard_bridge,
 )
 
 
 class VolcengineProviderPlugin(star.Star):
     def __init__(self, context: star.Context):
         super().__init__(context)
-        self._provider_schema_acquired = False
+        self._dashboard_bridge_acquired = False
         self._video_log_filter = install_video_log_redaction()
         try:
-            acquire_owned_provider_schema()
-            self._provider_schema_acquired = True
+            acquire_owned_dashboard_bridge()
+            self._dashboard_bridge_acquired = True
         except Exception:
             remove_video_log_redaction(self._video_log_filter)
             self._video_log_filter = None
@@ -36,13 +38,30 @@ class VolcengineProviderPlugin(star.Star):
             AGENT_PLAN_PROVIDER_TYPE,
         )
 
+    async def initialize(self) -> None:
+        config = self.context.astrbot_config_mgr.default_conf
+        changed_ids = migrate_legacy_video_settings(config)
+        if not changed_ids:
+            return
+
+        config.save_config()
+        changed_set = {provider_id for provider_id in changed_ids if provider_id}
+        manager = self.context.provider_manager
+        for provider in list(config.get("provider", [])):
+            provider_id = str(provider.get("id") or "")
+            if provider_id in changed_set and provider_id in manager.inst_map:
+                await manager.reload(provider)
+
+        logger.info(
+            "Volcengine video transport migration complete: model_cards=%d; "
+            "AstrBot capability feedback untouched.",
+            len(changed_set),
+        )
+
     async def terminate(self) -> None:
         remove_video_log_redaction(self._video_log_filter)
         self._video_log_filter = None
-        if getattr(self, "_provider_schema_acquired", False):
-            release_owned_provider_schema()
-            self._provider_schema_acquired = False
-        # Provider instances own and close their HTTP clients through AstrBot's
-        # ProviderManager.  The process-global type registry has no safe unload
-        # hook, so removal takes effect after a full restart.
+        if getattr(self, "_dashboard_bridge_acquired", False):
+            release_owned_dashboard_bridge()
+            self._dashboard_bridge_acquired = False
         return None

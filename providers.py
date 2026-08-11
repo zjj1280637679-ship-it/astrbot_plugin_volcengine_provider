@@ -17,23 +17,19 @@ from astrbot.core.provider.sources.request_retry import retry_provider_request
 from openai._exceptions import NotFoundError
 
 from .adapters.audio import build_ark_input_audio
-from .adapters.video import (
-    inject_current_request_videos,
-    resolve_video_input_enabled,
-)
+from .adapters.video import inject_current_request_videos
 from .compatibility.astrbot import _ApiKeyLogView
-from .metadata.agent_plan import (
-    KNOWN_AGENT_PLAN_MODELS,
-    publish_agent_plan_metadata,
+from .capabilities import (
+    clear_source_model_hints,
+    remember_source_model_hint,
+    source_scope_id,
+    video_input_enabled,
 )
-from .metadata.ark import publish_ark_model_metadata
-from .metadata.common import _dedupe_nonempty
-
+from .metadata.agent_plan import KNOWN_AGENT_PLAN_MODELS
+from .metadata.ark import normalize_ark_model_metadata
 from .registry import (
     AGENT_PLAN_PROVIDER_TYPE,
-    AGENT_PLAN_VIDEO_INPUT_KEY,
     ARK_PROVIDER_TYPE,
-    ARK_VIDEO_INPUT_KEY,
     register_owned_provider,
 )
 
@@ -71,7 +67,6 @@ ARK_DEFAULT_CONFIG = {
     "timeout": 120,
     "proxy": "",
     "custom_headers": {},
-    ARK_VIDEO_INPUT_KEY: False,
 }
 
 AGENT_PLAN_DEFAULT_CONFIG = {
@@ -85,8 +80,19 @@ AGENT_PLAN_DEFAULT_CONFIG = {
     "timeout": 120,
     "proxy": "",
     "custom_headers": {},
-    AGENT_PLAN_VIDEO_INPUT_KEY: False,
 }
+
+def _dedupe_nonempty(values) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
 
 
 def to_agent_plan_public_model(model: object) -> str:
@@ -114,7 +120,6 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
     """OpenAI-compatible provider whose billing endpoint cannot drift."""
 
     _fixed_api_base = ""
-    _video_input_config_key = ""
     _volcengine_provider_plugin_owned = True
 
     def __init__(self, provider_config: dict, provider_settings: dict) -> None:
@@ -153,10 +158,7 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         await inject_current_request_videos(
             context_query,
             extra_user_content_parts,
-            enabled=resolve_video_input_enabled(
-                self.provider_config,
-                self._video_input_config_key,
-            ),
+            enabled=video_input_enabled(self.provider_config),
         )
         return payloads, context_query
 
@@ -205,7 +207,6 @@ class ProviderVolcengineArk(_FixedArkEndpointProvider):
     """Ordinary pay-as-you-go/free-quota Volcengine Ark chat provider."""
 
     _fixed_api_base = ARK_API_BASE
-    _video_input_config_key = ARK_VIDEO_INPUT_KEY
     _volcengine_provider_plugin_owned = True
 
     def __init__(self, provider_config: dict, provider_settings: dict) -> None:
@@ -220,20 +221,27 @@ class ProviderVolcengineArk(_FixedArkEndpointProvider):
 
 
     async def get_models(self) -> list[str]:
-        """Enumerate every visible ordinary Ark model and publish its facts."""
+        """Enumerate visible Ark models and remember sparse Source feedback."""
 
         try:
             response = await retry_provider_request(
                 "Volcengine Ark",
                 lambda: self.client.models.list(),
             )
-            model_objects = sorted(
+            scope = source_scope_id(self.provider_config)
+            clear_source_model_hints(scope)
+            model_ids: list[str] = []
+            for model in sorted(
                 response.data,
-                key=lambda model: str(getattr(model, "id", "")),
-            )
-            return _dedupe_nonempty(
-                publish_ark_model_metadata(model) for model in model_objects
-            )
+                key=lambda item: str(getattr(item, "id", "")),
+            ):
+                model_id, hint = normalize_ark_model_metadata(model)
+                if not model_id:
+                    continue
+                model_ids.append(model_id)
+                if len(hint) > 1:
+                    remember_source_model_hint(scope, model_id, hint)
+            return _dedupe_nonempty(model_ids)
         except NotFoundError as error:
             raise Exception(f"获取模型列表失败：{error}") from error
 
@@ -249,7 +257,6 @@ class ProviderVolcengineAgentPlan(_FixedArkEndpointProvider):
     """Agent Plan provider with a local-only ``agentplan/`` namespace."""
 
     _fixed_api_base = AGENT_PLAN_API_BASE
-    _video_input_config_key = AGENT_PLAN_VIDEO_INPUT_KEY
     _volcengine_provider_plugin_owned = True
 
     def __init__(self, provider_config: dict, provider_settings: dict) -> None:
@@ -257,12 +264,10 @@ class ProviderVolcengineAgentPlan(_FixedArkEndpointProvider):
         config["model"] = to_agent_plan_public_model(
             config.get("model") or AGENT_PLAN_DEFAULT_MODEL
         )
-        publish_agent_plan_metadata(to_agent_plan_public_model)
         super().__init__(config, provider_settings)
 
     async def get_models(self) -> list[str]:
         # Do not probe an undocumented /models route with the Plan inference key.
-        publish_agent_plan_metadata(to_agent_plan_public_model)
         models = (self.get_model(), *KNOWN_AGENT_PLAN_MODELS)
         return _dedupe_nonempty(to_agent_plan_public_model(model) for model in models)
 
