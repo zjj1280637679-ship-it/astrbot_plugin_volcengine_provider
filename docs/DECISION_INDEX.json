@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "release": "0.1.16",
   "entries": [
     {
       "id": "ADR-0001",
@@ -36,12 +37,39 @@
       "doc": "docs/ADR/ADR-0004-migration-preserves-intent.md",
       "code": ["capabilities/model_scope.py", "capabilities/source_migration.py"],
       "tests": ["tests/test_0_1_15_feedback_boundary.py"]
+    },
+    {
+      "id": "KB-0001",
+      "topic": "interaction versus judgment",
+      "question": "Does successful or failed interaction grant authority to make a global capability verdict?",
+      "decision": "No. Interaction is lower-level evidence; judgment requires sufficient conditions, scope, and decision authority.",
+      "doc": "docs/KNOWLEDGE_BOUNDARY.md",
+      "code": ["adapters/errors.py", "metadata/ark.py"],
+      "tests": ["tests/test_0_1_15_feedback_boundary.py", "tests/e2e/real_volcengine_runtime_matrix.py"]
+    },
+    {
+      "id": "REG-0001",
+      "topic": "impact-based media regression",
+      "question": "Must every release repeat the full QQ audio/video E2E?",
+      "decision": "No. Historical product-path evidence remains evidence until a relevant dependency edge changes; full QQ-equivalent revalidation is impact-triggered.",
+      "doc": "docs/REGRESSION_SCOPE.md",
+      "code": ["adapters/audio.py", "adapters/video.py", "providers.py"],
+      "tests": ["docs/TEST_HISTORY.md"]
     }
   ],
-  "active_e2e": {
+  "active_evidence": {
     "doc": "docs/E2E_MATRIX.md",
-    "goal": "real Volcengine API x provider-card path x Dashboard UI-layout matrix",
-    "reason": "Function-level correctness does not prove user-path reachability across AstrBot provider layouts."
+    "goal": "0.1.16 release evidence across plugin contracts, AstrBot integration, downstream Ark attribution, and historical QQ product regressions",
+    "reason": "Each layer may judge only the interface it actually exercises; raw provider fixtures and brittle UI automation must not silently redefine QQ product compatibility."
   },
+  "ai_entry_points": [
+    "AGENTS.md",
+    "docs/AI_RULES.md",
+    "docs/KNOWLEDGE_BOUNDARY.md",
+    "docs/AI_ONBOARDING.md",
+    "docs/PROJECT_STATE.json",
+    "docs/TEST_HISTORY.md",
+    "docs/REGRESSION_SCOPE.md"
+  ],
   "warning": "This index is navigation metadata for humans and AI agents. It has no runtime authority."
 }
