@@ -1,0 +1,30 @@
+name: Verify provider card matrix dry run
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/verify-provider-card-matrix-dry-run.yml
+      - tests/e2e/provider_card_matrix/**
+      - docs/PROJECT_STATE.json
+      - docs/DECISION_INDEX.json
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate machine-readable project docs
+        run: |
+          python -m json.tool docs/PROJECT_STATE.json >/dev/null
+          python -m json.tool docs/DECISION_INDEX.json >/dev/null
+          python -m json.tool tests/e2e/provider_card_matrix/matrix.json >/dev/null
+      - name: Run provider-card matrix dry plan
+        run: python tests/e2e/provider_card_matrix/runner.py
