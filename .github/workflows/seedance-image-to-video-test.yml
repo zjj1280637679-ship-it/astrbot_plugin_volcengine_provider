@@ -1,0 +1,22 @@
+name: Seedance Image To Video Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: Public reference image URL
+        required: true
+      prompt:
+        description: Video motion prompt
+        required: true
+        default: "Keep the character identity consistent, cinematic first person MMA action, the blond muscular fighter moves toward the camera, punches, sweat particles, realistic motion --ratio 16:9 --dur 5"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare image-to-video test
+        run: |
+          echo "Seedance image-to-video test pipeline ready"
+          echo "Image: ${{ github.event.inputs.image_url }}"
+          echo "Prompt: ${{ github.event.inputs.prompt }}"
