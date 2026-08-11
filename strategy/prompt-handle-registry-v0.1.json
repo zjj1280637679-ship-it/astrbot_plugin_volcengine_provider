@@ -1,0 +1,129 @@
+{
+  "version": "0.1",
+  "principle": "A handle's presence in official examples proves accepted/recommended expression, not a quality success rate. Hard controls and probabilistic semantic handles are separated.",
+  "hard_controls": {
+    "model_id": {
+      "form": "exact model ID in request model field",
+      "evidence": "E2E",
+      "status": "executable",
+      "notes": "Exact version matters; do not inherit capability from another suffix."
+    },
+    "duration_prompt_suffix": {
+      "form": "--dur 5",
+      "evidence": "official Ark API example + E2E across 1.5 Pro, Pro 250528, Fast 251015",
+      "status": "executable_in_tested_domain",
+      "notes": "Earlier top-level duration was confounded; prompt suffix is the documented/currently isolated production choice."
+    },
+    "ratio_prompt_suffix": {
+      "forms": ["--ratio 16:9", "--ratio adaptive"],
+      "evidence": "official Ark API examples; 16:9 E2E in project",
+      "status": "executable",
+      "notes": "Only tested ratios should be treated as E2E."
+    },
+    "single_image_url_15_pro": {
+      "form": {"type": "image_url", "image_url": {"url": "<public URL>"}},
+      "evidence": "E2E",
+      "status": "executable_on_doubao-seedance-1-5-pro-251215",
+      "notes": "No explicit role was needed in the successful single-image test. Do not generalize image-role semantics to every model."
+    },
+    "silent_output_15_pro": {
+      "form": {"generate_audio": false},
+      "evidence": "two E2E observations with actual video-only MP4s",
+      "status": "production_safe_observed_rule",
+      "notes": "Omitting the field produced real AAC audio in D-002; when silence matters, send false explicitly."
+    },
+    "return_last_frame": {
+      "form": {"return_last_frame": true},
+      "evidence": "official Ark API documentation",
+      "status": "documented_candidate_not_yet_E2E",
+      "notes": "API docs state the PNG final frame can chain consecutive video tasks. Test only when continuity becomes load-bearing."
+    }
+  },
+  "semantic_handles": {
+    "camera_movement": {
+      "examples": ["镜头缓缓拉出", "slow dolly out", "camera slowly pushes in"],
+      "source_strength": "official API example contains camera-movement language; official prompt-guide pages exist",
+      "relation": "probabilistic",
+      "status": "candidate",
+      "what_is_proven": "camera language is an intended prompt modality",
+      "what_is_not_proven": "adherence rate, best wording, interaction with subject motion"
+    },
+    "ordered_action_sequence": {
+      "examples": ["first ..., then ..., finally ...", "先...随后...最后..."],
+      "source_strength": "official API examples describe sequential actions; developer-community implementations explicitly recommend ordered sequencing",
+      "relation": "probabilistic",
+      "status": "candidate",
+      "what_is_not_proven": "second-level timing accuracy or stable ordering success rate"
+    },
+    "multi_shot_narration": {
+      "examples": ["多个镜头。...镜头转向...", "shot 1 ... shot 2 ..."],
+      "source_strength": "official Ark API request example explicitly uses '多个镜头' and camera transition language",
+      "relation": "probabilistic",
+      "status": "candidate",
+      "what_is_proven": "multi-shot textual description is an intended input style",
+      "what_is_not_proven": "number-of-shot adherence, continuity quality, transition precision"
+    },
+    "pov": {
+      "examples": ["first-person POV", "POV close combat-sports training"],
+      "source_strength": "used successfully in project outputs",
+      "relation": "probabilistic",
+      "status": "project_hypothesis_with_successful_examples",
+      "what_is_not_proven": "POV adherence probability across seeds/models"
+    },
+    "identity_lock": {
+      "examples": ["Keep the same person", "identity and hairstyle remain consistent", "保持同一人物身份"],
+      "source_strength": "used in successful 1.5 Pro I2V project run",
+      "relation": "probabilistic",
+      "status": "project_hypothesis_with_successful_example",
+      "what_is_not_proven": "whether the wording causes consistency versus the reference image/model itself; no controlled ablation yet"
+    },
+    "negative_constraints": {
+      "examples": ["no blood", "no visible injury", "do not add another person"],
+      "source_strength": "accepted in successful project prompts",
+      "relation": "probabilistic",
+      "status": "candidate",
+      "what_is_not_proven": "negative-clause causal strength or best syntax"
+    },
+    "concrete_motion_verbs": {
+      "examples": ["advances", "throws a jab-cross", "resets guard", "turns toward camera"],
+      "source_strength": "official/community prompt practice and successful project prompts",
+      "relation": "probabilistic",
+      "status": "candidate",
+      "what_is_not_proven": "quality gain versus vague wording"
+    },
+    "temporal_segments": {
+      "examples": ["0-2s ... 2-4s ... 4-5s ..."],
+      "source_strength": "not established by current official parsed API examples",
+      "relation": "probabilistic",
+      "status": "unverified_hypothesis",
+      "production_policy": "do not claim precise timeline control until controlled tests justify it"
+    }
+  },
+  "prompt_modalities": {
+    "t2v": {
+      "hard_input": "text",
+      "recommended_compiler_shape": ["subject/scene", "single or ordered action", "camera wording if needed", "visual constraints", "documented suffix controls"],
+      "evidence_boundary": "semantic wording remains probabilistic"
+    },
+    "single_image_i2v_15_pro": {
+      "hard_input": ["text", "single image_url"],
+      "recommended_compiler_shape": ["state what should change/move", "state only load-bearing invariants", "camera wording", "documented suffix controls"],
+      "reason": "reference image already supplies appearance/scene information; re-describing every visual detail may introduce unnecessary constraints, but this is a strategy hypothesis rather than a proven causal law"
+    },
+    "first_last_frame": {
+      "hard_input": "documented/candidate, not E2E",
+      "recommended_compiler_shape": ["start state", "transition/action path", "end state"],
+      "production_policy": "do not auto-route until exact model/mode is E2E when required"
+    },
+    "native_audio_15_pro": {
+      "hard_input": "audio output observed by default when generate_audio omitted",
+      "semantic_audio_prompt": "unbenchmarked",
+      "production_policy": "explicitly disable audio for silent tasks; do not promise dialogue/SFX adherence without quality evidence"
+    }
+  },
+  "promotion_rule": {
+    "candidate_to_quality_claim": "requires controlled repeated samples when the handle becomes load-bearing",
+    "single_failure_rule": "one failed generation may update a sample record but does not universally falsify a probabilistic handle",
+    "single_success_rule": "one success proves reachability, not reliability"
+  }
+}
