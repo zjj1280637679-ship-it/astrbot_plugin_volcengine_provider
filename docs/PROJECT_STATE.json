@@ -17,6 +17,7 @@
     "The first provider-card Playwright matrix encoded unstable harness assumptions including welcome overlays, display labels, fixed source IDs, and selector structure. Its failures did not by themselves implicate plugin runtime logic.",
     "A flow diagram does not prove reachability: each arrow requires a concrete host/plugin/upstream interface or a minimal existence experiment.",
     "With the repository ordinary Ark secret, raw ordinary Ark /models and raw ordinary Ark text both succeeded, and the same /models and text paths through ProviderVolcengineArk also succeeded in the same run.",
+    "A Pillow-generated PNG sent as the same bytes through a raw Ark image_url data URI and through ProviderVolcengineArk using AstrBot's local-path MediaResolver both received HTTP 200 in the observed run. This is current L5 raw-vs-plugin image-path parity, not a permanent capability claim.",
     "The same ordinary Ark secret was rejected with HTTP 401 by both a minimal raw Agent Plan text request and ProviderVolcengineAgentPlan. Therefore that run is evidence of an Agent Plan credential/account prerequisite, not evidence of a plugin-path defect or permanent model incapability."
   ],
   "expected_outcomes": [
@@ -52,16 +53,16 @@
     "dashboard_ui_evidence_collector_v3": "passed_L4_coarse_reachability_and_evidence_collection",
     "real_volcengine_ordinary_ark_models": "passed_L5_raw_and_plugin_success_129_models_in_observed_run",
     "real_volcengine_ordinary_ark_text": "passed_L5_raw_and_plugin_success",
+    "real_volcengine_ordinary_ark_image": "passed_L5_raw_and_plugin_success_same_synthetic_png_bytes",
     "real_volcengine_agent_plan_text_with_ordinary_ark_secret": "blocked_L5_both_raw_and_plugin_http_401_credential_or_account_prerequisite",
     "real_volcengine_multimodal_matrix": "in_progress",
     "complete_qq_napcat_multimodal_path": "not_claimed_by_ci"
   },
   "active_validation_frontier": {
     "name": "real_volcengine_multimodal_runtime_matrix",
-    "current_stage": "ordinary_ark_image_then_audio_then_video_and_tools_using_astrbot_native_precedent",
-    "reason": "Ordinary Ark /models and text have current raw-vs-plugin L5 parity. Agent Plan cannot be meaningfully advanced with the current ordinary-Ark credential because both raw and plugin paths receive 401.",
+    "current_stage": "ordinary_ark_audio_then_video_and_tools_using_astrbot_native_precedent",
+    "reason": "Ordinary Ark /models, text, and image have current raw-vs-plugin L5 parity. Agent Plan cannot be meaningfully advanced with the current ordinary-Ark credential because both raw and plugin paths receive 401.",
     "dimensions": [
-      "image_raw_vs_plugin",
       "audio_raw_vs_plugin",
       "video_transport_off_local_invariant",
       "video_transport_on_raw_vs_plugin_when_a_proven_test_asset_path_exists",
