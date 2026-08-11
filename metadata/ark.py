@@ -53,7 +53,13 @@ def _normalized_modalities(values: object) -> list[str]:
 
 
 def normalize_ark_model_metadata(model: object) -> tuple[str, dict[str, Any]]:
-    """Return only facts explicitly present in this live receipt."""
+    """Return only information explicitly present in this live receipt.
+
+    Presence and truthiness are deliberately separate. An explicitly returned
+    empty modality list is still current feedback and must not be collapsed into
+    "field missing", otherwise a stale display value could survive a newer
+    receipt. This remains display feedback, not a model-capability truth claim.
+    """
 
     data = _as_mapping(model)
     model_id = str(data.get("id") or getattr(model, "id", "") or "").strip()
@@ -62,14 +68,16 @@ def normalize_ark_model_metadata(model: object) -> tuple[str, dict[str, Any]]:
 
     hint: dict[str, Any] = {"id": model_id}
     modalities = _as_mapping(data.get("modalities"))
-    input_mods = _normalized_modalities(modalities.get("input_modalities"))
-    output_mods = _normalized_modalities(modalities.get("output_modalities"))
-    if input_mods or output_mods:
+    raw_input = modalities.get("input_modalities")
+    raw_output = modalities.get("output_modalities")
+    has_input = "input_modalities" in modalities and isinstance(raw_input, (list, tuple))
+    has_output = "output_modalities" in modalities and isinstance(raw_output, (list, tuple))
+    if has_input or has_output:
         hint["modalities"] = {}
-        if input_mods:
-            hint["modalities"]["input"] = input_mods
-        if output_mods:
-            hint["modalities"]["output"] = output_mods
+        if has_input:
+            hint["modalities"]["input"] = _normalized_modalities(raw_input)
+        if has_output:
+            hint["modalities"]["output"] = _normalized_modalities(raw_output)
 
     limits = _as_mapping(data.get("token_limits"))
     context = _positive_int(limits.get("context_window"))
