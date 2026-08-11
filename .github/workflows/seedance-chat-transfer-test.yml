@@ -1,0 +1,152 @@
+name: Seedance Chat Transfer Test
+
+on:
+  push:
+    paths:
+      - '.github/seedance-trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+      MODEL_ID: doubao-seedance-1-5-pro-251215
+    steps:
+      - name: Validate secret presence
+        shell: bash
+        run: |
+          if [ -z "$ARK_API_KEY" ]; then
+            echo "HUOSHANYINQINGAPI is unavailable to this workflow"
+            exit 2
+          fi
+          echo "Secret is available (value intentionally not printed)."
+
+      - name: Create Seedance task
+        id: create
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+
+          prompt = (
+              "Cinematic photorealistic close-up POV boxing sparring in a professional gym. "
+              "An adult athletic muscular man is shirtless and wearing boxing gloves, facing the camera at arm's length. "
+              "He performs fast controlled punch combinations toward the POV camera while training; powerful chest, shoulders and arms flex naturally, sweat droplets catch the gym lights, dynamic but readable motion, subtle handheld impact, intense sports atmosphere. "
+              "No blood, no visible injury, no weapons, clearly consensual combat-sports training. --ratio 16:9 --duration 5"
+          )
+          payload = {
+              "model": os.environ["MODEL_ID"],
+              "content": [{"type": "text", "text": prompt}],
+              "duration": 5,
+              "generate_audio": False,
+          }
+          req = urllib.request.Request(
+              "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks",
+              data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+              headers={
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer " + os.environ["ARK_API_KEY"],
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  data = json.loads(r.read().decode("utf-8"))
+          except urllib.error.HTTPError as e:
+              body = e.read().decode("utf-8", "replace")
+              print(f"Create task HTTP {e.code}: {body}")
+              raise
+          print(json.dumps(data, ensure_ascii=False))
+          task_id = data.get("id")
+          if not task_id:
+              raise SystemExit("No task id returned")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write(f"TASK_ID={task_id}\n")
+          with open("seedance_task.json", "w", encoding="utf-8") as f:
+              json.dump({"task_id": task_id, "model": os.environ["MODEL_ID"], "prompt": prompt}, f, ensure_ascii=False, indent=2)
+          PY
+
+      - name: Poll Seedance task and download video
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+
+          task_id = os.environ["TASK_ID"]
+          headers = {"Authorization": "Bearer " + os.environ["ARK_API_KEY"]}
+          status_url = f"https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/{task_id}"
+
+          def find_video_url(obj):
+              if isinstance(obj, dict):
+                  for key in ("video_url", "videoUrl"):
+                      value = obj.get(key)
+                      if isinstance(value, str) and value.startswith(("http://", "https://")):
+                          return value
+                  for value in obj.values():
+                      found = find_video_url(value)
+                      if found:
+                          return found
+              elif isinstance(obj, list):
+                  for value in obj:
+                      found = find_video_url(value)
+                      if found:
+                          return found
+              return None
+
+          last = None
+          for attempt in range(90):
+              req = urllib.request.Request(status_url, headers=headers, method="GET")
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      data = json.loads(r.read().decode("utf-8"))
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode("utf-8", "replace")
+                  print(f"Poll HTTP {e.code}: {body}")
+                  raise
+              last = data
+              status = data.get("status", "")
+              print(f"poll {attempt + 1}: {status}")
+              if status == "succeeded":
+                  video_url = find_video_url(data)
+                  if not video_url:
+                      print(json.dumps(data, ensure_ascii=False, indent=2))
+                      raise SystemExit("Task succeeded but no video_url was found")
+                  with open("seedance_result.json", "w", encoding="utf-8") as f:
+                      json.dump(data, f, ensure_ascii=False, indent=2)
+                  req2 = urllib.request.Request(video_url, headers={"User-Agent": "github-actions"})
+                  with urllib.request.urlopen(req2, timeout=120) as r, open("seedance_pov_boxing_test.mp4", "wb") as out:
+                      while True:
+                          chunk = r.read(1024 * 1024)
+                          if not chunk:
+                              break
+                          out.write(chunk)
+                  size = os.path.getsize("seedance_pov_boxing_test.mp4")
+                  print(f"Downloaded video: {size} bytes")
+                  if size < 1024:
+                      raise SystemExit("Downloaded video is unexpectedly small")
+                  raise SystemExit(0)
+              if status in ("failed", "cancelled"):
+                  print(json.dumps(data, ensure_ascii=False, indent=2))
+                  raise SystemExit(f"Generation ended with status={status}")
+              time.sleep(10)
+
+          if last:
+              print(json.dumps(last, ensure_ascii=False, indent=2))
+          raise SystemExit("Timed out waiting for Seedance")
+          PY
+
+      - name: Upload result for ChatGPT transfer
+        uses: actions/upload-artifact@v4
+        with:
+          name: seedance-chat-transfer-test
+          path: |
+            seedance_pov_boxing_test.mp4
+            seedance_task.json
+            seedance_result.json
+          if-no-files-found: error
+          retention-days: 1
