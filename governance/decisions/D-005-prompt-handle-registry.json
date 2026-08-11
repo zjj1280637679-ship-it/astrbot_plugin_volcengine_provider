@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "decision_id": "D-005",
+  "decision": "Create a prompt/control handle registry that distinguishes hard API controls, official-example semantic handles, lower-tier implementation leads, and probabilistic quality hypotheses; do not run new generations yet.",
+  "trigger": "The executable model graph is now established for the current exact IDs, and the user requested prompt handles/modalities/strategy. Existing official examples and E2E requests contain useful handles, but their causal/quality strength differs.",
+  "rights": {
+    "authorized_by": ["user requested continued prompt/modality strategy development"],
+    "credentials_or_permissions": ["no new inference call required"],
+    "asset_rights": [],
+    "scope": "classification of existing official examples and project observations",
+    "invalidators": ["source/API documentation changes"],
+    "verdict": "pass"
+  },
+  "capability": {
+    "required_claim_ids": ["C-002", "C-004", "C-007", "C-009", "C-011", "C-013", "C-016"],
+    "relation_classes": ["conditional_deterministic", "probabilistic"],
+    "strongest_evidence": "E2E for hard controls; D/H for natural-language quality handles",
+    "verified_domain": {"hard_controls": ["exact model id", "text content", "single image_url on 1.5 Pro", "prompt suffix ratio/duration", "explicit generate_audio=false observations on 1.5 Pro"]},
+    "unverified_assumptions": ["POV reliability", "identity-lock reliability", "camera-movement adherence rate", "ordered-action timing accuracy", "multi-shot consistency"],
+    "alternative_existing_paths": ["blindly copy community prompt recipes — rejected because quality evidence is not controlled"],
+    "verdict": "pass_if_confidence_labels_are_preserved"
+  },
+  "intent": {
+    "user_goal": "Give GPT a model-aware prompt language that is useful without confusing examples with proven causal controls.",
+    "why_this_action_serves_the_goal": "It creates a reusable compiler vocabulary while preserving what still needs probabilistic validation.",
+    "is_it_necessary": true,
+    "lower_cost_or_lower_risk_equal_effect_options": [],
+    "verdict": "pass"
+  },
+  "effect": {
+    "expected_state_changes": ["repository strategy metadata only"],
+    "quota_or_cost": ["none"],
+    "repository_mutations": ["adds prompt-handle registry"],
+    "external_calls": [],
+    "public_or_private_asset_changes": [],
+    "irreversible_effects": [],
+    "cleanup_obligations": ["promote/demote handle evidence only after controlled tests or source changes"],
+    "useful_output": "prompt/compiler vocabulary with explicit epistemic status",
+    "verdict": "pass"
+  },
+  "epistemic_review": {
+    "is_this_a_possibility_graph_edge_or_executable_graph_edge": "hard controls may be executable; semantic quality handles remain possibility/probabilistic edges",
+    "what_exact_claim_is_being_tested_or_used": "no new causal test; classifies existing evidence",
+    "what_failure_would_falsify": "future controlled trials can falsify or bound semantic-handle reliability",
+    "what_failure_would_not_falsify": "one poor generation does not prove a semantic handle is universally ineffective",
+    "does_existing_evidence_make_retesting_unnecessary": true,
+    "if_retesting_is_needed_why": "only quality/reliability handles need repeated testing when they become load-bearing"
+  },
+  "decision_result": "approved"
+}

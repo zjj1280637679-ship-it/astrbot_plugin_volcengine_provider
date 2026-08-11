@@ -1,0 +1,106 @@
+{
+  "version": "0.2",
+  "principle": "Only exact model/mode edges with E2E evidence enter executable. Documentation-only edges remain candidates. Probabilistic quality/speed claims never become hard routing rules without Q-level evidence.",
+  "models": {
+    "doubao-seedance-1-5-pro-251215": {
+      "current_account_status": "executable",
+      "modes": {
+        "text_to_video": {"state": "executable", "evidence": "E2E", "claim_ids": ["C-002"]},
+        "single_image_to_video": {"state": "executable", "evidence": "E2E", "claim_ids": ["C-004"]},
+        "first_last_frame": {"state": "candidate_documented", "evidence": "D/community-product material", "production_use": "test only when load-bearing"},
+        "native_audio": {"state": "executable_observed", "evidence": "E2E under omitted generate_audio in D-002", "claim_ids": ["C-011"], "notes": "Omitted field produced AAC stereo audio; explicit false produced silent MP4 in two earlier runs. Explicit true semantics and audio prompt adherence remain untested."}
+      },
+      "observed_defaults_in_standard_t2v_probe": {
+        "resolution_reported": "720p",
+        "ratio": "16:9",
+        "duration": 5,
+        "fps": 24,
+        "usage_tokens": 108900,
+        "audio_present": true
+      },
+      "hard_strategy": {
+        "use_when": ["T2V is required", "single-image I2V is required", "native audio output is acceptable/desired under the observed default behavior"],
+        "when_silence_is_required": "send generate_audio=false explicitly",
+        "do_not_claim": ["stable speed superiority/inferiority", "universal 720p default", "universal token formula", "prompt-handle quality", "I2V quality superiority versus Pro 250528"]
+      }
+    },
+    "doubao-seedance-1-0-pro-fast-251015": {
+      "current_account_status": "executable",
+      "modes": {
+        "text_to_video": {"state": "executable", "evidence": "E2E", "claim_ids": ["C-009"]},
+        "single_image_to_video": {"state": "unknown_for_exact_version", "evidence": "none exact-version E2E"},
+        "first_last_frame": {"state": "unknown_for_exact_version", "evidence": "do not inherit from other Fast suffixes"},
+        "native_audio": {"state": "not_observed_in_standard_probe", "evidence": "returned MP4 had no audio stream"}
+      },
+      "observed_defaults_in_standard_t2v_probe": {
+        "resolution_reported": "1080p",
+        "ratio": "16:9",
+        "duration": 5,
+        "fps": 24,
+        "usage_tokens": 246840,
+        "audio_present": false
+      },
+      "hard_strategy": {
+        "use_when": ["text-to-video is required and this exact model is explicitly selected"],
+        "latency_note": "one controlled sample completed sooner than 1.5 Pro, but no stable fast-routing rule is admitted without repeated latency evidence",
+        "do_not_claim": ["I2V capability", "first-last-frame capability", "stable speed multiplier", "quality ranking"]
+      }
+    },
+    "doubao-seedance-1-0-pro-250528": {
+      "current_account_status": "executable",
+      "modes": {
+        "text_to_video": {"state": "executable", "evidence": "E2E", "claim_ids": ["C-013"]},
+        "single_image_to_video": {"state": "executable", "evidence": "E2E", "evidence_file": "evidence/D-006-pro-250528-i2v-probe.md"},
+        "first_last_frame": {"state": "candidate_documented", "evidence": "developer-community implementation material; not E2E in this project"},
+        "native_audio": {"state": "not_observed_in_tested_T2V_or_I2V_samples", "evidence": "both returned video-only MP4s"}
+      },
+      "observed_defaults_in_standard_t2v_probe": {
+        "resolution_reported": "1080p",
+        "ratio": "16:9",
+        "duration": 5,
+        "fps": 24,
+        "usage_tokens": 246840,
+        "audio_present": false
+      },
+      "observed_single_image_i2v_probe": {
+        "resolution_reported": "1080p",
+        "ratio": "16:9",
+        "duration": 5,
+        "fps": 24,
+        "usage_tokens": 246840,
+        "audio_present": false,
+        "sample_reference_retention": "high-level blond muscular fighter / octagon / close combat composition retained; detail drift observed",
+        "quality_evidence": "single sample only"
+      },
+      "hard_strategy": {
+        "use_when": ["T2V is required", "single-image I2V is required as an exact E2E alternative/fallback to 1.5 Pro"],
+        "i2v_quality_policy": "do not choose between Pro 250528 and 1.5 Pro on identity/detail quality until repeated controlled evidence exists",
+        "do_not_claim": ["quality ranking", "stable latency", "universal 1080p/token defaults"]
+      }
+    },
+    "doubao-seedance-1-0-lite-t2v-250428": {
+      "current_account_status": "not_executable_on_current_exact_route",
+      "modes": {
+        "text_to_video": {"state": "rejected_current_route", "evidence": "F", "claim_ids": ["C-014"], "error": "InvalidEndpointOrModel.NotFound"}
+      },
+      "causal_limit": "Provider error combines model/endpoint absence and lack of account access; do not choose between these causes without a discriminating source.",
+      "hard_strategy": {
+        "use_when": [],
+        "exclude_from_automatic_routing": true,
+        "reconsider_only_if": ["model ID changes", "account entitlement changes", "authoritative control-plane evidence shows access"]
+      }
+    }
+  },
+  "routing_state": {
+    "hard_T2V_options": ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-0-pro-fast-251015", "doubao-seedance-1-0-pro-250528"],
+    "hard_single_image_I2V_options": ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-0-pro-250528"],
+    "excluded_current_route": ["doubao-seedance-1-0-lite-t2v-250428"],
+    "quality_based_auto_routing": "not_admitted"
+  },
+  "non_hard_routing_hypotheses": [
+    "Fast may have a latency advantage; one sample supports possibility but not stable ranking.",
+    "1.0 Pro/Fast may offer higher observed default resolution than 1.5 Pro under the standardized T2V request; this is not a quality ranking.",
+    "Pro 250528 and 1.5 Pro are both E2E I2V routes, but identity/motion/camera quality comparison requires Q-level repeated evidence.",
+    "Prompt-handle adherence and identity/motion quality require repeated benchmark evidence before routing by quality."
+  ]
+}

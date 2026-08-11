@@ -1,0 +1,51 @@
+{
+  "model_id": "doubao-seedance-1-0-lite-t2v-250428",
+  "card_version": "0.2",
+  "current_account_status": "not_executable_on_current_exact_route",
+  "evidence_policy": "Separate historical product capability from current account/runtime executability. A historical feature does not override a current create-task rejection.",
+  "modalities": {
+    "text_to_video": {
+      "state": "current_route_failed",
+      "evidence": ["C-014", "D-003"],
+      "create_http_status": 404,
+      "error_code": "InvalidEndpointOrModel.NotFound",
+      "historical_product_capability": "T2V"
+    },
+    "single_image_to_video": {
+      "state": "not_a_capability_of_this_t2v_variant_by_product_design",
+      "evidence": "Historical Seedance 1.0 Lite product materials separate Lite T2V and Lite I2V into different model variants."
+    }
+  },
+  "historical_product_domain": {
+    "evidence_level": "D/developer product announcement; historical, not current-route E2E",
+    "text_to_video_durations_seconds": [5, 10],
+    "resolutions": ["480p", "720p"],
+    "notes": "Volcano Engine's Seedance 1.0 Lite launch material explicitly described 5s/10s generation and 480p/720p for the Lite product family. Treat as historical product-domain evidence, not current Ark-route availability."
+  },
+  "service_lifecycle_context": {
+    "evidence_level": "official Volcano Engine LAS discontinuation notice",
+    "scope": "Lake AI Service (LAS), not proven identical to the current Ark inference route",
+    "notice": "Seedance 1.0 Lite T2V 250428 and Lite I2V 250428 were listed for LAS termination with Seedance 1.5 Pro as replacement; termination date shown as 2026-05-11.",
+    "causal_use": "supporting context only",
+    "not_permitted_inference": "Do not claim the current Ark 404 is definitely caused by LAS retirement; the API error itself also allows account-access failure."
+  },
+  "provider_error_semantics": "The current Ark provider message explicitly combines two alternatives: the model/endpoint does not exist OR the account has no access.",
+  "duration_and_output_domain": {
+    "current_route": {
+      "tested_generation": "no task created",
+      "maximum_seconds": null
+    },
+    "historical_product": {
+      "supported_discrete_durations_seconds": [5, 10],
+      "supported_resolutions": ["480p", "720p"]
+    }
+  },
+  "epistemic_limits": [
+    "Do not choose one of the provider's alternative 404 causes without a discriminating source.",
+    "Do not generalize this failure to the Seedance Lite family or to another Lite exact version.",
+    "Do not treat historical 5s/10s 480p/720p product capability as proof that the exact model is currently callable.",
+    "Do not retry this exact route merely for confirmation unless an invalidator changes."
+  ],
+  "invalidators": ["model ID changes", "account entitlement changes", "service/model availability changes", "authoritative control-plane evidence changes"],
+  "automatic_routing": "excluded_until_invalidator"
+}

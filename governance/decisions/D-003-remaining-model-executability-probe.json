@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "decision_id": "D-003",
+  "decision": "Run one standardized minimal T2V probe each for doubao-seedance-1-0-pro-250528 and doubao-seedance-1-0-lite-t2v-250428, without re-running already E2E-verified 1.5 Pro or Fast 251015.",
+  "trigger": "Both exact IDs are relevant to future model routing, but their executability under the current account/API key has not been established by this project. The Pro ID has official API-document evidence; Lite has model-card/product-family evidence, but account/runtime availability remains a separate condition.",
+  "rights": {
+    "authorized_by": ["user instruction to continue capability/strategy investigation using the supplied models and API"],
+    "credentials_or_permissions": ["HUOSHANYINQINGAPI through GitHub Actions"],
+    "asset_rights": ["text-only synthetic probe"],
+    "scope": "one 5-second T2V probe per unverified exact model ID",
+    "invalidators": ["user revokes API/model testing authorization"],
+    "verdict": "pass"
+  },
+  "capability": {
+    "required_claim_ids": ["C-001"],
+    "relation_classes": ["conditional_deterministic"],
+    "strongest_evidence": "D/control-plane evidence before probe; runtime unknown",
+    "verified_domain": {"standard_probe_request": "same prompt and content-only request shape as D-002"},
+    "unverified_assumptions": ["current account entitlement permits each exact model", "each exact model accepts the standardized T2V request"],
+    "alternative_existing_paths": ["management/control-plane model listing, but compatible management credentials are not currently established"],
+    "verdict": "probe_required_for_executable_model_graph"
+  },
+  "intent": {
+    "user_goal": "Know which supplied exact model IDs can actually be used and build routing on facts rather than family-name inference.",
+    "why_this_action_serves_the_goal": "It resolves exact-version/account availability with one minimal generation per still-unknown model.",
+    "is_it_necessary": true,
+    "lower_cost_or_lower_risk_equal_effect_options": ["authoritative account model-entitlement endpoint if compatible credentials later become available"],
+    "verdict": "pass"
+  },
+  "effect": {
+    "expected_state_changes": ["two video-generation tasks and temporary artifacts"],
+    "quota_or_cost": ["one 5-second generation charged against each model's reported free quota if accepted"],
+    "repository_mutations": ["one probe workflow and trigger"],
+    "external_calls": ["Volcengine Ark create/query/download"],
+    "public_or_private_asset_changes": ["synthetic output only"],
+    "irreversible_effects": ["consumed inference quota"],
+    "cleanup_obligations": ["retain compact metadata evidence; generated probe videos need not be permanent"],
+    "useful_output": "exact executability plus observed default output/task metadata for the two remaining model IDs",
+    "verdict": "pass"
+  },
+  "epistemic_review": {
+    "is_this_a_possibility_graph_edge_or_executable_graph_edge": "possibility edges until successful probe",
+    "what_exact_claim_is_being_tested_or_used": "each exact model accepts and completes the standardized minimal 5-second 16:9 T2V request in the current account",
+    "what_failure_would_falsify": "only that exact model/request/account path",
+    "what_failure_would_not_falsify": "the product family, other versions, other modalities, or future entitlement changes",
+    "does_existing_evidence_make_retesting_unnecessary": false,
+    "if_retesting_is_needed_why": "these exact account/runtime paths have never been tested; this is first verification, not repetition"
+  },
+  "decision_result": "approved"
+}

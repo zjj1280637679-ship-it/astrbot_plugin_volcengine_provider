@@ -1,0 +1,103 @@
+{
+  "schema_version": "0.1",
+  "decision_id": "D-001",
+  "decision": "Retain GitHub Actions + Git blob transport + GitHub Artifacts as the current physical backend for single Seedance video generation; do not add MCP, Pipedream, n8n, R2, or a new Asset Gateway yet.",
+  "trigger": "The single-video text-to-video and image-to-video paths are already E2E verified, while earlier architecture expansion was driven partly by misattributed failures rather than demonstrated backend limits.",
+  "rights": {
+    "authorized_by": [
+      "user instruction to use the connected GitHub repository and Volcengine API"
+    ],
+    "credentials_or_permissions": [
+      "GitHub repository write/admin permission",
+      "GitHub Actions access to HUOSHANYINQINGAPI"
+    ],
+    "asset_rights": [
+      "current test reference image supplied/approved in the conversation"
+    ],
+    "scope": "single-video generation and transfer in the user's repository/account context",
+    "invalidators": [
+      "user revokes authorization",
+      "repository/account scope changes",
+      "new assets have materially different rights constraints"
+    ],
+    "verdict": "pass"
+  },
+  "capability": {
+    "required_claim_ids": [
+      "C-001",
+      "C-002",
+      "C-003",
+      "C-004",
+      "C-005"
+    ],
+    "relation_classes": [
+      "conditional_deterministic"
+    ],
+    "strongest_evidence": "E2E",
+    "verified_domain": {
+      "text_to_video": "doubao-seedance-1-5-pro-251215, 5-second tested path",
+      "image_to_video": "single public GitHub-hosted JPEG reference, 5-second tested path",
+      "output_transfer": "MP4 through GitHub Actions Artifact into ChatGPT"
+    },
+    "unverified_assumptions": [
+      "large-scale concurrency",
+      "very large asset limits",
+      "long-term retention needs",
+      "other Seedance model IDs",
+      "quality/reliability of prompt handles"
+    ],
+    "alternative_existing_paths": [
+      "MCP-based server",
+      "Pipedream MCP",
+      "n8n workflow runtime",
+      "object storage such as R2"
+    ],
+    "verdict": "pass_with_domain_limits"
+  },
+  "intent": {
+    "user_goal": "Allow GPT to generate a video through the user's API and return the actual asset to the conversation with minimal extra infrastructure.",
+    "why_this_action_serves_the_goal": "The existing path already produces the desired effect and has been tested end-to-end.",
+    "is_it_necessary": true,
+    "lower_cost_or_lower_risk_equal_effect_options": [],
+    "verdict": "pass"
+  },
+  "effect": {
+    "expected_state_changes": [
+      "workflow/API task creation",
+      "temporary GitHub artifacts",
+      "possible repository asset/metadata commits for reference inputs"
+    ],
+    "quota_or_cost": [
+      "Volcengine model token quota consumption",
+      "GitHub Actions execution/storage within account limits"
+    ],
+    "repository_mutations": [
+      "workflow/request metadata and optional reference asset commits"
+    ],
+    "external_calls": [
+      "Volcengine Ark video generation API"
+    ],
+    "public_or_private_asset_changes": [
+      "reference image may become publicly fetchable when placed in this public repository"
+    ],
+    "irreversible_effects": [
+      "API quota already consumed by completed generations",
+      "Git history persists unless repository history is rewritten"
+    ],
+    "cleanup_obligations": [
+      "avoid committing sensitive/private reference assets to a public repository",
+      "remove test-only assets/workflows if they become unnecessary"
+    ],
+    "useful_output": "actual generated MP4 delivered back into the ChatGPT conversation",
+    "verdict": "pass_with_asset_privacy_constraint"
+  },
+  "epistemic_review": {
+    "is_this_a_possibility_graph_edge_or_executable_graph_edge": "executable_graph within verified domain",
+    "what_exact_claim_is_being_tested_or_used": "C-001 through C-005",
+    "what_failure_would_falsify": "a previously verified edge fails under unchanged premises and inside the verified domain, or a documented/runtime invalidator fires",
+    "what_failure_would_not_falsify": "failure of an untested model ID, larger file, different input modality, or alternative upload method",
+    "does_existing_evidence_make_retesting_unnecessary": true,
+    "if_retesting_is_needed_why": "Only when a listed invalidator fires or the requested task leaves the verified domain."
+  },
+  "decision_result": "approved_with_domain_and_privacy_limits"
+}

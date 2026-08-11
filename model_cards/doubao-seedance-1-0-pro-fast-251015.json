@@ -1,0 +1,80 @@
+{
+  "model_id": "doubao-seedance-1-0-pro-fast-251015",
+  "card_version": "0.2",
+  "current_account_status": "executable",
+  "evidence_policy": "Exact-version runtime evidence outranks family/version-adjacent documentation. Do not inherit capabilities from Pro Fast 250610 or other suffixes unless the relation is explicitly version-independent.",
+  "modalities": {
+    "text_to_video": {
+      "state": "E2E",
+      "evidence": ["C-009", "D-002"],
+      "tested_duration_seconds": [5],
+      "tested_ratio": ["16:9"]
+    },
+    "single_image_to_video": {
+      "state": "unknown_exact_version",
+      "evidence": [],
+      "family_level_lead": "Current official Seedance 1.0 Pro/Pro Fast prompt guide exists, and Volcano Engine developer material describes an adjacent Pro Fast 250610 as first-frame I2V capable. This is not promoted to exact 251015 capability."
+    },
+    "first_last_frame": {
+      "state": "unknown_exact_version",
+      "evidence": [],
+      "family_level_lead": "Adjacent Pro Fast material generally lists first-frame I2V only; exact 251015 remains untested and must not inherit either support or non-support."
+    },
+    "native_audio_output": {
+      "state": "not_observed_in_standard_probe",
+      "evidence": ["D-002 media inspection"],
+      "tested_request": "audio field omitted",
+      "observed_media": "H.264 video only"
+    }
+  },
+  "duration_and_output_domain": {
+    "text_to_video": {
+      "5_seconds": "E2E",
+      "maximum_seconds": null,
+      "maximum_evidence": "unknown exact version",
+      "notes": "Volcano Engine developer wrappers expose broader 2-12 second parameters for Seedance families, but that wrapper-level range is not accepted as proof of the exact 251015 T2V maximum."
+    },
+    "single_image_to_video": {
+      "maximum_seconds": null,
+      "maximum_evidence": "modality itself not yet E2E"
+    },
+    "observed_default_resolution": {
+      "value": "1080p",
+      "evidence": "T observation in D-002 with no explicit resolution field",
+      "encoded_dimensions": "1920x1088",
+      "universal_default_claim": false
+    },
+    "observed_fps": 24,
+    "observed_output_format": "mp4"
+  },
+  "tested_request_controls": {
+    "prompt_suffix_ratio_16_9": "E2E",
+    "prompt_suffix_dur_5": "E2E"
+  },
+  "standard_probe_observation": {
+    "request": "text only, --ratio 16:9 --dur 5, no explicit audio/resolution/duration field",
+    "reported_resolution": "1080p",
+    "reported_duration": 5,
+    "reported_fps": 24,
+    "usage_tokens": 246840,
+    "media": {"video": "H.264, ffprobe 1920x1088", "audio": "none"},
+    "wall_seconds_one_sample": 39.76443076133728
+  },
+  "prompt_guide_status": {
+    "official_family_guide": "Seedance 1.0 series prompt guide, updated 2026-07-20",
+    "exact_version_specific_rules_parsed": false,
+    "policy": "Treat family prompt language as a candidate semantic handle, not a quality/reliability guarantee."
+  },
+  "epistemic_limits": [
+    "Do not inherit I2V/first-last-frame support from Pro Fast 250610 or any other suffix.",
+    "Do not inherit a 2-12 second maximum from a generic wrapper without exact-version/modality evidence.",
+    "The word Fast plus one faster sample is not a Q-level stable latency claim.",
+    "Do not infer a quality ranking from artifact size, resolution, or one seed."
+  ],
+  "production_strategy": {
+    "hard_use": ["5-second 16:9 T2V on the current exact model/account path"],
+    "candidate_use_requiring_first_probe": ["single-image I2V", "other duration boundaries"],
+    "automatic_quality_routing": "not_admitted"
+  },
+  "probabilistic_unknowns": ["stable latency distribution", "visual quality ranking", "motion adherence", "camera adherence", "I2V behavior"]
+}
