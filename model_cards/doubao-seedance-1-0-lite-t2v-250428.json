@@ -1,0 +1,21 @@
+{
+  "model_id": "doubao-seedance-1-0-lite-t2v-250428",
+  "card_version": "0.1",
+  "current_account_status": "not_executable_on_current_exact_route",
+  "modalities": {
+    "text_to_video": {
+      "state": "current_route_failed",
+      "evidence": ["C-014", "D-003"],
+      "create_http_status": 404,
+      "error_code": "InvalidEndpointOrModel.NotFound"
+    }
+  },
+  "provider_error_semantics": "The provider message explicitly combines two alternatives: the model/endpoint does not exist OR the account has no access.",
+  "epistemic_limits": [
+    "Do not choose one of the provider's alternative causes without a discriminating source.",
+    "Do not generalize this failure to the Seedance Lite family or to another Lite exact version.",
+    "Do not retry this exact route merely for confirmation unless an invalidator changes."
+  ],
+  "invalidators": ["model ID changes", "account entitlement changes", "service/model availability changes", "authoritative control-plane evidence changes"],
+  "automatic_routing": "excluded_until_invalidator"
+}
