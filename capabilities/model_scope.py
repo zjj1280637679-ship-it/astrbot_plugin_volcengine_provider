@@ -103,10 +103,14 @@ def normalize_owned_model_card_for_save(
 def migrate_legacy_video_settings(config: dict[str, Any]) -> list[str]:
     """Migrate pre-0.1.15 plugin video settings without touching modalities.
 
-    Legacy per-model state beats legacy Source defaults. A ``video``
-    entry in AstrBot 4.27 ``modalities`` is read only as a one-time
-    migration clue because earlier versions of this plugin stored its
-    video transport state there; the host field itself is preserved.
+    Migration preserves the old resolver's precedence exactly:
+
+    1. already-saved 0.1.15 per-card transport setting;
+    2. older per-card plugin setting;
+    3. older explicit Provider Source boolean (``True`` *or* ``False``);
+    4. historical ``video`` entry in AstrBot ``modalities`` as a final clue.
+
+    The ``modalities`` field itself remains host-owned and is never rewritten.
     """
 
     sources = config.get("provider_sources", [])
@@ -145,11 +149,14 @@ def migrate_legacy_video_settings(config: dict[str, Any]) -> list[str]:
         if not isinstance(explicit, bool):
             if isinstance(legacy_model, bool):
                 provider[VIDEO_INPUT_ENABLED_KEY] = legacy_model
+            elif source_id in legacy_defaults:
+                # Preserve the old Source-level user's explicit choice before
+                # consulting the still older modalities encoding. Membership,
+                # not truthiness, matters here: an explicit False is data.
+                provider[VIDEO_INPUT_ENABLED_KEY] = legacy_defaults[source_id]
             elif isinstance(modalities, list) and "video" in modalities:
                 # Known historical encoding used by this plugin only.
                 provider[VIDEO_INPUT_ENABLED_KEY] = True
-            elif source_id in legacy_defaults:
-                provider[VIDEO_INPUT_ENABLED_KEY] = legacy_defaults[source_id]
 
         provider.pop(LEGACY_MODEL_VIDEO_INPUT_KEY, None)
         if provider != before:
