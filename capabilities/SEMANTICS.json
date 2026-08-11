@@ -46,6 +46,7 @@
       "persistent": false,
       "missing_field": "not_reported",
       "explicit_false": "current_feedback_false_not_model_truth",
+      "explicit_empty_list": "current_feedback_empty_not_missing",
       "display_rule": "explicit_current_fields_may_replace_same_display_field_for_this_response_only",
       "global_metadata_mutation": false,
       "routing_authority": false
