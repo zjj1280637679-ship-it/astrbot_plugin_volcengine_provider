@@ -1,0 +1,1336 @@
+name: Build 0.1.15 feedback boundary
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/build-0.1.15-feedback-boundary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VOLCENGINE_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+    steps:
+      - name: Checkout clean 0.1.15 branch
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+          fetch-depth: 0
+
+      - name: Apply 0.1.15 feedback-boundary integration
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              n = text.count(old)
+              if n != 1:
+                  raise SystemExit(f'{label}: expected one match, got {n}')
+              return text.replace(old, new, 1)
+
+          # ------------------------------------------------------------------
+          # Per-model-card adapter setting + sparse Source feedback.
+          # ------------------------------------------------------------------
+          Path('capabilities').mkdir(exist_ok=True)
+          Path('capabilities/model_scope.py').write_text(dedent(r'''
+          """Per-model-card Volcengine adapter settings and legacy migration.
+
+          This module never infers model capabilities. The video flag is only a
+          request-transport setting. AstrBot native capability feedback such as
+          ``modalities`` remains host-owned and is never rewritten here.
+          """
+
+          from __future__ import annotations
+
+          from collections.abc import Mapping
+          from typing import Any
+
+          ARK_PROVIDER_TYPE = "volcengine_ark_chat_completion"
+          AGENT_PLAN_PROVIDER_TYPE = "volcengine_agent_plan_chat_completion"
+          OWNED_SOURCE_TYPES = frozenset({ARK_PROVIDER_TYPE, AGENT_PLAN_PROVIDER_TYPE})
+
+          VIDEO_INPUT_ENABLED_KEY = "volcengine_video_input_enabled"
+          LEGACY_MODEL_VIDEO_INPUT_KEY = "volcengine_model_video_input"
+          LEGACY_SOURCE_VIDEO_KEYS = {
+              ARK_PROVIDER_TYPE: "volcengine_ark_video_input",
+              AGENT_PLAN_PROVIDER_TYPE: "volcengine_agent_plan_video_input",
+          }
+
+
+          def source_scope_id(provider_config: Mapping[str, Any]) -> str:
+              return str(
+                  provider_config.get("provider_source_id")
+                  or provider_config.get("id")
+                  or ""
+              ).strip()
+
+
+          def video_input_enabled(provider_config: Mapping[str, Any]) -> bool:
+              """Return the current card's video transport setting.
+
+              Missing is the transport default (disabled), not a negative model
+              capability claim. Users can enable the channel per model card;
+              upstream accept/reject remains runtime feedback.
+              """
+
+              explicit = provider_config.get(VIDEO_INPUT_ENABLED_KEY)
+              if isinstance(explicit, bool):
+                  return explicit
+              legacy = provider_config.get(LEGACY_MODEL_VIDEO_INPUT_KEY)
+              if isinstance(legacy, bool):
+                  return legacy
+              return False
+
+
+          def source_types(config: Mapping[str, Any]) -> dict[str, str]:
+              result: dict[str, str] = {}
+              sources = config.get("provider_sources", [])
+              if not isinstance(sources, list):
+                  return result
+              for source in sources:
+                  if not isinstance(source, dict):
+                      continue
+                  source_id = str(source.get("id") or "").strip()
+                  if source_id:
+                      result[source_id] = str(source.get("type") or "").strip()
+              return result
+
+
+          def owned_source_type_for_card(
+              provider_config: Mapping[str, Any],
+              provider_sources: list[dict[str, Any]] | object,
+          ) -> str:
+              source_id = str(provider_config.get("provider_source_id") or "").strip()
+              if not source_id or not isinstance(provider_sources, list):
+                  return ""
+              for source in provider_sources:
+                  if not isinstance(source, dict):
+                      continue
+                  if str(source.get("id") or "").strip() != source_id:
+                      continue
+                  source_type = str(source.get("type") or "").strip()
+                  return source_type if source_type in OWNED_SOURCE_TYPES else ""
+              return ""
+
+
+          def normalize_owned_model_card_for_save(
+              provider_config: dict[str, Any],
+              provider_sources: list[dict[str, Any]] | object,
+              *,
+              default_enabled: bool | None = None,
+          ) -> dict[str, Any]:
+              """Normalize only plugin-owned transport keys on one owned card."""
+
+              if not owned_source_type_for_card(provider_config, provider_sources):
+                  return provider_config
+
+              explicit = provider_config.get(VIDEO_INPUT_ENABLED_KEY)
+              legacy = provider_config.get(LEGACY_MODEL_VIDEO_INPUT_KEY)
+              if not isinstance(explicit, bool):
+                  if isinstance(legacy, bool):
+                      provider_config[VIDEO_INPUT_ENABLED_KEY] = legacy
+                  elif isinstance(default_enabled, bool):
+                      provider_config[VIDEO_INPUT_ENABLED_KEY] = default_enabled
+              provider_config.pop(LEGACY_MODEL_VIDEO_INPUT_KEY, None)
+              return provider_config
+
+
+          def migrate_legacy_video_settings(config: dict[str, Any]) -> list[str]:
+              """Migrate pre-0.1.15 plugin video settings without touching modalities.
+
+              Legacy per-model state beats legacy Source defaults. A ``video``
+              entry in AstrBot 4.27 ``modalities`` is read only as a one-time
+              migration clue because earlier versions of this plugin stored its
+              video transport state there; the host field itself is preserved.
+              """
+
+              sources = config.get("provider_sources", [])
+              providers = config.get("provider", [])
+              if not isinstance(sources, list) or not isinstance(providers, list):
+                  return []
+
+              types = source_types(config)
+              legacy_defaults: dict[str, bool] = {}
+              source_changed = False
+              for source in sources:
+                  if not isinstance(source, dict):
+                      continue
+                  source_id = str(source.get("id") or "").strip()
+                  legacy_key = LEGACY_SOURCE_VIDEO_KEYS.get(types.get(source_id, ""))
+                  if not source_id or not legacy_key:
+                      continue
+                  value = source.pop(legacy_key, None)
+                  if isinstance(value, bool):
+                      legacy_defaults[source_id] = value
+                      source_changed = True
+
+              changed_ids: list[str] = []
+              for provider in providers:
+                  if not isinstance(provider, dict):
+                      continue
+                  source_id = str(provider.get("provider_source_id") or "").strip()
+                  if types.get(source_id) not in OWNED_SOURCE_TYPES:
+                      continue
+
+                  before = dict(provider)
+                  explicit = provider.get(VIDEO_INPUT_ENABLED_KEY)
+                  legacy_model = provider.get(LEGACY_MODEL_VIDEO_INPUT_KEY)
+                  modalities = provider.get("modalities")
+
+                  if not isinstance(explicit, bool):
+                      if isinstance(legacy_model, bool):
+                          provider[VIDEO_INPUT_ENABLED_KEY] = legacy_model
+                      elif isinstance(modalities, list) and "video" in modalities:
+                          # Known historical encoding used by this plugin only.
+                          provider[VIDEO_INPUT_ENABLED_KEY] = True
+                      elif source_id in legacy_defaults:
+                          provider[VIDEO_INPUT_ENABLED_KEY] = legacy_defaults[source_id]
+
+                  provider.pop(LEGACY_MODEL_VIDEO_INPUT_KEY, None)
+                  if provider != before:
+                      provider_id = str(provider.get("id") or "").strip()
+                      if provider_id:
+                          changed_ids.append(provider_id)
+
+              if source_changed and not changed_ids:
+                  changed_ids.append("")
+              return changed_ids
+          ''').lstrip(), encoding='utf-8')
+
+          Path('capabilities/source_hints.py').write_text(dedent(r'''
+          """Transient Source-scoped sparse feedback for model discovery.
+
+          Missing fields mean unknown, never unsupported. Feedback is scoped by
+          ``(source_id, model_id)`` and must never become a process-global model
+          capability table or a routing policy.
+          """
+
+          from __future__ import annotations
+
+          import copy
+          from typing import Any
+
+          _SOURCE_MODEL_HINTS: dict[tuple[str, str], dict[str, Any]] = {}
+
+
+          def clear_source_model_hints(source_id: str) -> None:
+              if not source_id:
+                  return
+              for key in [key for key in _SOURCE_MODEL_HINTS if key[0] == source_id]:
+                  _SOURCE_MODEL_HINTS.pop(key, None)
+
+
+          def remember_source_model_hint(
+              source_id: str,
+              model_id: str,
+              metadata: dict[str, Any],
+          ) -> None:
+              if source_id and model_id:
+                  _SOURCE_MODEL_HINTS[(source_id, model_id)] = copy.deepcopy(metadata)
+
+
+          def get_source_model_hints(
+              source_id: str,
+              model_ids: list[str] | None = None,
+          ) -> dict[str, dict[str, Any]]:
+              allowed = set(model_ids) if model_ids is not None else None
+              result: dict[str, dict[str, Any]] = {}
+              for (scope, model_id), metadata in _SOURCE_MODEL_HINTS.items():
+                  if scope != source_id:
+                      continue
+                  if allowed is not None and model_id not in allowed:
+                      continue
+                  result[model_id] = copy.deepcopy(metadata)
+              return result
+          ''').lstrip(), encoding='utf-8')
+
+          Path('capabilities/source_migration.py').write_text(dedent(r'''
+          """Clean only plugin-owned settings when a model card changes Source."""
+
+          from __future__ import annotations
+
+          from typing import Any
+
+          from .model_scope import (
+              LEGACY_MODEL_VIDEO_INPUT_KEY,
+              OWNED_SOURCE_TYPES,
+              VIDEO_INPUT_ENABLED_KEY,
+          )
+
+
+          def cleanup_owned_settings_on_source_change(
+              provider_config: dict[str, Any],
+              *,
+              old_source_type: str,
+              new_source_type: str,
+          ) -> bool:
+              if (
+                  old_source_type not in OWNED_SOURCE_TYPES
+                  or new_source_type in OWNED_SOURCE_TYPES
+              ):
+                  return False
+              changed = False
+              for key in (VIDEO_INPUT_ENABLED_KEY, LEGACY_MODEL_VIDEO_INPUT_KEY):
+                  if key in provider_config:
+                      provider_config.pop(key, None)
+                      changed = True
+              # AstrBot-native feedback (including modalities) is host-owned.
+              return changed
+          ''').lstrip(), encoding='utf-8')
+
+          Path('capabilities/__init__.py').write_text(dedent(r'''
+          """Stable entry point for Volcengine model-card settings and feedback."""
+
+          from .model_scope import (
+              AGENT_PLAN_PROVIDER_TYPE,
+              ARK_PROVIDER_TYPE,
+              LEGACY_MODEL_VIDEO_INPUT_KEY,
+              LEGACY_SOURCE_VIDEO_KEYS,
+              OWNED_SOURCE_TYPES,
+              VIDEO_INPUT_ENABLED_KEY,
+              migrate_legacy_video_settings,
+              normalize_owned_model_card_for_save,
+              owned_source_type_for_card,
+              source_scope_id,
+              source_types,
+              video_input_enabled,
+          )
+          from .source_hints import (
+              clear_source_model_hints,
+              get_source_model_hints,
+              remember_source_model_hint,
+          )
+          from .source_migration import cleanup_owned_settings_on_source_change
+
+          __all__ = [
+              "AGENT_PLAN_PROVIDER_TYPE",
+              "ARK_PROVIDER_TYPE",
+              "LEGACY_MODEL_VIDEO_INPUT_KEY",
+              "LEGACY_SOURCE_VIDEO_KEYS",
+              "OWNED_SOURCE_TYPES",
+              "VIDEO_INPUT_ENABLED_KEY",
+              "cleanup_owned_settings_on_source_change",
+              "clear_source_model_hints",
+              "get_source_model_hints",
+              "migrate_legacy_video_settings",
+              "normalize_owned_model_card_for_save",
+              "owned_source_type_for_card",
+              "remember_source_model_hint",
+              "source_scope_id",
+              "source_types",
+              "video_input_enabled",
+          ]
+          ''').lstrip(), encoding='utf-8')
+
+          Path('capabilities/README.md').write_text(dedent(r'''
+          # 模型卡设置与能力反馈边界
+
+          这里不保存“模型能做什么”的真值表，只管理：
+
+          - `volcengine_video_input_enabled`：逐模型卡的视频**请求传输开关**；
+          - 普通 Ark `/models` 本次明确返回的 Source-scoped 稀疏反馈；
+          - 旧插件视频字段的一次性迁移。
+
+          关键语义：
+
+          - 传输开关关闭 = 插件不发送视频；**不等于模型不支持视频**。
+          - 反馈字段缺失 = 未反馈；**不等于 False**。
+          - AstrBot 自己已有的图片/音频/工具等反馈优先，插件只补缺口。
+          - 插件不根据 model ID 推断能力，不选择主模型或 fallback，不建立 CapabilityStore。
+          ''').lstrip(), encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # Sparse Ark feedback; Agent Plan names only. No global metadata writer.
+          # ------------------------------------------------------------------
+          common = Path('metadata/common.py')
+          if common.exists():
+              common.unlink()
+
+          Path('metadata/ark.py').write_text(dedent(r'''
+          """Normalize ordinary Ark `/models` receipts into sparse feedback."""
+
+          from __future__ import annotations
+
+          from typing import Any
+
+
+          def _dedupe_nonempty(values: object) -> list[str]:
+              if not isinstance(values, (list, tuple)):
+                  return []
+              result: list[str] = []
+              seen: set[str] = set()
+              for value in values:
+                  text = str(value or "").strip()
+                  if not text or text in seen:
+                      continue
+                  seen.add(text)
+                  result.append(text)
+              return result
+
+
+          def _as_mapping(value: object) -> dict[str, Any]:
+              if isinstance(value, dict):
+                  return value
+              model_dump = getattr(value, "model_dump", None)
+              if callable(model_dump):
+                  dumped = model_dump()
+                  return dumped if isinstance(dumped, dict) else {}
+              return {}
+
+
+          def _positive_int(value: object) -> int:
+              try:
+                  parsed = int(value)
+              except (TypeError, ValueError):
+                  return 0
+              return parsed if parsed > 0 else 0
+
+
+          def _feature_flag(value: object) -> bool | None:
+              if isinstance(value, bool):
+                  return value
+              if isinstance(value, dict):
+                  for name in ("supported", "enabled", "available", "function_calling"):
+                      if isinstance(value.get(name), bool):
+                          return value[name]
+              return None
+
+
+          def _normalized_modalities(values: object) -> list[str]:
+              allowed = {"text", "image", "audio", "video"}
+              return [value for value in _dedupe_nonempty(values) if value in allowed]
+
+
+          def normalize_ark_model_metadata(model: object) -> tuple[str, dict[str, Any]]:
+              """Return only facts explicitly present in this live receipt."""
+
+              data = _as_mapping(model)
+              model_id = str(data.get("id") or getattr(model, "id", "") or "").strip()
+              if not model_id:
+                  return "", {}
+
+              hint: dict[str, Any] = {"id": model_id}
+              modalities = _as_mapping(data.get("modalities"))
+              input_mods = _normalized_modalities(modalities.get("input_modalities"))
+              output_mods = _normalized_modalities(modalities.get("output_modalities"))
+              if input_mods or output_mods:
+                  hint["modalities"] = {}
+                  if input_mods:
+                      hint["modalities"]["input"] = input_mods
+                  if output_mods:
+                      hint["modalities"]["output"] = output_mods
+
+              limits = _as_mapping(data.get("token_limits"))
+              context = _positive_int(limits.get("context_window"))
+              output = _positive_int(limits.get("max_output_token_length"))
+              if context or output:
+                  hint["limit"] = {}
+                  if context:
+                      hint["limit"]["context"] = context
+                  if output:
+                      hint["limit"]["output"] = output
+
+              features = _as_mapping(data.get("features"))
+              tools = _as_mapping(features.get("tools"))
+              tool_call = _feature_flag(tools.get("function_calling"))
+              if tool_call is None:
+                  tool_call = _feature_flag(features.get("function_calling"))
+              if tool_call is not None:
+                  hint["tool_call"] = tool_call
+
+              reasoning = _feature_flag(features.get("reasoning"))
+              if reasoning is not None:
+                  hint["reasoning"] = reasoning
+
+              return model_id, hint
+          ''').lstrip(), encoding='utf-8')
+
+          Path('metadata/agent_plan.py').write_text(dedent(r'''
+          """Agent Plan model-name discovery only; no model capability priors."""
+
+          AGENT_PLAN_FACTS_VERIFIED_AT = "2026-08-09"
+          AGENT_PLAN_FACTS_SOURCE_KIND = "Volcengine live Agent Plan console model list"
+
+          KNOWN_AGENT_PLAN_MODELS = (
+              "doubao-seed-2.1-turbo",
+              "doubao-seed-evolving",
+              "doubao-seed-2.0-lite",
+              "doubao-seed-2.0-mini",
+              "deepseek-v4-flash",
+              "deepseek-v4-pro",
+              "glm-5.2",
+              "glm-latest",
+              "kimi-k3",
+              "kimi-k2.7-code",
+              "minimax-m3",
+              "ark-code-latest",
+          )
+          ''').lstrip(), encoding='utf-8')
+
+          Path('metadata/__init__.py').write_text(
+              '"""Model discovery and sparse upstream-feedback translation."""\n',
+              encoding='utf-8',
+          )
+
+          # ------------------------------------------------------------------
+          # Dashboard bridge: model-card transport setting + additive feedback.
+          # ------------------------------------------------------------------
+          Path('registry.py').write_text(dedent(r'''
+          """Plugin-owned Provider registration and narrow AstrBot Dashboard bridge."""
+
+          from __future__ import annotations
+
+          import copy
+          from collections.abc import Callable
+          from typing import Any
+
+          from astrbot.core.provider.register import (
+              provider_cls_map,
+              provider_registry,
+              register_provider_adapter,
+          )
+
+          from .capabilities import (
+              AGENT_PLAN_PROVIDER_TYPE,
+              ARK_PROVIDER_TYPE,
+              OWNED_SOURCE_TYPES,
+              VIDEO_INPUT_ENABLED_KEY,
+              cleanup_owned_settings_on_source_change,
+              get_source_model_hints,
+              normalize_owned_model_card_for_save,
+              source_types,
+              video_input_enabled,
+          )
+
+          PLUGIN_MODULE_MARKER = "astrbot_plugin_volcengine_provider"
+
+          _DASHBOARD_LEASE_COUNT = 0
+          _SCHEMA_WRAPPER: Callable[..., Any] | None = None
+          _SCHEMA_ORIGINAL: Callable[..., Any] | None = None
+          _MODELS_WRAPPER: Callable[..., Any] | None = None
+          _MODELS_ORIGINAL: Callable[..., Any] | None = None
+          _CREATE_WRAPPER: Callable[..., Any] | None = None
+          _CREATE_ORIGINAL: Callable[..., Any] | None = None
+          _UPDATE_WRAPPER: Callable[..., Any] | None = None
+          _UPDATE_ORIGINAL: Callable[..., Any] | None = None
+
+
+          def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
+              """Expose a transport toggle only on concrete Volcengine model cards."""
+
+              try:
+                  items = payload["config_schema"]["provider"]["items"]
+              except (KeyError, TypeError):
+                  return payload
+              if not isinstance(items, dict):
+                  return payload
+
+              items.setdefault(
+                  VIDEO_INPUT_ENABLED_KEY,
+                  {
+                      "description": "视频请求通道（当前模型卡）",
+                      "type": "bool",
+                      "hint": (
+                          "仅控制火山适配器是否按 Ark video_url 协议尝试发送本轮视频；"
+                          "不是模型能力结论。关闭时保留 [Video] 文本占位。"
+                      ),
+                  },
+              )
+
+              types = source_types(payload)
+              providers = payload.get("providers", [])
+              if not isinstance(providers, list):
+                  return payload
+              for provider in providers:
+                  if not isinstance(provider, dict):
+                      continue
+                  source_id = str(provider.get("provider_source_id") or "").strip()
+                  if types.get(source_id) not in OWNED_SOURCE_TYPES:
+                      continue
+                  provider.setdefault(VIDEO_INPUT_ENABLED_KEY, video_input_enabled(provider))
+              return payload
+
+
+          def _is_owned_source(service: Any, source_id: str) -> bool:
+              config = getattr(service, "config", {})
+              types = source_types(config if hasattr(config, "get") else {})
+              return types.get(source_id) in OWNED_SOURCE_TYPES
+
+
+          def _merge_source_feedback(base: object, hint: object) -> dict[str, Any]:
+              """Add sparse Ark feedback without erasing AstrBot feedback."""
+
+              merged = copy.deepcopy(base) if isinstance(base, dict) else {}
+              if not isinstance(hint, dict):
+                  return merged
+
+              for key, value in hint.items():
+                  if key == "modalities" and isinstance(value, dict):
+                      current = merged.setdefault("modalities", {})
+                      if not isinstance(current, dict):
+                          current = {}
+                          merged["modalities"] = current
+                      for direction in ("input", "output"):
+                          incoming = value.get(direction)
+                          if not isinstance(incoming, list):
+                              continue
+                          existing = current.get(direction)
+                          existing_list = list(existing) if isinstance(existing, list) else []
+                          current[direction] = list(dict.fromkeys([*existing_list, *incoming]))
+                      continue
+
+                  if key == "limit" and isinstance(value, dict):
+                      current = merged.setdefault("limit", {})
+                      if not isinstance(current, dict):
+                          current = {}
+                          merged["limit"] = current
+                      for name, incoming in value.items():
+                          if not current.get(name) and incoming:
+                              current[name] = copy.deepcopy(incoming)
+                      continue
+
+                  if key not in merged or merged[key] in (None, ""):
+                      merged[key] = copy.deepcopy(value)
+              return merged
+
+
+          def _overlay_source_scoped_model_hints(
+              service: Any,
+              source_id: str,
+              result: dict[str, Any],
+          ) -> dict[str, Any]:
+              if not _is_owned_source(service, source_id):
+                  return result
+              models = [str(model) for model in result.get("models", []) or []]
+              hints = get_source_model_hints(source_id, models)
+              if not hints:
+                  return result
+              metadata = result.setdefault("model_metadata", {})
+              if not isinstance(metadata, dict):
+                  return result
+              for model_id, hint in hints.items():
+                  metadata[model_id] = _merge_source_feedback(metadata.get(model_id), hint)
+              return result
+
+
+          def acquire_owned_dashboard_bridge() -> None:
+              """Install reversible model-card UI/save and Source-feedback wrappers."""
+
+              global _DASHBOARD_LEASE_COUNT
+              global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
+              global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL
+
+              if _DASHBOARD_LEASE_COUNT:
+                  _DASHBOARD_LEASE_COUNT += 1
+                  return
+
+              from astrbot.dashboard.services.config_service import ProviderConfigService
+
+              schema_current = ProviderConfigService.get_provider_schema
+              if getattr(schema_current, "_volcengine_provider_schema_wrapper", False):
+                  schema_current = getattr(schema_current, "_volcengine_provider_schema_original")
+
+              models_current = ProviderConfigService.list_provider_source_models
+              if getattr(models_current, "_volcengine_source_models_wrapper", False):
+                  models_current = getattr(models_current, "_volcengine_source_models_original")
+
+              create_current = ProviderConfigService.create_provider
+              if getattr(create_current, "_volcengine_model_save_wrapper", False):
+                  create_current = getattr(create_current, "_volcengine_model_save_original")
+
+              update_current = ProviderConfigService.update_provider
+              if getattr(update_current, "_volcengine_model_save_wrapper", False):
+                  update_current = getattr(update_current, "_volcengine_model_save_original")
+
+              def schema_wrapper(self) -> dict[str, Any]:
+                  return _inject_model_card_video_control(schema_current(self))
+
+              async def models_wrapper(self, source_id: str) -> dict[str, Any]:
+                  return _overlay_source_scoped_model_hints(
+                      self,
+                      source_id,
+                      await models_current(self, source_id),
+                  )
+
+              async def create_wrapper(
+                  self,
+                  config: dict[str, Any],
+                  source_id: str | None = None,
+              ) -> None:
+                  normalized = dict(config)
+                  if source_id:
+                      normalized["provider_source_id"] = source_id
+                  normalize_owned_model_card_for_save(
+                      normalized,
+                      self.config.get("provider_sources", []),
+                      default_enabled=False,
+                  )
+                  await create_current(self, normalized, source_id)
+
+              async def update_wrapper(
+                  self,
+                  provider_id: str,
+                  config: dict[str, Any],
+              ) -> None:
+                  normalized = dict(config)
+                  existing = self.provider_manager.get_provider_config_by_id(provider_id)
+                  if not isinstance(existing, dict):
+                      existing = {}
+                  if not normalized.get("provider_source_id") and existing.get("provider_source_id"):
+                      normalized["provider_source_id"] = existing["provider_source_id"]
+
+                  sources = self.config.get("provider_sources", [])
+                  types = source_types({"provider_sources": sources})
+                  old_source_id = str(existing.get("provider_source_id") or "").strip()
+                  new_source_id = str(normalized.get("provider_source_id") or "").strip()
+                  old_type = types.get(old_source_id, "")
+                  new_type = types.get(new_source_id, "")
+
+                  cleanup_owned_settings_on_source_change(
+                      normalized,
+                      old_source_type=old_type,
+                      new_source_type=new_type,
+                  )
+
+                  if (
+                      new_type in OWNED_SOURCE_TYPES
+                      and VIDEO_INPUT_ENABLED_KEY not in normalized
+                      and old_type in OWNED_SOURCE_TYPES
+                      and isinstance(existing.get(VIDEO_INPUT_ENABLED_KEY), bool)
+                  ):
+                      normalized[VIDEO_INPUT_ENABLED_KEY] = existing[VIDEO_INPUT_ENABLED_KEY]
+
+                  normalize_owned_model_card_for_save(
+                      normalized,
+                      sources,
+                      default_enabled=False,
+                  )
+                  await update_current(self, provider_id, normalized)
+
+              schema_wrapper._volcengine_provider_schema_wrapper = True  # type: ignore[attr-defined]
+              schema_wrapper._volcengine_provider_schema_original = schema_current  # type: ignore[attr-defined]
+              models_wrapper._volcengine_source_models_wrapper = True  # type: ignore[attr-defined]
+              models_wrapper._volcengine_source_models_original = models_current  # type: ignore[attr-defined]
+              create_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
+              create_wrapper._volcengine_model_save_original = create_current  # type: ignore[attr-defined]
+              update_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
+              update_wrapper._volcengine_model_save_original = update_current  # type: ignore[attr-defined]
+
+              ProviderConfigService.get_provider_schema = schema_wrapper  # type: ignore[method-assign]
+              ProviderConfigService.list_provider_source_models = models_wrapper  # type: ignore[method-assign]
+              ProviderConfigService.create_provider = create_wrapper  # type: ignore[method-assign]
+              ProviderConfigService.update_provider = update_wrapper  # type: ignore[method-assign]
+
+              _SCHEMA_ORIGINAL, _SCHEMA_WRAPPER = schema_current, schema_wrapper
+              _MODELS_ORIGINAL, _MODELS_WRAPPER = models_current, models_wrapper
+              _CREATE_ORIGINAL, _CREATE_WRAPPER = create_current, create_wrapper
+              _UPDATE_ORIGINAL, _UPDATE_WRAPPER = update_current, update_wrapper
+              _DASHBOARD_LEASE_COUNT = 1
+
+
+          def release_owned_dashboard_bridge() -> None:
+              global _DASHBOARD_LEASE_COUNT
+              global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL, _MODELS_WRAPPER, _MODELS_ORIGINAL
+              global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL
+
+              if _DASHBOARD_LEASE_COUNT <= 0:
+                  return
+              _DASHBOARD_LEASE_COUNT -= 1
+              if _DASHBOARD_LEASE_COUNT:
+                  return
+
+              from astrbot.dashboard.services.config_service import ProviderConfigService
+
+              if _SCHEMA_WRAPPER is not None and ProviderConfigService.get_provider_schema is _SCHEMA_WRAPPER:
+                  ProviderConfigService.get_provider_schema = _SCHEMA_ORIGINAL  # type: ignore[method-assign]
+              if _MODELS_WRAPPER is not None and ProviderConfigService.list_provider_source_models is _MODELS_WRAPPER:
+                  ProviderConfigService.list_provider_source_models = _MODELS_ORIGINAL  # type: ignore[method-assign]
+              if _CREATE_WRAPPER is not None and ProviderConfigService.create_provider is _CREATE_WRAPPER:
+                  ProviderConfigService.create_provider = _CREATE_ORIGINAL  # type: ignore[method-assign]
+              if _UPDATE_WRAPPER is not None and ProviderConfigService.update_provider is _UPDATE_WRAPPER:
+                  ProviderConfigService.update_provider = _UPDATE_ORIGINAL  # type: ignore[method-assign]
+
+              _SCHEMA_WRAPPER = _SCHEMA_ORIGINAL = None
+              _MODELS_WRAPPER = _MODELS_ORIGINAL = None
+              _CREATE_WRAPPER = _CREATE_ORIGINAL = None
+              _UPDATE_WRAPPER = _UPDATE_ORIGINAL = None
+
+
+          # 0.1.14 import compatibility.
+          acquire_owned_provider_schema = acquire_owned_dashboard_bridge
+          release_owned_provider_schema = release_owned_dashboard_bridge
+
+
+          def register_owned_provider(
+              provider_type_name: str,
+              desc: str,
+              *,
+              provider_type,
+              default_config_tmpl: dict,
+              provider_display_name: str,
+          ):
+              existing = provider_cls_map.get(provider_type_name)
+              if existing is not None:
+                  existing_cls = getattr(existing, "cls_type", None)
+                  module = str(getattr(existing_cls, "__module__", ""))
+                  owned = bool(
+                      getattr(existing_cls, "_volcengine_provider_plugin_owned", False)
+                      or PLUGIN_MODULE_MARKER in module
+                  )
+                  if not owned:
+                      raise ValueError(
+                          f"Provider type {provider_type_name!r} is already owned by "
+                          f"{module or 'an unknown module'}"
+                      )
+                  provider_registry[:] = [item for item in provider_registry if item is not existing]
+                  provider_cls_map.pop(provider_type_name, None)
+
+              return register_provider_adapter(
+                  provider_type_name,
+                  desc,
+                  provider_type=provider_type,
+                  default_config_tmpl=default_config_tmpl,
+                  provider_display_name=provider_display_name,
+              )
+          ''').lstrip(), encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # Keep main's media adapters; only remove the old capability resolver.
+          # ------------------------------------------------------------------
+          p = Path('adapters/video.py')
+          video = p.read_text(encoding='utf-8')
+          resolver = '''\ndef resolve_video_input_enabled(\n    provider_config: dict,\n    video_input_config_key: str,\n) -> bool:\n    """Resolve the Source-owned video switch, retaining only legacy fallback."""\n\n    explicit = provider_config.get(video_input_config_key)\n    if isinstance(explicit, bool):\n        return explicit\n    modalities = provider_config.get("modalities")\n    return isinstance(modalities, list) and "video" in modalities\n\n'''
+          if resolver not in video:
+              raise SystemExit('adapters/video.py legacy resolver not found')
+          video = video.replace(resolver, '\n', 1)
+          p.write_text(video, encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # Providers: retain isolated media adapters, remove capability priors.
+          # ------------------------------------------------------------------
+          p = Path('providers.py')
+          text = p.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              '''from .adapters.video import (\n    inject_current_request_videos,\n    resolve_video_input_enabled,\n)\n''',
+              'from .adapters.video import inject_current_request_videos\n',
+              'providers video import',
+          )
+          text = replace_once(
+              text,
+              '''from .metadata.agent_plan import (\n    KNOWN_AGENT_PLAN_MODELS,\n    publish_agent_plan_metadata,\n)\nfrom .metadata.ark import publish_ark_model_metadata\nfrom .metadata.common import _dedupe_nonempty\n\nfrom .registry import (\n    AGENT_PLAN_PROVIDER_TYPE,\n    AGENT_PLAN_VIDEO_INPUT_KEY,\n    ARK_PROVIDER_TYPE,\n    ARK_VIDEO_INPUT_KEY,\n    register_owned_provider,\n)\n''',
+              '''from .capabilities import (\n    clear_source_model_hints,\n    remember_source_model_hint,\n    source_scope_id,\n    video_input_enabled,\n)\nfrom .metadata.agent_plan import KNOWN_AGENT_PLAN_MODELS\nfrom .metadata.ark import normalize_ark_model_metadata\nfrom .registry import (\n    AGENT_PLAN_PROVIDER_TYPE,\n    ARK_PROVIDER_TYPE,\n    register_owned_provider,\n)\n''',
+              'providers knowledge imports',
+          )
+          text = text.replace('    ARK_VIDEO_INPUT_KEY: False,\n', '')
+          text = text.replace('    AGENT_PLAN_VIDEO_INPUT_KEY: False,\n', '')
+          text = text.replace('    _video_input_config_key = ""\n', '')
+          text = text.replace('    _video_input_config_key = ARK_VIDEO_INPUT_KEY\n', '')
+          text = text.replace('    _video_input_config_key = AGENT_PLAN_VIDEO_INPUT_KEY\n', '')
+          text = replace_once(
+              text,
+              '''            enabled=resolve_video_input_enabled(\n                self.provider_config,\n                self._video_input_config_key,\n            ),\n''',
+              '            enabled=video_input_enabled(self.provider_config),\n',
+              'providers video transport',
+          )
+
+          marker = '''AGENT_PLAN_DEFAULT_CONFIG = {\n    "id": "volcengine-agent-plan",\n    "provider": VOLCENGINE_BRAND_KEY,\n    "type": AGENT_PLAN_PROVIDER_TYPE,\n    "provider_type": "chat_completion",\n    "enable": True,\n    "key": [],\n    "api_base": AGENT_PLAN_API_BASE,\n    "timeout": 120,\n    "proxy": "",\n    "custom_headers": {},\n}\n\n'''
+          helper = '''def _dedupe_nonempty(values) -> list[str]:\n    result: list[str] = []\n    seen: set[str] = set()\n    for value in values:\n        text = str(value or "").strip()\n        if not text or text in seen:\n            continue\n        seen.add(text)\n        result.append(text)\n    return result\n\n\n'''
+          text = replace_once(text, marker, marker + helper, 'providers dedupe helper')
+
+          old_get_models = '''    async def get_models(self) -> list[str]:\n        """Enumerate every visible ordinary Ark model and publish its facts."""\n\n        try:\n            response = await retry_provider_request(\n                "Volcengine Ark",\n                lambda: self.client.models.list(),\n            )\n            model_objects = sorted(\n                response.data,\n                key=lambda model: str(getattr(model, "id", "")),\n            )\n            return _dedupe_nonempty(\n                publish_ark_model_metadata(model) for model in model_objects\n            )\n        except NotFoundError as error:\n            raise Exception(f"获取模型列表失败：{error}") from error\n'''
+          new_get_models = '''    async def get_models(self) -> list[str]:\n        """Enumerate visible Ark models and remember sparse Source feedback."""\n\n        try:\n            response = await retry_provider_request(\n                "Volcengine Ark",\n                lambda: self.client.models.list(),\n            )\n            scope = source_scope_id(self.provider_config)\n            clear_source_model_hints(scope)\n            model_ids: list[str] = []\n            for model in sorted(\n                response.data,\n                key=lambda item: str(getattr(item, "id", "")),\n            ):\n                model_id, hint = normalize_ark_model_metadata(model)\n                if not model_id:\n                    continue\n                model_ids.append(model_id)\n                if len(hint) > 1:\n                    remember_source_model_hint(scope, model_id, hint)\n            return _dedupe_nonempty(model_ids)\n        except NotFoundError as error:\n            raise Exception(f"获取模型列表失败：{error}") from error\n'''
+          text = replace_once(text, old_get_models, new_get_models, 'ordinary get_models')
+          text = text.replace('        publish_agent_plan_metadata(to_agent_plan_public_model)\n', '')
+          p.write_text(text, encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # Plugin lifecycle: migrate old settings once, then use AstrBot reload.
+          # ------------------------------------------------------------------
+          Path('main.py').write_text(dedent(r'''
+          """AstrBot plugin entrypoint.
+
+          Importing providers registers both Provider types before AstrBot creates
+          configured instances. Plugin initialization only migrates old plugin
+          video settings; it does not author model capability feedback.
+          """
+
+          from astrbot.api import logger, star
+
+          from . import providers as _providers  # noqa: F401
+          from .adapters.logging import install_video_log_redaction, remove_video_log_redaction
+          from .capabilities import migrate_legacy_video_settings
+          from .registry import (
+              AGENT_PLAN_PROVIDER_TYPE,
+              ARK_PROVIDER_TYPE,
+              acquire_owned_dashboard_bridge,
+              release_owned_dashboard_bridge,
+          )
+
+
+          class VolcengineProviderPlugin(star.Star):
+              def __init__(self, context: star.Context):
+                  super().__init__(context)
+                  self._dashboard_bridge_acquired = False
+                  self._video_log_filter = install_video_log_redaction()
+                  try:
+                      acquire_owned_dashboard_bridge()
+                      self._dashboard_bridge_acquired = True
+                  except Exception:
+                      remove_video_log_redaction(self._video_log_filter)
+                      self._video_log_filter = None
+                      raise
+                  logger.info(
+                      "Volcengine providers registered: %s, %s; restart AstrBot after "
+                      "install/update/disable because the provider type registry has no "
+                      "safe plugin-owned unload hook",
+                      ARK_PROVIDER_TYPE,
+                      AGENT_PLAN_PROVIDER_TYPE,
+                  )
+
+              async def initialize(self) -> None:
+                  config = self.context.astrbot_config_mgr.default_conf
+                  changed_ids = migrate_legacy_video_settings(config)
+                  if not changed_ids:
+                      return
+
+                  config.save_config()
+                  changed_set = {provider_id for provider_id in changed_ids if provider_id}
+                  manager = self.context.provider_manager
+                  for provider in list(config.get("provider", [])):
+                      provider_id = str(provider.get("id") or "")
+                      if provider_id in changed_set and provider_id in manager.inst_map:
+                          await manager.reload(provider)
+
+                  logger.info(
+                      "Volcengine video transport migration complete: model_cards=%d; "
+                      "AstrBot capability feedback untouched.",
+                      len(changed_set),
+                  )
+
+              async def terminate(self) -> None:
+                  remove_video_log_redaction(self._video_log_filter)
+                  self._video_log_filter = None
+                  if getattr(self, "_dashboard_bridge_acquired", False):
+                      release_owned_dashboard_bridge()
+                      self._dashboard_bridge_acquired = False
+                  return None
+          ''').lstrip(), encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # Documentation / version.
+          # ------------------------------------------------------------------
+          meta = Path('metadata.yaml').read_text(encoding='utf-8')
+          meta = replace_once(meta, 'version: "0.1.14"', 'version: "0.1.15"', 'metadata version')
+          meta = meta.replace(
+              '让多模态能力按需开启',
+              '让音视频请求沿 AstrBot 原有模型卡与反馈机制按需执行',
+          )
+          Path('metadata.yaml').write_text(meta, encoding='utf-8')
+
+          change = Path('CHANGELOG.md').read_text(encoding='utf-8')
+          if '## 0.1.15' not in change:
+              entry = dedent(r'''
+              ## 0.1.15
+
+              - 修正供应商适配能力与模型能力反馈的边界：视频设置改为逐模型卡 `volcengine_video_input_enabled` 请求传输开关，不再存放在 Provider Source，也不读写 AstrBot `modalities`；开关只决定是否尝试发送 `video_url`，不是模型支持/不支持视频的结论。
+              - 兼容迁移旧 `volcengine_ark_video_input`、`volcengine_agent_plan_video_input`、`volcengine_model_video_input` 以及旧插件曾写入的 `modalities: video`，但迁移只生成新的插件传输字段，绝不删除或改写宿主 `modalities`。
+              - 普通 Ark `/models` 改为 Source-scoped 稀疏反馈：仅反馈本次回执明确给出的模态、工具、reasoning 和 token limit；缺失保持“未反馈”，不补 `False/0`，不写进全局 `LLM_METADATAS[model_id]`，并以 additive merge 保护 AstrBot 已有反馈。
+              - Agent Plan 保留控制台可见 model-name 候选与 `agentplan/` 本地命名空间，但删除按豆包、DeepSeek、GLM、Kimi、MiniMax 等 model ID 预填能力的静态表；模型能力变化无需等待本插件升级。
+              - 保留 0.1.14 已完成的 `adapters/audio.py`、`adapters/video.py`、结构化日志脱敏和 side-effect-free package import；本版只纠正能力/反馈策略，不把媒体生命周期重新塞回 Provider。
+              - 主模型、fallback、重试、图片/音频/工具能力反馈仍完全归 AstrBot；火山上游对某模态的接受或拒绝属于有效运行反馈，插件不自行换模型。
+
+              ''')
+              change = change.replace('# 更新记录\n\n', '# 更新记录\n\n' + entry, 1)
+          Path('CHANGELOG.md').write_text(change, encoding='utf-8')
+
+          readme = Path('README.md').read_text(encoding='utf-8')
+          readme = readme.replace('version-0.1.14-e85d3f', 'version-0.1.15-e85d3f')
+          readme = readme.replace(
+              '视频则使用只属于火山供应商源的开关',
+              '视频则使用逐模型卡的火山请求通道开关',
+          )
+          readme = readme.replace(
+              '在对应火山供应商源开启“视频输入”后',
+              '在当前火山模型卡开启“视频请求通道”后',
+          )
+          readme = readme.replace(
+              '只给自己的两种火山供应商源增加“视频输入”布尔开关',
+              '只给自己的模型卡增加“视频请求通道”布尔开关，且不把它写入 `modalities`',
+          )
+          readme = readme.replace(
+              '需要视频时，在这张火山供应商源的高级设置里开启“视频输入”。',
+              '需要视频时，在当前火山模型卡开启“视频请求通道”；它只是传输设置，不是模型能力结论。',
+          )
+          readme = readme.replace(
+              '旧版已经保存的 `modalities: video` 会继续作为兼容回退读取。',
+              '旧版视频字段和旧插件曾写入的 `modalities: video` 会一次性迁移为新的逐模型卡传输开关；AstrBot `modalities` 本身保持不动。',
+          )
+          readme = readme.replace(
+              '若上游返回模型能力、上下文或输出限制，插件会把这些字段转换为 AstrBot 原生模型元数据；上游没有明确声明的能力则不替你猜。',
+              '若 `/models` 明确返回模态、工具、reasoning、上下文或输出限制，插件只把这些字段作为当前 Source 的补充反馈；缺失字段保持未反馈，并且不会覆盖 AstrBot 已有反馈。',
+          )
+          readme = readme.replace(
+              '图片、音频与工具继续按模型真实能力配置；需要视频时，在这张 Agent Plan 供应商源的高级设置里开启“视频输入”。旧版 `modalities: video` 配置继续兼容。',
+              '图片、音频与工具继续沿 AstrBot 原生模型卡反馈配置；需要视频时，在当前 Agent Plan 模型卡开启“视频请求通道”。这个开关不作为模型能力先验。',
+          )
+          readme = readme.replace(
+              '为了不给你索要不必要的高权限凭据，插件提供经过官方套餐表核对的候选，也允许你手动填写新模型。',
+              '为了不给你索要不必要的高权限凭据，插件只提供控制台可见 model-name 候选并允许手动填写新模型，不再按 model ID 预填能力。',
+          )
+          readme = readme.replace(
+              '在对应火山供应商源开启“视频输入”后，本次消息或本次引用中的受信视频附件会转换为火山官方 `video_url`。',
+              '在当前火山模型卡开启“视频请求通道”后，本次消息或本次引用中的受信视频附件会转换为火山官方 `video_url`。关闭时保持 `[Video]` 文本占位；两种状态都不是模型能力结论。',
+          )
+          readme = readme.replace(
+              '未知模型的新卡先只有文本能力，你再按真实情况手动勾选。',
+              '未知模型未标注的能力保持“未反馈”，你再按 AstrBot 原生模型卡、已有反馈和实际请求结果调整配置。',
+          )
+          readme = readme.replace(
+              '先确认对应火山供应商源的“视频输入”已开启',
+              '先确认当前火山模型卡的“视频请求通道”已开启',
+          )
+          if '## 0.1.15：请求通道不是能力真值表' not in readme:
+              marker = '## 0.1.14'
+              idx = readme.find(marker)
+              section = dedent(r'''
+              ## 0.1.15：请求通道不是能力真值表
+
+              - AstrBot 模型卡上的图片、音频、工具等信息继续由 AstrBot 管理；没有某个标注只代表当前没有反馈，不自动等于不支持。
+              - 视频在 AstrBot 4.27 还没有原生反馈选项，因此插件提供逐模型卡“视频请求通道”；它只控制 Ark `video_url` 是否发送，不写 `modalities`，也不替模型下能力结论。
+              - 普通 Ark `/models` 只贡献当前 Source 的稀疏补充反馈，不覆盖 AstrBot 已有反馈；Agent Plan 只提供 model-name 候选，不维护跨模型厂商的能力先验表。
+
+              ''')
+              if idx >= 0:
+                  readme = readme[:idx] + section + readme[idx:]
+              else:
+                  readme += '\n' + section
+          Path('README.md').write_text(readme, encoding='utf-8')
+
+          Path('ARCHITECTURE.md').write_text(dedent(r'''
+          # 0.1.15 架构目录与职责边界
+
+          > AstrBot 管生命周期、模型卡反馈、路由、fallback 与重试；插件只补火山协议差异、自己的传输设置和非破坏性 Source 回执展示。
+
+          ```text
+          astrbot_plugin_volcengine_provider/
+          ├── main.py                 # 插件生命周期 + 旧插件字段一次性迁移
+          ├── registry.py             # Provider 注册 + 可撤销 Dashboard 窄桥
+          ├── providers.py            # 两条固定端点的薄 Provider 编排
+          ├── adapters/
+          │   ├── audio.py            # Ark WAV / input_audio 最后一公里
+          │   ├── video.py            # 受信视频附件 → Ark video_url
+          │   └── logging.py          # SDK 音视频结构化脱敏
+          ├── capabilities/
+          │   ├── model_scope.py      # 逐模型卡视频传输设置 + 旧配置迁移
+          │   ├── source_hints.py     # (source_id, model_id) 稀疏反馈
+          │   └── source_migration.py # 换 Source 时只清理插件字段
+          ├── metadata/
+          │   ├── ark.py              # /models → 稀疏反馈，不写全局缓存
+          │   └── agent_plan.py       # model-name 候选，不保存能力先验
+          └── compatibility/
+              └── astrbot.py          # AstrBot Key 前缀日志脱敏 shim
+          ```
+
+          ## 不变量
+
+          1. `volcengine_video_input_enabled` 是请求传输设置，不是模型能力事实。
+          2. 插件不读写 AstrBot `modalities` 来管理视频；仅在 0.1.15 迁移时读取历史 `video` 作为旧插件状态线索，并保持原字段不变。
+          3. `/models` 缺失字段保持 unknown；Source feedback 只 additive merge，不覆盖 AstrBot 反馈，不写 `LLM_METADATAS[model_id]`。
+          4. Agent Plan 不按 model ID 维护豆包/DeepSeek/GLM/Kimi/MiniMax 能力表。
+          5. Provider 不选择其他模型，不维护 Key/fallback/retry 池，不复制 AstrBot MediaResolver 生命周期。
+          6. `adapters/audio.py` / `video.py` 是协议最后一公里；拆分不意味着能力失踪，根目录由本文件提供导航。
+          7. 所有兼容桥必须可卸载；AstrBot 原生提供对应 hook/视频反馈后应删除兼容层，而不是继续叠加。
+          ''').lstrip(), encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # Regression tests for the corrected semantics.
+          # ------------------------------------------------------------------
+          Path('tests').mkdir(exist_ok=True)
+          Path('tests/test_0_1_15_feedback_boundary.py').write_text(dedent(r'''
+          from __future__ import annotations
+
+          import copy
+          import sys
+          from pathlib import Path
+
+          ROOT = Path(__file__).resolve().parents[1]
+          sys.path.insert(0, str(ROOT / "AstrBot" / "data" / "plugins"))
+
+          from astrbot.core.agent.message import TextPart
+          from astrbot_plugin_volcengine_provider.capabilities import (
+              ARK_PROVIDER_TYPE,
+              VIDEO_INPUT_ENABLED_KEY,
+              cleanup_owned_settings_on_source_change,
+              migrate_legacy_video_settings,
+              normalize_owned_model_card_for_save,
+              video_input_enabled,
+          )
+          from astrbot_plugin_volcengine_provider.metadata.agent_plan import KNOWN_AGENT_PLAN_MODELS
+          from astrbot_plugin_volcengine_provider.metadata.ark import normalize_ark_model_metadata
+          from astrbot_plugin_volcengine_provider.providers import ProviderVolcengineArk
+          from astrbot_plugin_volcengine_provider.registry import (
+              _inject_model_card_video_control,
+              _merge_source_feedback,
+          )
+
+
+          def main() -> None:
+              assert video_input_enabled({}) is False
+              assert video_input_enabled({VIDEO_INPUT_ENABLED_KEY: True}) is True
+              assert video_input_enabled({'modalities': ['text', 'video']}) is False
+
+              sources = [
+                  {'id': 'ark', 'type': ARK_PROVIDER_TYPE},
+                  {'id': 'foreign', 'type': 'openai_chat_completion'},
+              ]
+              card = {
+                  'id': 'ark/a',
+                  'provider_source_id': 'ark',
+                  'modalities': ['text', 'image'],
+              }
+              before = copy.deepcopy(card['modalities'])
+              normalize_owned_model_card_for_save(card, sources, default_enabled=False)
+              assert card[VIDEO_INPUT_ENABLED_KEY] is False
+              assert card['modalities'] == before
+
+              cfg = {
+                  'provider_sources': [
+                      {'id': 'ark', 'type': ARK_PROVIDER_TYPE, 'volcengine_ark_video_input': True},
+                      {'id': 'foreign', 'type': 'openai_chat_completion'},
+                  ],
+                  'provider': [
+                      {'id': 'ark/legacy', 'provider_source_id': 'ark', 'modalities': ['text', 'video']},
+                      {'id': 'foreign/a', 'provider_source_id': 'foreign', 'modalities': ['text']},
+                  ],
+              }
+              migrate_legacy_video_settings(cfg)
+              assert cfg['provider'][0][VIDEO_INPUT_ENABLED_KEY] is True
+              assert cfg['provider'][0]['modalities'] == ['text', 'video']
+              assert VIDEO_INPUT_ENABLED_KEY not in cfg['provider'][1]
+              assert 'volcengine_ark_video_input' not in cfg['provider_sources'][0]
+
+              moving = {
+                  'provider_source_id': 'foreign',
+                  VIDEO_INPUT_ENABLED_KEY: True,
+                  'modalities': ['text', 'video'],
+              }
+              cleanup_owned_settings_on_source_change(
+                  moving,
+                  old_source_type=ARK_PROVIDER_TYPE,
+                  new_source_type='openai_chat_completion',
+              )
+              assert VIDEO_INPUT_ENABLED_KEY not in moving
+              assert moving['modalities'] == ['text', 'video']
+
+              mid, hint = normalize_ark_model_metadata({'id': 'unknown'})
+              assert mid == 'unknown'
+              assert hint == {'id': 'unknown'}
+              _, rich = normalize_ark_model_metadata({
+                  'id': 'rich',
+                  'modalities': {'input_modalities': ['image', 'audio']},
+                  'features': {'reasoning': {'supported': True}},
+                  'token_limits': {'context_window': 65536},
+              })
+              assert rich['modalities']['input'] == ['image', 'audio']
+              assert rich['reasoning'] is True
+              assert rich['limit'] == {'context': 65536}
+              assert 'tool_call' not in rich
+
+              base = {
+                  'id': 'same',
+                  'tool_call': True,
+                  'modalities': {'input': ['image'], 'output': ['text']},
+                  'limit': {'context': 131072, 'output': 0},
+              }
+              incoming = {
+                  'id': 'same',
+                  'tool_call': False,
+                  'modalities': {'input': ['audio']},
+                  'limit': {'context': 65536, 'output': 4096},
+              }
+              merged = _merge_source_feedback(base, incoming)
+              assert merged['tool_call'] is True
+              assert merged['modalities']['input'] == ['image', 'audio']
+              assert merged['limit'] == {'context': 131072, 'output': 4096}
+
+              payload = {
+                  'config_schema': {'provider': {'items': {}}},
+                  'provider_sources': sources,
+                  'providers': [
+                      {'id': 'ark/a', 'provider_source_id': 'ark', 'model': 'same'},
+                      {'id': 'foreign/a', 'provider_source_id': 'foreign', 'model': 'same'},
+                  ],
+              }
+              out = _inject_model_card_video_control(payload)
+              assert out['providers'][0][VIDEO_INPUT_ENABLED_KEY] is False
+              assert VIDEO_INPUT_ENABLED_KEY not in out['providers'][1]
+
+              # Agent Plan list remains discovery-only and includes third parties.
+              assert 'deepseek-v4-pro' in KNOWN_AGENT_PLAN_MODELS
+              assert 'glm-5.2' in KNOWN_AGENT_PLAN_MODELS
+
+              provider = ProviderVolcengineArk({
+                  'id': 'video-test',
+                  'provider': 'volcengine',
+                  'type': ARK_PROVIDER_TYPE,
+                  'provider_type': 'chat_completion',
+                  'enable': True,
+                  'key': ['dummy-key'],
+                  'api_base': 'https://ark.cn-beijing.volces.com/api/v3',
+                  'model': 'dummy-model',
+                  VIDEO_INPUT_ENABLED_KEY: True,
+              }, {'request_max_retries': 1})
+
+              async def fake_resolve(ref: str) -> str:
+                  assert ref == '/tmp/test.mp4'
+                  return 'data:video/mp4;base64,AAAA'
+
+              import astrbot_plugin_volcengine_provider.adapters.video as video_adapter
+              original = video_adapter.resolve_video_reference
+              video_adapter.resolve_video_reference = fake_resolve
+              try:
+                  import asyncio
+                  marker = '[Video Attachment: name test.mp4, path /tmp/test.mp4]'
+                  messages = [{'role': 'user', 'content': [{'type': 'text', 'text': marker}]}]
+                  asyncio.run(video_adapter.inject_current_request_videos(
+                      messages,
+                      [TextPart(text=marker)],
+                      enabled=True,
+                  ))
+                  assert messages[0]['content'][0]['type'] == 'video_url'
+
+                  messages_off = [{'role': 'user', 'content': [{'type': 'text', 'text': marker}]}]
+                  asyncio.run(video_adapter.inject_current_request_videos(
+                      messages_off,
+                      [TextPart(text=marker)],
+                      enabled=False,
+                  ))
+                  assert messages_off[0]['content'] == [{'type': 'text', 'text': '[Video]'}]
+              finally:
+                  video_adapter.resolve_video_reference = original
+
+              print('FEEDBACK_BOUNDARY_0_1_15=OK')
+
+
+          if __name__ == '__main__':
+              main()
+          ''').lstrip(), encoding='utf-8')
+          PY
+
+      - name: Static integration audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile providers.py registry.py main.py adapters/*.py capabilities/*.py metadata/*.py compatibility/*.py
+          git diff --check
+          test ! -e metadata/common.py
+          ! grep -R --exclude-dir=.git --exclude-dir=.github --exclude-dir=tests --exclude=CHANGELOG.md -n 'LLM_METADATAS\[' metadata capabilities registry.py providers.py main.py
+          ! grep -R --exclude-dir=.git --exclude-dir=.github --exclude-dir=tests -n 'provider_config\["modalities"\]' capabilities
+          ! grep -R --exclude-dir=.git --exclude-dir=.github --exclude-dir=tests -n 'resolve_video_input_enabled' providers.py adapters/video.py
+          ! grep -R --exclude-dir=.git --exclude-dir=.github --exclude-dir=tests -n 'AGENT_PLAN_MODEL_SPECS' metadata providers.py
+          ! grep -R --exclude-dir=.git --exclude-dir=.github --exclude-dir=tests -n 'ARK_VIDEO_INPUT_KEY\|AGENT_PLAN_VIDEO_INPUT_KEY' providers.py registry.py
+          grep -q 'version: "0.1.15"' metadata.yaml
+          grep -q 'version-0.1.15' README.md
+          echo STATIC_0_1_15=OK
+
+      - name: Checkout frozen AstrBot 4.27.2
+        uses: actions/checkout@v4
+        with:
+          repository: AstrBotDevs/AstrBot
+          ref: 30e20318cbaaa2e1ba57f3e0eee265d9ee98115c
+          path: AstrBot
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install frozen AstrBot dependencies
+        working-directory: AstrBot
+        run: uv sync --no-dev --exclude-newer 2026-08-10T13:00:00Z
+
+      - name: Install plugin into AstrBot
+        run: |
+          mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
+          rsync -a --exclude='.git' --exclude='.github' --exclude='AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
+
+      - name: Run semantic regression
+        run: AstrBot/.venv/bin/python tests/test_0_1_15_feedback_boundary.py
+
+      - name: Verify audio/video adapter separation survived
+        shell: bash
+        run: |
+          AstrBot/.venv/bin/python - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path('AstrBot/data/plugins')))
+          from astrbot_plugin_volcengine_provider.adapters.audio import build_ark_input_audio
+          from astrbot_plugin_volcengine_provider.adapters.video import inject_current_request_videos
+          from astrbot_plugin_volcengine_provider.providers import ProviderVolcengineArk
+          assert callable(build_ark_input_audio)
+          assert callable(inject_current_request_videos)
+          assert ProviderVolcengineArk.__module__.endswith('.providers')
+          print('MEDIA_ADAPTER_BOUNDARY=OK')
+          PY
+
+      - name: Real ordinary Ark E2E
+        if: env.VOLCENGINE_API_KEY != ''
+        shell: bash
+        run: |
+          AstrBot/.venv/bin/python - <<'PY'
+          import asyncio
+          import os
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path('AstrBot/data/plugins')))
+          from astrbot_plugin_volcengine_provider.providers import ProviderVolcengineArk
+
+          model = 'doubao-seed-2-0-pro-260215'
+          provider = ProviderVolcengineArk({
+              'id': 'rc15-live',
+              'provider': 'volcengine',
+              'type': 'volcengine_ark_chat_completion',
+              'provider_type': 'chat_completion',
+              'enable': True,
+              'key': [os.environ['VOLCENGINE_API_KEY']],
+              'api_base': 'https://ark.cn-beijing.volces.com/api/v3',
+              'model': model,
+              'timeout': 60,
+              'modalities': ['text'],
+          }, {'request_max_retries': 1})
+
+          async def main():
+              models = await provider.get_models()
+              assert model in models
+              response = await provider.text_chat(
+                  prompt='Reply with exactly RC15_OK.',
+                  contexts=[],
+                  system_prompt='',
+                  model=model,
+                  request_max_retries=1,
+                  max_tokens=16,
+              )
+              text = (response.completion_text or '').strip()
+              print('RC15_MODEL_COUNT=', len(models))
+              print('RC15_RESPONSE=', text)
+              assert 'RC15_OK' in text
+
+          asyncio.run(main())
+          print('REAL_ARK_0_1_15=OK')
+          PY
+
+      - name: Commit 0.1.15
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A capabilities metadata registry.py providers.py main.py adapters/video.py ARCHITECTURE.md README.md CHANGELOG.md metadata.yaml tests/test_0_1_15_feedback_boundary.py
+          git commit -m "release: 0.1.15 preserve AstrBot feedback boundaries"
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
