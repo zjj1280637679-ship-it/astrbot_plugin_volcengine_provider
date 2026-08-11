@@ -1,4 +1,4 @@
-name: Collect real AstrBot Dashboard UI evidence
+name: 0.1.16 Real AstrBot Dashboard Reachability Evidence
 
 on:
   workflow_dispatch:
@@ -17,6 +17,8 @@ on:
       - docs/ENGINEERING_METHODOLOGY.md
       - docs/EVIDENCE_LEVELS.md
       - docs/TEST_BOUNDARIES.md
+      - docs/KNOWLEDGE_BOUNDARY.md
+      - docs/REGRESSION_SCOPE.md
 
 permissions:
   contents: read
