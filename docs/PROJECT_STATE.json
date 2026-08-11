@@ -6,6 +6,7 @@
   "status": "release_candidate_under_runtime_product_validation",
   "objective_conditions": [
     "Volcengine Ark is both a first-party platform for Doubao/Seed models and a serving platform for third-party/open models.",
+    "A real Ark /models receipt on 2026-08-11 returned 129 models through the current account, including Doubao/Seed and third-party/open model families such as DeepSeek. This is current L5 evidence for the platform-aggregation condition, not a permanent catalog.",
     "Model capability and platform behavior can change independently of plugin releases.",
     "AstrBot already owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and Dashboard rendering.",
     "AstrBot capability icons are incomplete feedback, not a complete model-capability truth table.",
@@ -14,7 +15,9 @@
     "End-to-end modality availability depends on the complete QQ/NapCat/AstrBot/adapter/provider/model path, not only model capability.",
     "A real AstrBot v4.27.2 production Dashboard has been built and started with this plugin loaded; browser login and the Provider page have been reached successfully.",
     "The first provider-card Playwright matrix encoded unstable harness assumptions including welcome overlays, display labels, fixed source IDs, and selector structure. Its failures did not by themselves implicate plugin runtime logic.",
-    "A flow diagram does not prove reachability: each arrow requires a concrete host/plugin/upstream interface or a minimal existence experiment."
+    "A flow diagram does not prove reachability: each arrow requires a concrete host/plugin/upstream interface or a minimal existence experiment.",
+    "With the repository ordinary Ark secret, raw ordinary Ark /models and raw ordinary Ark text both succeeded, and the same /models and text paths through ProviderVolcengineArk also succeeded in the same run.",
+    "The same ordinary Ark secret was rejected with HTTP 401 by both a minimal raw Agent Plan text request and ProviderVolcengineAgentPlan. Therefore that run is evidence of an Agent Plan credential/account prerequisite, not evidence of a plugin-path defect or permanent model incapability."
   ],
   "expected_outcomes": [
     "Expose implemented Volcengine request transport paths without converting them into permanent model-capability claims.",
@@ -37,7 +40,8 @@
     "ui_validation": "coarse_reachability_hard_gate_plus_nonblocking_presentation_evidence",
     "engineering_loop": "observe_attribute_minimally_modify_retest_record",
     "interface_rule": "prove_each_flow_arrow_before_automation",
-    "precedent_rule": "astrbot_native_first"
+    "precedent_rule": "astrbot_native_first",
+    "runtime_attribution": "compare_minimal_raw_upstream_with_plugin_path_before_changing_production"
   },
   "validation_progress": {
     "provider_card_matrix_dry_run": "passed_L2",
@@ -45,22 +49,23 @@
     "provider_config_service_matrix_astrbot_4_27_2": "passed_L3",
     "real_dashboard_login_and_provider_page_astrbot_4_27_2": "passed_L4",
     "fine_provider_card_playwright_matrix": "retired_as_release_gate_due_harness_assumptions",
-    "dashboard_ui_evidence_collector_v3": "active",
-    "real_volcengine_api_full_matrix": "next_runtime_frontier",
+    "dashboard_ui_evidence_collector_v3": "passed_L4_coarse_reachability_and_evidence_collection",
+    "real_volcengine_ordinary_ark_models": "passed_L5_raw_and_plugin_success_129_models_in_observed_run",
+    "real_volcengine_ordinary_ark_text": "passed_L5_raw_and_plugin_success",
+    "real_volcengine_agent_plan_text_with_ordinary_ark_secret": "blocked_L5_both_raw_and_plugin_http_401_credential_or_account_prerequisite",
+    "real_volcengine_multimodal_matrix": "in_progress",
     "complete_qq_napcat_multimodal_path": "not_claimed_by_ci"
   },
   "active_validation_frontier": {
-    "name": "real_volcengine_runtime_matrix",
-    "current_stage": "stabilize_ui_evidence_collector_then_execute_real_api_cases",
-    "reason": "L2/L3 contracts and L4 Dashboard reachability are established; the next missing evidence is current real upstream runtime behavior.",
+    "name": "real_volcengine_multimodal_runtime_matrix",
+    "current_stage": "ordinary_ark_image_then_audio_then_video_and_tools_using_astrbot_native_precedent",
+    "reason": "Ordinary Ark /models and text have current raw-vs-plugin L5 parity. Agent Plan cannot be meaningfully advanced with the current ordinary-Ark credential because both raw and plugin paths receive 401.",
     "dimensions": [
-      "ordinary_ark_models_receipt",
-      "text_request",
-      "image_request_when_asset_available",
-      "audio_request_when_asset_available",
-      "video_transport_off",
-      "video_transport_on",
-      "tool_call_when_suitable",
+      "image_raw_vs_plugin",
+      "audio_raw_vs_plugin",
+      "video_transport_off_local_invariant",
+      "video_transport_on_raw_vs_plugin_when_a_proven_test_asset_path_exists",
+      "tool_call_using_astrbot_native_tool_test_precedent",
       "failure_provenance"
     ]
   },
