@@ -1,0 +1,249 @@
+name: Patch native Source transport hint compatibility
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/patch-source-transport-hint.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+          fetch-depth: 0
+
+      - name: Apply Source hint compatibility patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, got {count}')
+              return text.replace(old, new)
+
+          # ---- registry.py ----
+          path = Path('registry.py')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              '_VIDEO_UI_KEY_PREFIX = "_volcengine_video_transport_ui_"\n\n_DASHBOARD_LEASE_COUNT = 0\n',
+              '_VIDEO_UI_KEY_PREFIX = "_volcengine_video_transport_ui_"\n'
+              '_SOURCE_TRANSPORT_UI_HINT = (\n'
+              '    "视频请求通道是逐模型卡的请求转发设置，不是模型能力结论。"\n'
+              '    "如果当前 AstrBot Dashboard 在新建模型卡时未显示该开关，请先保存模型卡，"\n'
+              '    "再点击该模型卡进入编辑设置；若未来 Dashboard 已在新建页直接显示，可直接在那里设置。"\n'
+              ')\n\n'
+              '_DASHBOARD_LEASE_COUNT = 0\n',
+              'registry hint constant',
+          )
+          text = replace_once(
+              text,
+              '_UPDATE_WRAPPER: Callable[..., Any] | None = None\n_UPDATE_ORIGINAL: Callable[..., Any] | None = None\n',
+              '_UPDATE_WRAPPER: Callable[..., Any] | None = None\n'
+              '_UPDATE_ORIGINAL: Callable[..., Any] | None = None\n'
+              '_SOURCE_UPSERT_WRAPPER: Callable[..., Any] | None = None\n'
+              '_SOURCE_UPSERT_ORIGINAL: Callable[..., Any] | None = None\n',
+              'registry source upsert globals',
+          )
+          marker = '\n\ndef _apply_video_ui_transport_setting(\n'
+          helpers = '''\n\ndef _inject_owned_source_transport_hint(payload: dict[str, Any]) -> dict[str, Any]:\n    """Project a current UI-path hint onto owned Sources only.\n\n    The provider-source list is copied before mutation so this explanatory\n    Dashboard projection cannot become an in-memory configuration side effect\n    even on AstrBot builds that return live config objects. Existing host/user\n    hints are preserved rather than overwritten.\n    """\n\n    provider_sources = payload.get("provider_sources")\n    if not isinstance(provider_sources, list):\n        return payload\n\n    copied_sources = copy.deepcopy(provider_sources)\n    payload["provider_sources"] = copied_sources\n    types = source_types({"provider_sources": copied_sources})\n    for source in copied_sources:\n        if not isinstance(source, dict):\n            continue\n        source_id = str(source.get("id") or "").strip()\n        if not source_id or types.get(source_id) not in OWNED_SOURCE_TYPES:\n            continue\n        if not source.get("hint"):\n            source["hint"] = _SOURCE_TRANSPORT_UI_HINT\n    return payload\n\n\ndef _strip_source_transport_hint(source_config: dict[str, Any]) -> None:\n    """Remove only this plugin's short-lived explanatory Source hint."""\n\n    if source_config.get("hint") == _SOURCE_TRANSPORT_UI_HINT:\n        source_config.pop("hint", None)\n'''
+          if text.count(marker) != 1:
+              raise SystemExit(f'registry helper marker count={text.count(marker)}')
+          text = text.replace(marker, helpers + marker)
+
+          text = replace_once(
+              text,
+              '    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL\n',
+              '    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL\n'
+              '    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL\n',
+              'acquire source global',
+          )
+          discovery = '''    update_current = _unwrap_owned_wrapper(\n        getattr(ProviderConfigService, "update_provider", None),\n        marker="_volcengine_model_save_wrapper",\n        original="_volcengine_model_save_original",\n    )\n\n    installed = False\n'''
+          discovery_new = '''    update_current = _unwrap_owned_wrapper(\n        getattr(ProviderConfigService, "update_provider", None),\n        marker="_volcengine_model_save_wrapper",\n        original="_volcengine_model_save_original",\n    )\n    source_upsert_current = _unwrap_owned_wrapper(\n        getattr(ProviderConfigService, "upsert_provider_source", None),\n        marker="_volcengine_source_save_wrapper",\n        original="_volcengine_source_save_original",\n    )\n\n    installed = False\n'''
+          text = replace_once(text, discovery, discovery_new, 'source upsert discovery')
+          text = replace_once(
+              text,
+              '    can_install_transport_ui = (\n        schema_current is not None\n        and create_current is not None\n        and update_current is not None\n    )\n\n    if can_install_transport_ui:\n        def schema_wrapper(self) -> dict[str, Any]:\n            return _inject_model_card_video_control(schema_current(self))\n',
+              '    can_install_transport_ui = (\n        schema_current is not None\n        and create_current is not None\n        and update_current is not None\n    )\n    can_install_source_hint = (\n        can_install_transport_ui and source_upsert_current is not None\n    )\n\n    if can_install_transport_ui:\n        def schema_wrapper(self) -> dict[str, Any]:\n            result = _inject_model_card_video_control(schema_current(self))\n            if can_install_source_hint:\n                result = _inject_owned_source_transport_hint(result)\n            return result\n',
+              'schema wrapper hint projection',
+          )
+          source_wrapper = '''\n    if can_install_source_hint:\n        async def source_upsert_wrapper(\n            self,\n            source_id: str,\n            config: dict[str, Any],\n        ) -> Any:\n            normalized = dict(config)\n            _strip_source_transport_hint(normalized)\n            return await source_upsert_current(self, source_id, normalized)\n\n        source_upsert_wrapper._volcengine_source_save_wrapper = True  # type: ignore[attr-defined]\n        source_upsert_wrapper._volcengine_source_save_original = source_upsert_current  # type: ignore[attr-defined]\n        ProviderConfigService.upsert_provider_source = source_upsert_wrapper  # type: ignore[method-assign]\n        _SOURCE_UPSERT_ORIGINAL, _SOURCE_UPSERT_WRAPPER = (\n            source_upsert_current,\n            source_upsert_wrapper,\n        )\n        installed = True\n'''
+          marker = '\n    if installed:\n        _DASHBOARD_LEASE_COUNT = 1\n'
+          if text.count(marker) != 1:
+              raise SystemExit(f'source wrapper insert marker count={text.count(marker)}')
+          text = text.replace(marker, source_wrapper + marker)
+
+          # release has the same global line a second time; replace the remaining occurrence.
+          old_global = '    global _CREATE_WRAPPER, _CREATE_ORIGINAL, _UPDATE_WRAPPER, _UPDATE_ORIGINAL\n'
+          if text.count(old_global) != 1:
+              raise SystemExit(f'release source global remaining count={text.count(old_global)}')
+          text = text.replace(
+              old_global,
+              old_global + '    global _SOURCE_UPSERT_WRAPPER, _SOURCE_UPSERT_ORIGINAL\n',
+          )
+          restore_marker = '''        if (\n            _UPDATE_WRAPPER is not None\n            and getattr(ProviderConfigService, "update_provider", None)\n            is _UPDATE_WRAPPER\n        ):\n            ProviderConfigService.update_provider = _UPDATE_ORIGINAL  # type: ignore[method-assign]\n\n    _SCHEMA_WRAPPER = _SCHEMA_ORIGINAL = None\n'''
+          restore_new = '''        if (\n            _UPDATE_WRAPPER is not None\n            and getattr(ProviderConfigService, "update_provider", None)\n            is _UPDATE_WRAPPER\n        ):\n            ProviderConfigService.update_provider = _UPDATE_ORIGINAL  # type: ignore[method-assign]\n        if (\n            _SOURCE_UPSERT_WRAPPER is not None\n            and getattr(ProviderConfigService, "upsert_provider_source", None)\n            is _SOURCE_UPSERT_WRAPPER\n        ):\n            ProviderConfigService.upsert_provider_source = _SOURCE_UPSERT_ORIGINAL  # type: ignore[method-assign]\n\n    _SCHEMA_WRAPPER = _SCHEMA_ORIGINAL = None\n'''
+          text = replace_once(text, restore_marker, restore_new, 'release source restore')
+          text = replace_once(
+              text,
+              '    _UPDATE_WRAPPER = _UPDATE_ORIGINAL = None\n',
+              '    _UPDATE_WRAPPER = _UPDATE_ORIGINAL = None\n'
+              '    _SOURCE_UPSERT_WRAPPER = _SOURCE_UPSERT_ORIGINAL = None\n',
+              'release source reset',
+          )
+          path.write_text(text, encoding='utf-8')
+
+          # ---- model-card UI scope regression ----
+          path = Path('tests/test_model_card_ui_scope.py')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              '    _VIDEO_UI_KEY_PREFIX,\n    _apply_video_ui_transport_setting,\n    _inject_model_card_video_control,\n    _video_ui_key,\n',
+              '    _SOURCE_TRANSPORT_UI_HINT,\n    _VIDEO_UI_KEY_PREFIX,\n'
+              '    _apply_video_ui_transport_setting,\n'
+              '    _inject_model_card_video_control,\n'
+              '    _inject_owned_source_transport_hint,\n'
+              '    _strip_source_transport_hint,\n'
+              '    _video_ui_key,\n',
+              'UI test imports',
+          )
+          text = replace_once(
+              text,
+              '    out = _inject_model_card_video_control(payload)\n    items = out["config_schema"]["provider"]["items"]\n',
+              '    out = _inject_model_card_video_control(payload)\n'
+              '    out = _inject_owned_source_transport_hint(out)\n'
+              '    items = out["config_schema"]["provider"]["items"]\n',
+              'UI test source hint injection',
+          )
+          anchor = '''    assert not any(\n        str(key).startswith(_VIDEO_UI_KEY_PREFIX)\n        for key in foreign_card\n    )\n\n'''
+          addition = '''    # Source guidance is a Dashboard-only current UI-path hint. Owned\n    # Sources receive it, foreign Sources do not, and the input list used to\n    # build the projection remains unmodified.\n    projected_sources = out["provider_sources"]\n    assert projected_sources[0]["hint"] == _SOURCE_TRANSPORT_UI_HINT\n    assert projected_sources[1]["hint"] == _SOURCE_TRANSPORT_UI_HINT\n    assert "hint" not in projected_sources[2]\n    assert all("hint" not in source for source in sources)\n\n    to_save = dict(projected_sources[0])\n    _strip_source_transport_hint(to_save)\n    assert "hint" not in to_save\n    custom_hint = {"hint": "host-or-user-hint"}\n    _strip_source_transport_hint(custom_hint)\n    assert custom_hint["hint"] == "host-or-user-hint"\n\n'''
+          if text.count(anchor) != 1:
+              raise SystemExit(f'UI hint assertion anchor count={text.count(anchor)}')
+          text = text.replace(anchor, anchor + addition)
+          path.write_text(text, encoding='utf-8')
+
+          # ---- Dashboard save-boundary regression ----
+          path = Path('tests/test_dashboard_save_boundary.py')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              '        self.updated: list[tuple[str, dict]] = []\n',
+              '        self.updated: list[tuple[str, dict]] = []\n'
+              '        self.source_upserts: list[tuple[str, dict]] = []\n',
+              'save test source-upsert storage',
+          )
+          text = replace_once(
+              text,
+              '    assert registry.acquire_owned_dashboard_bridge() is True\n    try:\n        service = FakeService()\n',
+              '    original_source_upsert = ProviderConfigService.upsert_provider_source\n'
+              '    async def record_source_upsert(self, source_id: str, config: dict) -> None:\n'
+              '        self.source_upserts.append((source_id, copy.deepcopy(config)))\n\n'
+              '    ProviderConfigService.upsert_provider_source = record_source_upsert\n'
+              '    assert registry.acquire_owned_dashboard_bridge() is True\n'
+              '    try:\n'
+              '        service = FakeService()\n',
+              'save test source-upsert wrapper setup',
+          )
+          insert_anchor = '''        ark_ui = registry._video_ui_key("ark-A")\n        foreign_ui = registry._video_ui_key("foreign-A")\n\n'''
+          insert = '''        # The Dashboard-only native Source hint is removed before the\n        # host persistence boundary. Unrelated host/user hints are preserved.\n        await ProviderConfigService.upsert_provider_source(\n            service,\n            "ark-A",\n            {\n                "id": "ark-A",\n                "type": ARK_PROVIDER_TYPE,\n                "hint": registry._SOURCE_TRANSPORT_UI_HINT,\n            },\n        )\n        source_id, source_saved = service.source_upserts[-1]\n        assert source_id == "ark-A"\n        assert "hint" not in source_saved\n\n        await ProviderConfigService.upsert_provider_source(\n            service,\n            "foreign-A",\n            {\n                "id": "foreign-A",\n                "type": "openai_chat_completion",\n                "hint": "host-or-user-hint",\n            },\n        )\n        _, foreign_source_saved = service.source_upserts[-1]\n        assert foreign_source_saved["hint"] == "host-or-user-hint"\n\n'''
+          if text.count(insert_anchor) != 1:
+              raise SystemExit(f'save hint assertion anchor count={text.count(insert_anchor)}')
+          text = text.replace(insert_anchor, insert_anchor + insert)
+          text = replace_once(
+              text,
+              '    finally:\n        while registry._DASHBOARD_LEASE_COUNT > 0:\n            registry.release_owned_dashboard_bridge()\n',
+              '    finally:\n'
+              '        while registry._DASHBOARD_LEASE_COUNT > 0:\n'
+              '            registry.release_owned_dashboard_bridge()\n'
+              '        ProviderConfigService.upsert_provider_source = original_source_upsert\n',
+              'save test source-upsert restore',
+          )
+          path.write_text(text, encoding='utf-8')
+
+          # ---- Dashboard capability-degradation regression ----
+          path = Path('tests/test_dashboard_bridge_compat.py')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              '    "update_provider",\n)\n',
+              '    "update_provider",\n    "upsert_provider_source",\n)\n',
+              'compat optional source method',
+          )
+          anchor = '''    acquired = registry.acquire_owned_dashboard_bridge()\n    assert acquired is True\n    registry.release_owned_dashboard_bridge()\n\n    originals = {\n'''
+          replacement = '''    acquired = registry.acquire_owned_dashboard_bridge()\n    assert acquired is True\n    registry.release_owned_dashboard_bridge()\n\n    originals = {\n'''
+          if text.count(anchor) != 1:
+              raise SystemExit(f'compat baseline anchor count={text.count(anchor)}')
+          # Insert missing-upsert case after originals is constructed, not before.
+          after_originals = '''    originals = {\n        name: getattr(ProviderConfigService, name, None)\n        for name in OPTIONAL_METHODS\n    }\n\n    try:\n'''
+          case = '''    originals = {\n        name: getattr(ProviderConfigService, name, None)\n        for name in OPTIONAL_METHODS\n    }\n\n    try:\n        # Source-hint persistence cleanup is optional. If this host lacks the\n        # Source upsert boundary, retain the model-card transport UI but do not\n        # project a Source hint that cannot be safely stripped on save.\n        if hasattr(ProviderConfigService, "upsert_provider_source"):\n            delattr(ProviderConfigService, "upsert_provider_source")\n        acquired = registry.acquire_owned_dashboard_bridge()\n        assert acquired is True\n        assert getattr(\n            ProviderConfigService.get_provider_schema,\n            "_volcengine_provider_schema_wrapper",\n            False,\n        )\n        registry.release_owned_dashboard_bridge()\n        if originals.get("upsert_provider_source") is not None:\n            setattr(\n                ProviderConfigService,\n                "upsert_provider_source",\n                originals["upsert_provider_source"],\n            )\n\n'''
+          text = replace_once(text, after_originals, case, 'compat missing source upsert')
+          path.write_text(text, encoding='utf-8')
+
+          # ---- real browser matrix future-compatible acceptance ----
+          path = Path('tests/e2e/provider_card_matrix/browser_matrix.py')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              'CANONICAL_VIDEO_KEY = "volcengine_video_input_enabled"\n',
+              'CANONICAL_VIDEO_KEY = "volcengine_video_input_enabled"\n'
+              'SOURCE_HINT_MARKER = "视频请求通道是逐模型卡的请求转发设置"\n',
+              'browser hint marker',
+          )
+          marker = '\n\nasync def login(page: Page) -> None:\n'
+          helper = '''\n\nasync def source_transport_hint_visible(page: Page, *, wait: bool) -> bool:\n    locator = page.locator(\n        ".provider-config-shell .v-alert", has_text=SOURCE_HINT_MARKER\n    ).first\n    if wait:\n        try:\n            await expect(locator).to_be_visible(timeout=5_000)\n        except Exception:\n            return False\n    return await locator.is_visible()\n'''
+          if text.count(marker) != 1:
+              raise SystemExit(f'browser hint helper marker count={text.count(marker)}')
+          text = text.replace(marker, helper + marker)
+          text = replace_once(
+              text,
+              '        result["stages"]["source_save"] = True\n        await page.screenshot(\n',
+              '        result["stages"]["source_save"] = True\n'
+              '        result["source_transport_hint_visible"] = (\n'
+              '            await source_transport_hint_visible(page, wait=case.owned)\n'
+              '        )\n'
+              '        if not case.owned and result["source_transport_hint_visible"]:\n'
+              '            result["errors"].append(\n'
+              '                "foreign Source leaked Volcengine transport guidance"\n'
+              '            )\n'
+              '        await page.screenshot(\n',
+              'browser capture source hint',
+          )
+          old_accept = '''        if case.owned:\n            if result["model_create_video_control_count"] != 1:\n                result["errors"].append(\n                    "owned model create dialog does not expose exactly one video transport control"\n                )\n            if result["model_edit_video_control_count"] != 1:\n                result["errors"].append(\n                    "owned model edit dialog does not expose exactly one video transport control"\n                )\n        else:\n'''
+          new_accept = '''        if case.owned:\n            direct_create_path = result["model_create_video_control_count"] == 1\n            guided_edit_path = (\n                result.get("source_transport_hint_visible") is True\n                and result["model_edit_video_control_count"] == 1\n            )\n            result["model_create_transport_path"] = (\n                "direct"\n                if direct_create_path\n                else "native_source_hint_then_edit"\n                if guided_edit_path\n                else "unreachable"\n            )\n            if not (direct_create_path or guided_edit_path):\n                result["errors"].append(\n                    "owned video transport setting has neither a direct create control nor a native discoverable save-then-edit path"\n                )\n            if result["model_edit_video_control_count"] != 1:\n                result["errors"].append(\n                    "owned model edit dialog does not expose exactly one video transport control"\n                )\n        else:\n'''
+          text = replace_once(text, old_accept, new_accept, 'browser future-compatible acceptance')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - run: git diff --check
+
+      - name: Run focused regressions on supported AstrBot baselines
+        run: |
+          python -m pip install uv
+          for VERSION in v4.26.1 v4.27.2; do
+            rm -rf AstrBot
+            git clone --depth 1 --branch "$VERSION" https://github.com/AstrBotDevs/AstrBot.git AstrBot
+            uv sync --directory AstrBot
+            mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
+            rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
+            uv run --directory AstrBot python ../tests/test_model_card_ui_scope.py
+            uv run --directory AstrBot python ../tests/test_dashboard_save_boundary.py
+            uv run --directory AstrBot python ../tests/test_dashboard_bridge_compat.py
+          done
+
+      - name: Commit production and persistent regressions only
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add registry.py tests/test_model_card_ui_scope.py tests/test_dashboard_save_boundary.py tests/test_dashboard_bridge_compat.py tests/e2e/provider_card_matrix/browser_matrix.py
+          git commit -m "fix: expose native discoverable video transport path on model creation"
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
