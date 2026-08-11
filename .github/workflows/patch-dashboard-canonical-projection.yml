@@ -1,0 +1,128 @@
+name: Patch Dashboard canonical projection
+
+on:
+  push:
+    branches:
+      - refactor/0.1.15-feedback-boundary
+    paths:
+      - .github/workflows/patch-dashboard-canonical-projection.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/0.1.15-feedback-boundary
+          fetch-depth: 0
+
+      - name: Apply narrow Dashboard projection fix and regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          registry = Path('registry.py')
+          text = registry.read_text(encoding='utf-8')
+          old = '''        # The canonical value remains ordinary data but has no shared schema
+          # item, so it is not rendered on foreign cards.
+          provider.setdefault(VIDEO_INPUT_ENABLED_KEY, video_input_enabled(provider))
+          provider[_video_ui_key(source_id)] = provider[VIDEO_INPUT_ENABLED_KEY]
+          '''
+          new = '''        # Dashboard is a projection, not persistence. AstrBotConfig renders
+          # unknown iterable keys through its fallback renderer, so returning the
+          # canonical key would expose a second raw text field beside the intended
+          # Source-scoped switch. Preserve its value only in the short-lived UI
+          # key; save wrappers translate that UI value back to the canonical key.
+          current_value = video_input_enabled(provider)
+          provider.pop(VIDEO_INPUT_ENABLED_KEY, None)
+          provider[_video_ui_key(source_id)] = current_value
+          '''
+          if old not in text:
+              raise SystemExit('registry projection snippet not found exactly once')
+          if text.count(old) != 1:
+              raise SystemExit(f'unexpected projection snippet count={text.count(old)}')
+          registry.write_text(text.replace(old, new), encoding='utf-8')
+
+          test = Path('tests/test_model_card_ui_scope.py')
+          text = test.read_text(encoding='utf-8')
+          old = '''            {"id": "ark-A/m", "provider_source_id": "ark-A", "model": "m"},
+                      {"id": "plan-A/m", "provider_source_id": "plan-A", "model": "m"},
+          '''
+          new = '''            {
+                          "id": "ark-A/m",
+                          "provider_source_id": "ark-A",
+                          "model": "m",
+                          VIDEO_INPUT_ENABLED_KEY: True,
+                      },
+                      {
+                          "id": "plan-A/m",
+                          "provider_source_id": "plan-A",
+                          "model": "m",
+                          VIDEO_INPUT_ENABLED_KEY: False,
+                      },
+          '''
+          if old not in text:
+              raise SystemExit('test provider fixture snippet not found')
+          text = text.replace(old, new)
+          old = '''    assert ark_card[ark_ui] is False
+              assert plan_card[plan_ui] is False
+              assert VIDEO_INPUT_ENABLED_KEY in ark_card
+              assert VIDEO_INPUT_ENABLED_KEY in plan_card
+              assert VIDEO_INPUT_ENABLED_KEY not in foreign_card
+          '''
+          new = '''    # The Dashboard projection carries the configured value only through the
+              # temporary Source-scoped UI key. The canonical persistence key must
+              # not be present in the returned iterable or AstrBot's fallback
+              # renderer exposes it as a raw text field.
+              assert ark_card[ark_ui] is True
+              assert plan_card[plan_ui] is False
+              assert VIDEO_INPUT_ENABLED_KEY not in ark_card
+              assert VIDEO_INPUT_ENABLED_KEY not in plan_card
+              assert VIDEO_INPUT_ENABLED_KEY not in foreign_card
+          '''
+          if old not in text:
+              raise SystemExit('test projection assertions snippet not found')
+          test.write_text(text.replace(old, new), encoding='utf-8')
+
+          workflow = Path('.github/workflows/probe-real-dashboard-ui.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old = '''      - tests/e2e/provider_card_matrix/browser_matrix.py
+          '''
+          new = '''      - tests/e2e/provider_card_matrix/browser_matrix.py
+                - registry.py
+                - providers.py
+                - capabilities/**
+          '''
+          if old not in text:
+              raise SystemExit('browser workflow paths snippet not found')
+          workflow.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+      - run: git diff --check
+
+      - name: Install AstrBot 4.27.2 test fixture
+        run: |
+          git clone --depth 1 --branch v4.27.2 https://github.com/AstrBotDevs/AstrBot.git AstrBot
+          python -m pip install uv
+          uv sync --directory AstrBot
+          mkdir -p AstrBot/data/plugins/astrbot_plugin_volcengine_provider
+          rsync -a --exclude '.git' --exclude '.github' --exclude 'AstrBot' ./ AstrBot/data/plugins/astrbot_plugin_volcengine_provider/
+
+      - name: Run focused regression suite
+        run: |
+          uv run --directory AstrBot python ../tests/test_model_card_ui_scope.py
+          uv run --directory AstrBot python ../tests/test_dashboard_save_boundary.py
+          uv run --directory AstrBot python ../tests/test_dashboard_bridge_compat.py
+
+      - name: Commit production fix and remove construction workflow
+        run: |
+          rm .github/workflows/patch-dashboard-canonical-projection.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add registry.py tests/test_model_card_ui_scope.py .github/workflows/probe-real-dashboard-ui.yml .github/workflows/patch-dashboard-canonical-projection.yml
+          git commit -m "fix: hide canonical video transport key from Dashboard projection"
+          git push origin HEAD:refactor/0.1.15-feedback-boundary
