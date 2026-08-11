@@ -1,22 +1,162 @@
 name: Seedance Image To Video Test
 
 on:
+  push:
+    paths:
+      - '.github/seedance-image-trigger.txt'
   workflow_dispatch:
-    inputs:
-      image_url:
-        description: Public reference image URL
-        required: true
-      prompt:
-        description: Video motion prompt
-        required: true
-        default: "Keep the character identity consistent, cinematic first person MMA action, the blond muscular fighter moves toward the camera, punches, sweat particles, realistic motion --ratio 16:9 --dur 5"
+
+permissions:
+  contents: read
 
 jobs:
   generate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+      MODEL_ID: doubao-seedance-1-5-pro-251215
+      IMAGE_URL: https://raw.githubusercontent.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/main/assets/seedance_test/blond_mma_reference_upload_test.jpg
     steps:
-      - name: Prepare image-to-video test
+      - name: Validate secret presence
+        shell: bash
         run: |
-          echo "Seedance image-to-video test pipeline ready"
-          echo "Image: ${{ github.event.inputs.image_url }}"
-          echo "Prompt: ${{ github.event.inputs.prompt }}"
+          if [ -z "$ARK_API_KEY" ]; then
+            echo "HUOSHANYINQINGAPI is unavailable to this workflow"
+            exit 2
+          fi
+          echo "Secret is available (value intentionally not printed)."
+
+      - name: Verify reference image URL
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, urllib.request
+          url = os.environ['IMAGE_URL']
+          req = urllib.request.Request(url, headers={'User-Agent':'github-actions'})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              content_type = r.headers.get('Content-Type','')
+              data = r.read()
+          print('reference content-type:', content_type)
+          print('reference bytes:', len(data))
+          if len(data) < 1024:
+              raise SystemExit('Reference image download unexpectedly small')
+          if not content_type.startswith('image/'):
+              raise SystemExit('Reference URL did not return an image')
+          open('reference_download_test.jpg','wb').write(data)
+          PY
+
+      - name: Create Seedance image-to-video task
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          prompt = (
+              "Keep the same adult blond muscular MMA fighter and the same octagon setting from the reference image. "
+              "First-person POV close combat-sports training: he advances toward the camera, throws a fast controlled punch combination toward the POV, then resets his guard. "
+              "Natural muscular motion, sweat particles catching the overhead lights, subtle handheld impact, cinematic photorealism, identity and hairstyle remain consistent, no blood, no visible injury. "
+              "--ratio 16:9 --dur 5"
+          )
+          payload = {
+              'model': os.environ['MODEL_ID'],
+              'content': [
+                  {'type':'text','text':prompt},
+                  {'type':'image_url','image_url':{'url':os.environ['IMAGE_URL']}}
+              ],
+              'duration': 5,
+              'generate_audio': False,
+          }
+          req = urllib.request.Request(
+              'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
+              data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+              headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['ARK_API_KEY']},
+              method='POST',
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  data=json.loads(r.read().decode('utf-8'))
+          except urllib.error.HTTPError as e:
+              body=e.read().decode('utf-8','replace')
+              print(f'Create task HTTP {e.code}: {body}')
+              raise
+          print(json.dumps(data, ensure_ascii=False))
+          task_id=data.get('id')
+          if not task_id:
+              raise SystemExit('No task id returned')
+          with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as f:
+              f.write(f'TASK_ID={task_id}\n')
+          with open('seedance_i2v_task.json','w',encoding='utf-8') as f:
+              json.dump({'task_id':task_id,'model':os.environ['MODEL_ID'],'image_url':os.environ['IMAGE_URL'],'prompt':prompt},f,ensure_ascii=False,indent=2)
+          PY
+
+      - name: Poll task and download video
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          task_id=os.environ['TASK_ID']
+          headers={'Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          status_url=f'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/{task_id}'
+          def find_video_url(obj):
+              if isinstance(obj,dict):
+                  for key in ('video_url','videoUrl'):
+                      v=obj.get(key)
+                      if isinstance(v,str) and v.startswith(('http://','https://')):
+                          return v
+                  for v in obj.values():
+                      x=find_video_url(v)
+                      if x:return x
+              elif isinstance(obj,list):
+                  for v in obj:
+                      x=find_video_url(v)
+                      if x:return x
+              return None
+          last=None
+          for attempt in range(90):
+              req=urllib.request.Request(status_url,headers=headers,method='GET')
+              try:
+                  with urllib.request.urlopen(req,timeout=60) as r:
+                      data=json.loads(r.read().decode('utf-8'))
+              except urllib.error.HTTPError as e:
+                  body=e.read().decode('utf-8','replace')
+                  print(f'Poll HTTP {e.code}: {body}')
+                  raise
+              last=data
+              status=data.get('status','')
+              print(f'poll {attempt+1}: {status}')
+              if status=='succeeded':
+                  video_url=find_video_url(data)
+                  if not video_url:
+                      print(json.dumps(data,ensure_ascii=False,indent=2))
+                      raise SystemExit('Task succeeded but no video_url found')
+                  with open('seedance_i2v_result.json','w',encoding='utf-8') as f:
+                      json.dump(data,f,ensure_ascii=False,indent=2)
+                  req2=urllib.request.Request(video_url,headers={'User-Agent':'github-actions'})
+                  with urllib.request.urlopen(req2,timeout=120) as r, open('seedance_blond_mma_i2v.mp4','wb') as out:
+                      while True:
+                          chunk=r.read(1024*1024)
+                          if not chunk:break
+                          out.write(chunk)
+                  size=os.path.getsize('seedance_blond_mma_i2v.mp4')
+                  print('Downloaded video bytes:',size)
+                  if size<1024:raise SystemExit('Downloaded video unexpectedly small')
+                  raise SystemExit(0)
+              if status in ('failed','cancelled'):
+                  print(json.dumps(data,ensure_ascii=False,indent=2))
+                  raise SystemExit(f'Generation ended with status={status}')
+              time.sleep(10)
+          if last:print(json.dumps(last,ensure_ascii=False,indent=2))
+          raise SystemExit('Timed out waiting for Seedance')
+          PY
+
+      - name: Upload result for ChatGPT transfer
+        uses: actions/upload-artifact@v4
+        with:
+          name: seedance-blond-mma-i2v
+          path: |
+            reference_download_test.jpg
+            seedance_blond_mma_i2v.mp4
+            seedance_i2v_task.json
+            seedance_i2v_result.json
+          if-no-files-found: error
+          retention-days: 1
