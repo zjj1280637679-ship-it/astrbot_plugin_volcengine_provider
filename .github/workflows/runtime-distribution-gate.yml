@@ -70,7 +70,7 @@ jobs:
       matrix:
         astrbot_ref: [v4.26.1, v4.27.2]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -134,6 +134,14 @@ jobs:
           test ! -e "$target/.github"
           test ! -e "$target/tests"
           test ! -e "$target/docs"
+      - name: Install ffmpeg for the real compressed-video contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -n 1
+          ffmpeg -hide_banner -encoders 2>/dev/null | grep -q 'libx264'
       - name: Run packaged provider and Dashboard contract tests
         shell: bash
         run: |
