@@ -148,6 +148,18 @@ def main() -> None:
     _expect_value_error(
         lambda: normalize_model_fields_for_save({REASONING_MODE_KEY: "magic"})
     )
+    for key in (
+        TEMPERATURE_KEY,
+        TOP_P_KEY,
+        FREQUENCY_PENALTY_KEY,
+        PRESENCE_PENALTY_KEY,
+    ):
+        for non_finite in ("nan", "NaN", "inf", "-inf", "Infinity", "1e309"):
+            _expect_value_error(
+                lambda key=key, value=non_finite: normalize_model_fields_for_save(
+                    {key: value}
+                )
+            )
 
     # Explicit horizontal rows outrank the same JSON keys, while missing rows do
     # nothing and therefore preserve custom_extra_body values.

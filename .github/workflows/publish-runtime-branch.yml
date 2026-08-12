@@ -92,10 +92,15 @@ jobs:
 
           rm -rf "$work"
           mkdir -p "$work"
-          WORK="$work" ARCHIVE="$archive" MANIFEST="$manifest" python - <<'PY'
+          WORK="$work" \
+          ARCHIVE="$archive" \
+          MANIFEST="$manifest" \
+          VERSION_FILE="$RUNNER_TEMP/runtime-candidate-version" \
+            python - <<'PY'
           import hashlib
           import json
           import os
+          import re
           import zipfile
           from pathlib import Path, PurePosixPath
 
@@ -105,8 +110,15 @@ jobs:
           manifest = json.loads(manifest_path.read_text('utf-8'))
           if manifest['package'] != 'astrbot_plugin_volcengine_provider':
               raise SystemExit('unexpected runtime package name')
-          if manifest['version'] != '0.1.19':
-              raise SystemExit('unexpected runtime version')
+          version = manifest.get('version')
+          if not isinstance(version, str) or not version.strip():
+              raise SystemExit('runtime manifest version is missing')
+          version = version.strip()
+          if re.fullmatch(
+              r'(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
+              version,
+          ) is None:
+              raise SystemExit(f'invalid runtime release version: {version!r}')
 
           expected = {item['path']: item for item in manifest['files']}
           if len(expected) != len(manifest['files']):
@@ -162,7 +174,18 @@ jobs:
                   target = work.joinpath(*PurePosixPath(relative).parts)
                   target.parent.mkdir(parents=True, exist_ok=True)
                   target.write_bytes(data)
+
+          metadata = (work / 'metadata.yaml').read_text('utf-8')
+          match = re.search(
+              r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', metadata
+          )
+          if match is None or match.group(1).strip() != version:
+              raise SystemExit('runtime metadata/manifest version mismatch')
+          Path(os.environ['VERSION_FILE']).write_text(version, encoding='utf-8')
           PY
+
+          runtime_version=$(cat "$RUNNER_TEMP/runtime-candidate-version")
+          test -n "$runtime_version"
 
           cd "$work"
           git init -b candidate
@@ -170,7 +193,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
           git add --all
-          git commit -m "runtime candidate: 0.1.19 from ${SOURCE_SHA}"
+          git commit -m "runtime candidate: ${runtime_version} from ${SOURCE_SHA}"
 
           candidate_sha=$(git rev-parse HEAD)
           candidate_tree=$(git rev-parse 'HEAD^{tree}')
@@ -182,6 +205,38 @@ jobs:
             old_runtime_tree=$(git rev-parse 'refs/remotes/origin/runtime^{tree}')
             if [ "$candidate_tree" = "$old_runtime_tree" ]; then
               publish_needed=false
+            else
+              old_runtime_metadata="$RUNNER_TEMP/old-runtime-metadata.yaml"
+              git show refs/remotes/origin/runtime:metadata.yaml \
+                > "$old_runtime_metadata"
+              CANDIDATE_VERSION="$runtime_version" \
+              OLD_RUNTIME_METADATA="$old_runtime_metadata" \
+                python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          pattern = re.compile(
+              r'(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\Z'
+          )
+          candidate = os.environ['CANDIDATE_VERSION']
+          metadata = Path(os.environ['OLD_RUNTIME_METADATA']).read_text('utf-8')
+          match = re.search(
+              r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', metadata
+          )
+          current = match.group(1).strip() if match is not None else ''
+          if pattern.fullmatch(current) is None:
+              raise SystemExit(
+                  f'current runtime has invalid release version: {current!r}'
+              )
+          if tuple(map(int, candidate.split('.'))) <= tuple(
+              map(int, current.split('.'))
+          ):
+              raise SystemExit(
+                  'changed runtime tree requires a strictly newer version: '
+                  f'candidate={candidate} current={current}'
+              )
+          PY
             fi
           fi
 

@@ -9,6 +9,7 @@ persisted model card.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -250,6 +251,8 @@ def _normalize_float(
         value = float(raw)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Invalid numeric value for {key}: {raw!r}") from exc
+    if not math.isfinite(value):
+        raise ValueError(f"{key} must be a finite number")
     if value < minimum or value > maximum:
         raise ValueError(f"{key} must be between {minimum} and {maximum}")
     provider_config[key] = value

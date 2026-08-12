@@ -35,6 +35,14 @@ Runtime package / runtime branch
 
 The release process is **allow-list based**, not deny-list based. A new development file is excluded by default until its runtime necessity is demonstrated.
 
+`metadata.yaml` is the release-version source for the active distribution
+chain. The builder copies that value into the runtime manifest; candidate and
+installed-package validators compare their own `metadata.yaml` with that exact
+manifest. Active release workflows must not duplicate the current plugin
+version as a numeric literal. Release versions use three unsigned numeric
+parts. If the generated runtime tree differs from the current `runtime` tree,
+its version must be strictly newer; identical trees remain a no-op.
+
 ## Runtime allow-list for this plugin
 
 Root files:

@@ -47,6 +47,14 @@ metadata/*.py
 
 Only files required by Python imports, AstrBot plugin discovery/configuration, runtime UI identity, or licensing belong here.
 
+The manifest version is derived from the packaged `metadata.yaml`. Active
+build, candidate, and native-install workflows must compare against that
+manifest rather than embedding the current plugin version independently. This
+keeps one version bump from leaving a stale validator behind. Versions use an
+unsigned three-part numeric format. A changed runtime tree must carry a version
+strictly newer than the currently published runtime; an identical tree is a
+no-op.
+
 ## 5. Development-only classes
 
 The following are excluded even if public in the development repository:

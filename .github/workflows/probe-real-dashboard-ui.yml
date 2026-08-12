@@ -22,12 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: git clone --depth 1 --branch v4.27.2 https://github.com/AstrBotDevs/AstrBot.git AstrBot
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           # This workflow owns a long-running `uv run astrbot` evidence server.
           # Caching provides little value here and previously caused the action's
@@ -35,10 +35,10 @@ jobs:
           enable-cache: false
       - run: uv sync --directory AstrBot
       - name: Setup pnpm exactly as AstrBot v4.27.2 Dashboard CI
-        uses: pnpm/action-setup@v6.0.9
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
           version: 10.28.2
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '24.13.0'
           cache: pnpm
@@ -146,7 +146,7 @@ jobs:
       - name: Show AstrBot log on hard failure
         if: failure()
         run: cat /tmp/astrbot-e2e.log || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: real-dashboard-model-fields-0.1.19
