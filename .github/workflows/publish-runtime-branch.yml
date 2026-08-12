@@ -299,14 +299,50 @@ jobs:
       - postpublish-native-install
     if: >-
       always() &&
-      needs.prepare-candidate.outputs.publish_needed == 'true' &&
-      needs.prepare-candidate.outputs.candidate_branch != ''
+      needs.prepare-candidate.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
     steps:
+      - name: Delete stale candidate refs that already equal runtime
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/promoted-candidate-cleanup"
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          git init "$work"
+          cd "$work"
+
+          runtime_sha=$(git ls-remote "$remote" refs/heads/runtime | awk '{print $1}')
+          test -n "$runtime_sha"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          while read -r candidate_sha candidate_ref; do
+            test -n "$candidate_sha" || continue
+            test "$candidate_sha" = "$runtime_sha" || continue
+            case "$candidate_ref" in
+              refs/heads/runtime-candidate-*) ;;
+              *) continue ;;
+            esac
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+              push "$remote" \
+              ":${candidate_ref}" \
+              "--force-with-lease=${candidate_ref}:${candidate_sha}"
+          done < <(git ls-remote --heads "$remote" 'refs/heads/runtime-candidate-*')
+
+          if git ls-remote --heads "$remote" 'refs/heads/runtime-candidate-*' \
+            | awk -v runtime_sha="$runtime_sha" '$1 == runtime_sha { found=1 } END { exit found ? 0 : 1 }'
+          then
+            echo 'promoted candidate cleanup left an exact runtime duplicate' >&2
+            exit 1
+          fi
+          echo 'RUNTIME_PROMOTED_CANDIDATE_CLEANUP=OK'
       - name: Delete only the unchanged candidate ref created by this run
+        if: >-
+          needs.prepare-candidate.outputs.publish_needed == 'true' &&
+          needs.prepare-candidate.outputs.candidate_branch != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -314,7 +350,10 @@ jobs:
           CANDIDATE_SHA: ${{ needs.prepare-candidate.outputs.candidate_sha }}
         run: |
           set -euo pipefail
+          work="$RUNNER_TEMP/current-candidate-cleanup"
           remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          git init "$work"
+          cd "$work"
           actual=$(git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" | awk '{print $1}')
           if [ -z "$actual" ]; then
             echo 'RUNTIME_CANDIDATE_CLEANUP=ALREADY_ABSENT'
