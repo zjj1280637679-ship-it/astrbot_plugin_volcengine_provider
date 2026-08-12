@@ -2,6 +2,18 @@ name: 0.1.19 Real AstrBot Dashboard Model-Field Evidence
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - release/0.1.19-model-card-fields
+    paths:
+      - .github/workflows/probe-real-dashboard-ui.yml
+      - tests/e2e/provider_card_matrix/browser_matrix.py
+      - tests/e2e/provider_card_matrix/browser_matrix_0_1_19.py
+      - registry.py
+      - main.py
+      - providers.py
+      - adapters/video.py
+      - capabilities/**
   pull_request:
     branches: [main]
     paths:
