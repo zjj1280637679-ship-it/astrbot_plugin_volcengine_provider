@@ -1,6 +1,16 @@
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "decision_id": "D-XXX",
+  "lifecycle": {
+    "status": "candidate",
+    "introduced_in": "",
+    "scope": "",
+    "supersedes": [],
+    "superseded_by": null,
+    "invalidators": [],
+    "reconsider_if": [],
+    "last_verified": ""
+  },
   "decision": "Describe the concrete action being considered.",
   "trigger": "What user goal, failure, or new condition caused this decision to be considered?",
   "rights": {
