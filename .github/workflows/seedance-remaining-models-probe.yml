@@ -35,14 +35,14 @@ jobs:
       - name: Validate secret
         shell: bash
         env:
-          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+          SEEDANCE_API_KEY: ${{ secrets.VOLCENGINE_SEEDANCE_API_KEY }}
         run: |
-          test -n "$ARK_API_KEY" || { echo 'HUOSHANYINQINGAPI unavailable'; exit 2; }
+          test -n "$SEEDANCE_API_KEY" || { echo 'CONFIGURATION_ERROR: VOLCENGINE_SEEDANCE_API_KEY unavailable; NO_API_CALL'; exit 2; }
 
       - name: Run standardized T2V probe
         shell: bash
         env:
-          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+          SEEDANCE_API_KEY: ${{ secrets.VOLCENGINE_SEEDANCE_API_KEY }}
         run: |
           mkdir -p probe_output
           python3 - <<'PY'
@@ -55,7 +55,7 @@ jobs:
               '--ratio 16:9 --dur 5'
           )
           base='https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks'
-          headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['SEEDANCE_API_KEY']}
           payload={'model':model,'content':[{'type':'text','text':prompt}]}
           record={'experiment':'D-003 remaining exact-model executability probe','model':model,'prompt':prompt,'payload_except_model':{'content':payload['content']},'start_unix':time.time()}
           def save():
@@ -69,7 +69,7 @@ jobs:
           record['create_response']=created; task_id=created.get('id')
           if not task_id:
               record['final_state']='no_task_id'; record['end_unix']=time.time(); record['wall_seconds']=record['end_unix']-record['start_unix']; save(); raise SystemExit(0)
-          record['task_id']=task_id; status_url=base+'/'+task_id; poll_headers={'Authorization':'Bearer '+os.environ['ARK_API_KEY']}; last=None
+          record['task_id']=task_id; status_url=base+'/'+task_id; poll_headers={'Authorization':'Bearer '+os.environ['SEEDANCE_API_KEY']}; last=None
           for attempt in range(90):
               req=urllib.request.Request(status_url,headers=poll_headers,method='GET')
               try:

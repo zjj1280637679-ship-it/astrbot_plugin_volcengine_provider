@@ -11,7 +11,9 @@
 - `0.1.17` 已在仓库/`runtime` 发行层完成发布，不是候选版；AstrBot 商店记录是否已刷新为 `0.1.17`、下载源是否实际解析到 `runtime`，以及真实 Windows 商店安装是否成功，仍作为外部验收前沿，不由仓库成功推断。
 - 当前尚未建立不可变 tag / GitHub Release；在后续补齐发行来源链之前，可复现安装入口仍以已验证的 `runtime` 分支为准，不能把会过期的 Actions artifact 当作永久发行包。
 - 旧 `0.1.16 Core Release Gate` 已由覆盖所有目标为 `main` 的 PR / `main` push 的 0.1.17 主门禁取代；Dashboard 可达性证据流保留为仅限 `main` 的手动任务，并固定全部第三方 Action 到完整 commit SHA。
-- 真实火山协议与 6 个 Seedance 付费任务全部改为仅限 `main` 的手动显式确认，统一进入 `paid-volcengine` environment 与共享串行并发组；API Key 只注入实际检查/调用步骤，不再暴露给 checkout、依赖安装或 artifact Action。environment 的审批人与同名 secret 仍需在仓库 Settings 中配置。
+- 真实火山协议矩阵按凭据作用域拆分：`HUOSHANYINQINGAPI` 只允许普通 Ark `/models`、文本与图片检查使用；Agent Plan 只允许使用可选的 `VOLCENGINE_AGENT_PLAN_API_KEY`，未配置时明确记为 `not-run`，禁止回退复用普通 Ark Key。历史上普通 Key 调用 Plan 被 raw/plugin 同时拒绝的结果继续保留为凭据边界证据，不作为 Agent Plan 可用性结论。
+- 6 个历史 Seedance 付费工作流只允许使用 `VOLCENGINE_SEEDANCE_API_KEY`，禁止复用 `HUOSHANYINQINGAPI`。真实火山协议与这些 Seedance 任务仍仅限 `main` 手动显式确认，统一进入 `paid-volcengine` environment 与共享串行并发组；各专属 Key 只注入实际检查/调用步骤，不暴露给 checkout、依赖安装或 artifact Action。environment 的审批人与相应 Secret 仍需在仓库 Settings 中配置。
+- 明确普通模型截图的来源：截图中的候选来自对应普通 Ark 凭据当次 `/models` 动态回执，不增加静态模型白名单，也不从模型是否出现在列表或截图中推断模态、工具或长度能力。
 - 记录本次实际错误模式：仓库 ZIP 中 `.github/workflows/**` 进入商店包，Windows 解压中途失败并留下半安装目录，随后重装出现文件名/目录冲突；同时确认“开发可解释性”属于开发仓库，不应通过把 AI/测试/架构资料塞进运行包来实现。
 - 本版本不改变 0.1.16 的 Provider、音频、视频、能力反馈、migration 或 AstrBot fallback/retry 语义；变化集中在发行/安装边界。
 
@@ -22,7 +24,7 @@
 - 新增 `docs/TEST_HISTORY.md` 与 `docs/REGRESSION_SCOPE.md`：历史 QQ 音频/视频验证不会因为本版没有重复跑同一条高成本链路而被遗忘；只有媒体 adapter、AstrBot MediaResolver/媒体契约、Ark 音视频 payload 或 QQ/NapCat 输入语义发生相关变化时，才要求完整 QQ 等价链重验。
 - 明确裸供应商测试的权限边界：raw Ark 请求用于下游协议归因，不能替代 `QQ -> NapCat/OneBot -> AstrBot -> MediaResolver -> plugin adapter -> Ark/model` 的产品链；禁止为了让不等价的 WAV/MP4 fixture 变绿而放宽生产代码，避免出现“CI 可用但 QQ 不可用”。
 - 普通 Ark 真实运行证据升级为 raw-vs-plugin 对照：当前账户的 `/models`（一次观测返回 129 项）、文本和同字节 PNG 图片路径均完成对照；这些结果作为当前 L5 运行证据保存，不写成永久模型能力表。
-- 当前普通 Ark 凭据调用 Agent Plan 时，raw 与插件路径同时落在同一认证/账户边界，因此只记录为凭据/账户前提，不据此修改 Provider 生产逻辑，也不把失败归因为模型能力。
+- 当前普通 Ark 凭据调用 Agent Plan 时，raw 与插件路径同时落在同一认证/账户边界，因此只记录为“普通凭据不能替代 Plan 专属凭据”的历史边界证据，不据此修改 Provider 生产逻辑，不把失败归因为模型能力，也不把它写成 Agent Plan 可用或不可用的结论。
 - Dashboard 精细 Playwright 卡片矩阵不再作为发布硬门槛：保留真实 AstrBot 生产 Dashboard 构建、登录、Provider 页面可达的粗粒度 L4 证据，以及截图/DOM/可见文本证据采集；避免把欢迎弹窗、显示标签、固定 Source ID 或 Vuetify selector 等测试夹具假设误报成插件故障。
 - 完善 AI/项目可解释性入口：`AGENTS.md`、`docs/AI_ONBOARDING.md`、`docs/PROJECT_STATE.json`、`docs/DECISION_INDEX.json`、ADR、证据等级与测试边界共同暴露“客观条件 -> 目标 -> 当前策略 -> 历史证据 -> 重新验证条件”，但这些文件仍是解释钩子，不是运行时控制面。
 - 本版本没有重新定义已实现的 QQ 音频/视频产品接口；媒体路径按影响分析继承既有验证资产。若未来修改 `adapters/audio.py`、`adapters/video.py`、相关宿主 hook 或媒体依赖，则必须按 `REGRESSION_SCOPE.md` 重新跑对应 QQ 等价链。

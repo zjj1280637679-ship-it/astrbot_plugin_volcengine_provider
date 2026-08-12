@@ -81,6 +81,8 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 普通通道会使用你当前填写的推理 Key 调用同一 `api_base` 下的 `/models`，不会再用离线白名单把结果截成少数几项。若 `/models` 明确返回模态、工具、reasoning、上下文或输出限制，这些字段只作为**当前这一轮 Source 回执**展示：缺失字段保持未反馈；明确返回的字段（包括 `False`）只在本次模型列表响应中替换同名旧展示值，读取后即丢弃，不写回 AstrBot 全局模型元数据。
 
+README、Dashboard 或验收截图里出现的普通方舟模型，都是截图当时使用对应普通 Key 从 `/models` 动态发现的结果，不是插件静态白名单。一个模型出现在列表或截图里只证明该凭据在当次请求中看见了这个模型；不能据此推断图片、音频、视频、工具或长度能力。
+
 ## 接通 Agent Plan
 
 1. 新增 `volcengine_agent_plan_chat_completion`。
@@ -128,7 +130,7 @@ QQ Record
 - **raw Ark 测试只负责下游协议归因。** 直接发送 WAV、MP4/data URL 或其他合成 fixture，可以帮助判断 Ark payload 是否成立，但不能替代 `QQ → NapCat/OneBot → AstrBot → MediaResolver → plugin adapter → Ark/model` 的真实产品接口。
 - **不要为了测试绿灯改坏 QQ。** 一个不等价裸媒体 fixture 如果失败，首先检查测试条件是否等价；禁止为了让 CI 通过而放宽生产 adapter，导致“直接 API 测试成功、QQ 实际不可用”。
 - **历史媒体验收按影响重验。** 已验证的 QQ 定向音频/视频链记录在 `docs/TEST_HISTORY.md`；只有媒体 adapter、AstrBot 媒体契约、Ark 音视频 payload 或 QQ/NapCat 输入语义发生相关变化时，才按 `docs/REGRESSION_SCOPE.md` 重新跑完整 QQ 等价链。
-- **当前运行证据用于归因，不写成真理。** 普通 Ark 当前 `/models`、文本和同字节 PNG 图片已经完成 raw-vs-plugin 对照；Agent Plan 在使用普通 Ark 凭据时 raw/plugin 同时落在同一认证边界。这些结果只说明当前运行条件，不触发模型能力数据库或插件自有 fallback。
+- **当前运行证据用于归因，不写成真理。** 普通 Ark 当前 `/models`、文本和同字节 PNG 图片已经完成 raw-vs-plugin 对照；历史上普通 Ark 凭据在 Agent Plan 的 raw/plugin 路径同时被拒绝，只证明两类凭据不能互换。当前矩阵没有专属 Plan Key 时会明确记为 `not-run`。这些结果不触发模型能力数据库或插件自有 fallback。
 - 项目的 AI/维护入口见 `AGENTS.md`、`docs/AI_RULES.md`、`docs/KNOWLEDGE_BOUNDARY.md`、`docs/TEST_HISTORY.md`、`docs/REGRESSION_SCOPE.md` 与 `docs/PROJECT_STATE.json`。这些文件只负责解释和导航，不是运行时控制面。
 
 ## 0.1.15：请求通道不是能力真值表
@@ -246,10 +248,20 @@ registry.py
 ### 0.1.16 当前运行归因证据
 
 - 当前普通 Ark `/models`、文本以及同字节 PNG 图片完成 raw-vs-plugin 对照；这些结果用于确认下游协议/插件路径，而不是生成永久模型能力表。
-- 当前普通 Ark 凭据调用 Agent Plan 时，raw 与插件路径同时落在同一认证/账户边界，因此不会为了让 CI 变绿而修改 Agent Plan Provider。
+- 历史上曾用普通 Ark 凭据调用 Agent Plan，raw 与插件路径同时落在同一认证/账户边界。该结果继续保留为“普通凭据不能替代 Agent Plan 专属凭据”的边界证据，不是 Agent Plan 可用或不可用的结论，也不能代表专属凭据条件下的结果。
 - 直接 WAV/视频等裸 fixture 若与 QQ 输入条件不等价，不作为 QQ 产品链是否可用的单独裁决依据。
 
-真实额度测试默认跳过，只有显式注入临时环境变量时才运行。测试代码不会主动读取正式配置或保存密钥。
+### 仓库真实额度测试的凭据边界
+
+| 仓库 Secret | 唯一用途 | 缺失时的语义 |
+| --- | --- | --- |
+| `HUOSHANYINQINGAPI` | 普通 Ark 的 `/models`、文本与图片 raw-vs-plugin 运行证据 | 普通 Ark 下游协议证据不运行；禁止拿它填充 Agent Plan 或 Seedance 流程 |
+| `VOLCENGINE_AGENT_PLAN_API_KEY` | 真实运行矩阵中的 Agent Plan raw-vs-plugin 分支 | 该分支明确记为 `not-run`；不得回退复用普通 Ark Key，也不得据此判断 Agent Plan 可用性 |
+| `VOLCENGINE_SEEDANCE_API_KEY` | 6 个历史 Seedance 付费工作流 | 对应工作流不能运行；禁止复用普通 Ark Key |
+
+`VOLCENGINE_AGENT_PLAN_API_KEY` 是可选测试凭据：没有配置时，普通 Ark 矩阵仍可在自己的条件成立时运行，只有 Agent Plan 分支保持 `not-run`。6 个历史 Seedance 工作流是独立的付费实验入口，不是普通聊天 Provider 的能力白名单或模型能力结论。
+
+真实额度测试默认跳过，只有手动确认并向对应流程显式注入其专属环境变量时才运行。测试代码不会主动读取正式配置或保存密钥。
 
 ## 隐私、日志与费用
 

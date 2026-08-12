@@ -49,6 +49,10 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - The real AstrBot v4.27.2 Dashboard has been built, started, logged into, and opened at the Provider page with this plugin loaded. That is UI/host evidence, not model-capability evidence.
 - Fine Playwright provider-card automation encoded unstable harness assumptions and was retired as a release gate; coarse reachability plus evidence collection remains useful.
 - Historical QQ-oriented media validation is tracked explicitly and must be re-run based on dependency impact, not because every release must reproduce every old E2E.
+- `HUOSHANYINQINGAPI` is an ordinary-Ark-only test credential. It must not be reused for Agent Plan or Seedance workflows.
+- The real runtime matrix may exercise Agent Plan only with the optional dedicated `VOLCENGINE_AGENT_PLAN_API_KEY`; when it is absent, the Agent Plan branch is explicitly `not-run`, not failed and not inferred.
+- The six historical paid Seedance workflows may use only `VOLCENGINE_SEEDANCE_API_KEY`; they must never fall back to the ordinary Ark credential.
+- Ordinary model IDs visible in screenshots are dynamic observations from that ordinary credential's current `/models` response. They are not a static allow-list and do not establish model capability.
 
 ## Current expected outcome
 
@@ -59,6 +63,7 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - Provider-specific configuration remains isolated from foreign providers.
 - Raw upstream tests are used for downstream protocol attribution, while QQ compatibility is judged only by a QQ-equivalent media path.
 - Historical successful paths remain evidence until an impact edge invalidates their conditions.
+- Every paid workflow receives only the credential matching its endpoint and evidence scope. A missing optional Agent Plan credential produces `not-run`; a missing required Seedance credential fails before any API call. Neither path may reuse another scope's key.
 
 ## Current strategy
 
@@ -72,6 +77,8 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - Prefer AstrBot-native precedent and minimal existence experiments before constructing new automation around an assumed interface.
 - Use `TEST_HISTORY` + `REGRESSION_SCOPE` before deciding whether audio/video needs a full QQ-equivalent rerun.
 - Never broaden media production code merely to make a non-equivalent raw fixture pass.
+- Keep `HUOSHANYINQINGAPI`, `VOLCENGINE_AGENT_PLAN_API_KEY`, and `VOLCENGINE_SEEDANCE_API_KEY` in disjoint workflow scopes. Never use one as another's fallback.
+- Treat screenshots and ordinary Ark `/models` results as current Source observations only; do not create a static model allow-list or infer capability from list membership.
 
 ## Current release state
 
@@ -81,7 +88,7 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 
 Publication safety is part of the release contract. The main gate covers all pull requests targeting `main` and all `main` pushes, and publication is serialized. The generated runtime tree is compared with `runtime` first; an identical tree is a no-op that skips both validation matrices and promotion. When content changes, the run creates one unique temporary candidate branch and explicitly calls the reusable AstrBot `4.26.1` / `4.27.2` × `repo_branch` / `download_url` validator before promotion. Immediately before promotion it re-reads `origin/main`, then updates `runtime` with an exact old-SHA `force-with-lease`. Git has no read-only compare-and-swap for an unchanged `main` ref, so these are deliberately not described as one atomic transaction: a main push in the final update interval receives its own subsequent gate/publisher, while publication serialization and the runtime lease prevent it from being overwritten by a concurrent publisher. After a real promotion, the same publish run explicitly calls the same reusable four-cell validator against the promoted `runtime`; this post-publish check is a blocking publication job.
 
-Current ordinary Ark `/models`, text, and image raw-vs-plugin checks remain downstream L5 attribution evidence. Current Agent Plan checks with an ordinary-Ark credential fail in both raw and plugin paths at the same authentication/account boundary and therefore do not justify a production-code change. Audio/video product compatibility is not redefined by those raw probes; see `TEST_HISTORY` and `REGRESSION_SCOPE`.
+Current ordinary Ark `/models`, text, and image raw-vs-plugin checks remain downstream L5 attribution evidence and use only `HUOSHANYINQINGAPI`. The ordinary model IDs captured in screenshots come from that run's dynamic `/models` receipt; they are not a maintained allow-list or capability claim. Agent Plan runtime evidence may be collected only when the optional `VOLCENGINE_AGENT_PLAN_API_KEY` is present; otherwise that branch is `not-run`. The historical raw/plugin rejection produced by sending an ordinary Ark credential to Agent Plan remains useful only as credential-boundary evidence and is not an Agent Plan availability verdict. The six historical Seedance workflows are separately scoped to `VOLCENGINE_SEEDANCE_API_KEY`. Audio/video product compatibility is not redefined by those raw probes; see `TEST_HISTORY` and `REGRESSION_SCOPE`.
 
 The remaining external frontier is to observe the AstrBot Store showing `0.1.17`, resolving its install source to `runtime`, and completing a real Windows Store installation without development files or partial-install conflicts.
 

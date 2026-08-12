@@ -29,10 +29,10 @@ jobs:
       - name: Validate secret presence
         shell: bash
         env:
-          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+          SEEDANCE_API_KEY: ${{ secrets.VOLCENGINE_SEEDANCE_API_KEY }}
         run: |
-          if [ -z "$ARK_API_KEY" ]; then
-            echo "HUOSHANYINQINGAPI is unavailable to this workflow"
+          if [ -z "$SEEDANCE_API_KEY" ]; then
+            echo "CONFIGURATION_ERROR: VOLCENGINE_SEEDANCE_API_KEY is unavailable; NO_API_CALL"
             exit 2
           fi
           echo "Secret is available (value intentionally not printed)."
@@ -59,7 +59,7 @@ jobs:
       - name: Create Seedance image-to-video task
         shell: bash
         env:
-          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+          SEEDANCE_API_KEY: ${{ secrets.VOLCENGINE_SEEDANCE_API_KEY }}
         run: |
           python3 - <<'PY'
           import json, os, urllib.request, urllib.error
@@ -81,7 +81,7 @@ jobs:
           req = urllib.request.Request(
               'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
               data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
-              headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['ARK_API_KEY']},
+              headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['SEEDANCE_API_KEY']},
               method='POST',
           )
           try:
@@ -104,12 +104,12 @@ jobs:
       - name: Poll task and download video
         shell: bash
         env:
-          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+          SEEDANCE_API_KEY: ${{ secrets.VOLCENGINE_SEEDANCE_API_KEY }}
         run: |
           python3 - <<'PY'
           import json, os, time, urllib.request, urllib.error
           task_id=os.environ['TASK_ID']
-          headers={'Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          headers={'Authorization':'Bearer '+os.environ['SEEDANCE_API_KEY']}
           status_url=f'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/{task_id}'
           def find_video_url(obj):
               if isinstance(obj,dict):

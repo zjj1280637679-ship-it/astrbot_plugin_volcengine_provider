@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "project": "astrbot_plugin_volcengine_provider",
   "active_release": "0.1.17",
   "active_branch": "main",
@@ -19,7 +19,12 @@
     "Development explainability and runtime distribution have different audiences: AI/ADR/tests/evidence belong in the development state unless a concrete runtime consumer requires them.",
     "The runtime branch is a user-consumed publication ref and must not change until a uniquely addressed candidate has passed the native installer matrix.",
     "A runtime publication can race with newer main pushes unless publication is serialized and the triggering source SHA is rechecked immediately before promotion.",
-    "A locally generated ZIP cannot by itself prove the GitHub repo-branch and download-URL paths consumed by AstrBot; candidate-branch and post-promotion native installer checks have different evidence scopes."
+    "A locally generated ZIP cannot by itself prove the GitHub repo-branch and download-URL paths consumed by AstrBot; candidate-branch and post-promotion native installer checks have different evidence scopes.",
+    "HUOSHANYINQINGAPI is scoped to ordinary Ark runtime evidence only and must not be reused for Agent Plan or Seedance workflows.",
+    "The real runtime matrix can exercise Agent Plan only with the optional VOLCENGINE_AGENT_PLAN_API_KEY; when absent, the Agent Plan branch is not-run rather than failed or inferred.",
+    "The six historical Seedance paid workflows are scoped only to VOLCENGINE_SEEDANCE_API_KEY and may not reuse an ordinary Ark key.",
+    "Ordinary model IDs shown in screenshots are dynamically discovered from the current ordinary credential's /models response; screenshot/list membership is neither a static allow-list nor model-capability evidence.",
+    "Historical raw and plugin rejection of an ordinary Ark credential at the Agent Plan endpoint is credential-boundary evidence only, not an Agent Plan availability conclusion."
   ],
   "expected_outcomes": [
     "Keep the 0.1.16 provider/runtime/capability semantics unchanged.",
@@ -34,7 +39,10 @@
     "Validate one unique temporary candidate branch on AstrBot 4.26.1 and 4.27.2 through both repo_branch and download_url before changing runtime.",
     "Serialize publication, reject source SHAs that are already stale immediately before promotion, and update runtime with an exact old-SHA force-with-lease only after candidate validation.",
     "Treat an unchanged runtime tree as a no-op instead of creating a redundant runtime commit.",
-    "After a real promotion, explicitly call the same reusable four-cell native-install validator against the promoted runtime as a blocking publish job."
+    "After a real promotion, explicitly call the same reusable four-cell native-install validator against the promoted runtime as a blocking publish job.",
+    "Keep ordinary Ark, Agent Plan, and Seedance paid-test credentials disjoint and never use one scope as another's fallback.",
+    "Represent a missing dedicated Agent Plan test credential as not-run while allowing independently authorized ordinary Ark evidence to proceed.",
+    "Keep ordinary model discovery dynamic and treat screenshots and /models list membership as observations rather than capability claims."
   ],
   "current_strategy": {
     "development_branch": "main",
@@ -54,6 +62,12 @@
     "runtime_ref_update": "force_with_lease_after_all_candidate_gates_pass",
     "runtime_unchanged_content_policy": "no_op_skip_pre_and_post_matrices_and_promotion",
     "runtime_post_publish_validation": "publish_run_explicitly_calls_the_same_reusable_4_matrix_as_a_blocking_job_after_real_promotion",
+    "ordinary_ark_test_secret": "HUOSHANYINQINGAPI_ordinary_ark_only",
+    "agent_plan_test_secret": "VOLCENGINE_AGENT_PLAN_API_KEY_optional_missing_means_not_run",
+    "seedance_test_secret": "VOLCENGINE_SEEDANCE_API_KEY_only_for_six_historical_paid_workflows",
+    "cross_credential_reuse": "forbidden",
+    "ordinary_model_screenshot_provenance": "dynamic_current_models_receipt_no_static_allow_list_no_capability_inference",
+    "historical_ordinary_key_at_plan_evidence": "credential_boundary_only_not_agent_plan_availability",
     "provider_runtime_changes_in_0_1_17": false,
     "video_control": "per_model_card_request_transport_switch",
     "astrbot_modalities_mutation": false,
@@ -112,7 +126,10 @@
     "runtime_unchanged_content_noop_skips_both_matrices_and_promotion": "configured",
     "runtime_post_publish_explicit_reusable_4_matrix": "configured_as_blocking_publish_job",
     "immutable_tag_or_github_release": "not_created_current_reproducible_install_source_is_runtime_branch",
-    "paid_volcengine_workflows": "manual_main_only_boolean_confirmation_shared_serial_concurrency_and_step_scoped_secret_configured_environment_settings_still_required",
+    "paid_volcengine_workflows": "manual_main_only_boolean_confirmation_shared_serial_concurrency_and_step_scoped_secrets_configured_environment_settings_still_required",
+    "credential_scope_contract": "configured_ordinary_ark_only_agent_plan_optional_dedicated_seedance_dedicated_no_cross_reuse",
+    "agent_plan_without_dedicated_test_secret": "not_run_missing_dedicated_agent_plan_api_key",
+    "ordinary_models_screenshot_source": "dynamic_models_response_not_static_allow_list_or_capability_claim",
     "marketplace_sync": "external_state_not_claimed_until_store_refresh_or_republish_is_observed"
   },
   "active_validation_frontier": {

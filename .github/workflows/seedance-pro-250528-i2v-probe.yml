@@ -29,9 +29,9 @@ jobs:
       - name: Validate prerequisites
         shell: bash
         env:
-          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+          SEEDANCE_API_KEY: ${{ secrets.VOLCENGINE_SEEDANCE_API_KEY }}
         run: |
-          test -n "$ARK_API_KEY" || { echo 'HUOSHANYINQINGAPI unavailable'; exit 2; }
+          test -n "$SEEDANCE_API_KEY" || { echo 'CONFIGURATION_ERROR: VOLCENGINE_SEEDANCE_API_KEY unavailable; NO_API_CALL'; exit 2; }
           python3 - <<'PY'
           import os, urllib.request
           req=urllib.request.Request(os.environ['IMAGE_URL'],headers={'User-Agent':'github-actions'})
@@ -47,7 +47,7 @@ jobs:
       - name: Run exact Pro 250528 I2V probe
         shell: bash
         env:
-          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+          SEEDANCE_API_KEY: ${{ secrets.VOLCENGINE_SEEDANCE_API_KEY }}
         run: |
           mkdir -p probe_output
           mv reference.jpg probe_output/reference.jpg
@@ -68,7 +68,7 @@ jobs:
               ]
           }
           base='https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks'
-          headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['SEEDANCE_API_KEY']}
           record={
               'experiment':'D-006 Pro 250528 exact I2V probe',
               'model':model,
@@ -97,7 +97,7 @@ jobs:
               record['final_state']='no_task_id'; record['end_unix']=time.time(); record['wall_seconds']=record['end_unix']-record['start_unix']; save(); raise SystemExit(0)
           record['task_id']=task_id
           status_url=base+'/'+task_id
-          poll_headers={'Authorization':'Bearer '+os.environ['ARK_API_KEY']}
+          poll_headers={'Authorization':'Bearer '+os.environ['SEEDANCE_API_KEY']}
           last=None
           for attempt in range(90):
               req=urllib.request.Request(status_url,headers=poll_headers,method='GET')

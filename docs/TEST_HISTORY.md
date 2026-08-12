@@ -9,8 +9,17 @@ This file records important validation evidence and prevents future agents from 
 | 0.1.13 | Architecture | Responsibility audit removed duplicate key-rotation/retry/media lifecycle logic and retained AstrBot ownership | Provider does not own AstrBot lifecycle |
 | 0.1.14 | Compatibility | AstrBot 4.26.1 / 4.27.2 matrix passed, including real synthetic Tencent Silk, trusted video attachment bridge, provider registration and real ordinary Ark text | Host integration remained compatible across the tested host versions |
 | 0.1.15 | Capability boundary | Runtime-feedback isolation, migration precedence, foreign-provider isolation and transport-failure provenance regressions passed | Feedback/config transport is not capability authority |
-| 0.1.16 release preparation | Runtime evidence | Real ordinary Ark `/models`, text and image raw-vs-plugin attribution succeeded; current ordinary-Ark credential was rejected by both raw and plugin Agent Plan paths | Current failures can be attributed without automatically blaming plugin code or inventing capability facts |
+| 0.1.16 release preparation | Runtime evidence | Real ordinary Ark `/models`, text and image raw-vs-plugin attribution succeeded; an ordinary-Ark credential was rejected by both raw and plugin Agent Plan paths | The ordinary checks provide downstream attribution. The Plan rejection proves only that the ordinary credential cannot substitute for a dedicated Plan credential; it is not an Agent Plan availability verdict |
 | 0.1.17 | Distribution boundary | Allow-list runtime build produced a ~195 KB ZIP with 21 runtime files; generated package loaded on AstrBot 4.26.1 and 4.27.2; `runtime` branch archive was published and revalidated; both versions' native plugin updaters successfully installed from the `/tree/runtime` repo source and from a direct runtime ZIP URL | Development repository state is no longer treated as the user package; the chosen runtime branch is actually consumable by the declared compatibility floor and current host |
+| 0.1.17 | Paid credential scope | Runtime workflows separate `HUOSHANYINQINGAPI` (ordinary Ark only), optional `VOLCENGINE_AGENT_PLAN_API_KEY` (Agent Plan only), and `VOLCENGINE_SEEDANCE_API_KEY` (six historical Seedance workflows only); cross-scope fallback is forbidden | Evidence can be collected only under the credential matching its endpoint. Missing dedicated Agent Plan credentials mean `not-run`, not failure; ordinary credentials must not be repurposed to manufacture Plan or Seedance evidence |
+
+## Credential-scoped evidence rules
+
+- `HUOSHANYINQINGAPI` authorizes only ordinary Ark `/models`, text, and image runtime attribution.
+- The Agent Plan portion of the real runtime matrix runs only when the optional `VOLCENGINE_AGENT_PLAN_API_KEY` exists. Without it, the result is `not_run_missing_dedicated_agent_plan_api_key`; the matrix must not substitute the ordinary key.
+- The six historical paid Seedance workflows use only `VOLCENGINE_SEEDANCE_API_KEY`. They must not reuse `HUOSHANYINQINGAPI` and do not establish ordinary chat-provider capability.
+- Historical raw/plugin rejection of an ordinary Ark key at the Agent Plan endpoint remains evidence about credential scope. It says nothing about Agent Plan availability under a valid dedicated key.
+- Ordinary model IDs captured in screenshots came from the then-current `/models` response for the ordinary credential. The project does not convert those screenshots into a static model allow-list or infer capability from list membership.
 
 ## Revalidation rules
 

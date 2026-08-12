@@ -32,6 +32,8 @@ jobs:
           python-version: '3.12'
       - name: Build allow-list runtime artifact
         run: python tools/release/build_runtime_package.py
+      - name: Verify CI credential scopes
+        run: python tests/test_credential_scope.py
       - name: Audit package inventory and hard size ceiling
         shell: bash
         run: |

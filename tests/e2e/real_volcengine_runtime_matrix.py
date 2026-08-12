@@ -41,7 +41,8 @@ from astrbot_plugin_volcengine_provider.providers import (  # noqa: E402
     ProviderVolcengineArk,
 )
 
-API_KEY = os.environ.get("ARK_API_KEY", "").strip()
+ARK_API_KEY = os.environ.get("ARK_API_KEY", "").strip()
+AGENT_PLAN_API_KEY = os.environ.get("AGENT_PLAN_API_KEY", "").strip()
 ARTIFACT_DIR = Path(os.environ.get("E2E_ARTIFACT_DIR", "e2e-artifacts"))
 
 
@@ -55,10 +56,11 @@ def safe_error(exc: BaseException) -> dict[str, Any]:
 def raw_request(
     url: str,
     *,
+    api_key: str,
     method: str = "GET",
     payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    headers = {"Authorization": f"Bearer {API_KEY}"}
+    headers = {"Authorization": f"Bearer {api_key}"}
     data = None
     if payload is not None:
         headers["Content-Type"] = "application/json"
@@ -175,7 +177,7 @@ async def plugin_text(
 
 
 async def main() -> None:
-    if not API_KEY:
+    if not ARK_API_KEY:
         raise SystemExit(
             "ARK_API_KEY is unavailable; no current runtime conclusion may be drawn"
         )
@@ -188,7 +190,7 @@ async def main() -> None:
         "type": ARK_PROVIDER_TYPE,
         "provider_type": "chat_completion",
         "provider": "volcengine",
-        "key": [API_KEY],
+        "key": [ARK_API_KEY],
         "api_base": ARK_API_BASE,
         "model": ARK_DEFAULT_MODEL,
         "timeout": 90,
@@ -196,25 +198,10 @@ async def main() -> None:
         "custom_headers": {},
         "custom_extra_body": {},
     }
-    plan_config = {
-        "id": "real-e2e-volcengine-agent-plan",
-        "type": AGENT_PLAN_PROVIDER_TYPE,
-        "provider_type": "chat_completion",
-        "provider": "volcengine",
-        "key": [API_KEY],
-        "api_base": AGENT_PLAN_API_BASE,
-        "model": AGENT_PLAN_DEFAULT_MODEL,
-        "timeout": 90,
-        "enable": True,
-        "custom_headers": {},
-        "custom_extra_body": {},
-    }
-
     ark = ProviderVolcengineArk(ark_config, settings)
-    plan = ProviderVolcengineAgentPlan(plan_config, settings)
 
     result: dict[str, Any] = {
-        "schema_version": 4,
+        "schema_version": 5,
         "evidence_level": "L5_current_downstream_protocol_attribution",
         "claim_scope": (
             "Ark/provider protocol attribution only; not QQ audio/video product "
@@ -224,12 +211,17 @@ async def main() -> None:
         "cards": {},
     }
 
-    raw_models = await asyncio.to_thread(raw_request, f"{ARK_API_BASE}/models")
+    raw_models = await asyncio.to_thread(
+        raw_request,
+        f"{ARK_API_BASE}/models",
+        api_key=ARK_API_KEY,
+    )
     ark_models = await plugin_models(ark)
 
     raw_ark_text = await asyncio.to_thread(
         raw_request,
         f"{ARK_API_BASE}/chat/completions",
+        api_key=ARK_API_KEY,
         method="POST",
         payload={
             "model": ARK_DEFAULT_MODEL,
@@ -246,6 +238,7 @@ async def main() -> None:
         raw_ark_image = await asyncio.to_thread(
             raw_request,
             f"{ARK_API_BASE}/chat/completions",
+            api_key=ARK_API_KEY,
             method="POST",
             payload={
                 "model": ARK_DEFAULT_MODEL,
@@ -292,36 +285,66 @@ async def main() -> None:
         ),
     }
 
-    plan_models = await plugin_models(plan)
-    raw_plan_text = await asyncio.to_thread(
-        raw_request,
-        f"{AGENT_PLAN_API_BASE}/chat/completions",
-        method="POST",
-        payload={
+    if AGENT_PLAN_API_KEY:
+        plan_config = {
+            "id": "real-e2e-volcengine-agent-plan",
+            "type": AGENT_PLAN_PROVIDER_TYPE,
+            "provider_type": "chat_completion",
+            "provider": "volcengine",
+            "key": [AGENT_PLAN_API_KEY],
+            "api_base": AGENT_PLAN_API_BASE,
             "model": AGENT_PLAN_DEFAULT_MODEL,
-            "messages": [{"role": "user", "content": "Reply with exactly RAW_PLAN_OK"}],
-            "stream": False,
-        },
-    )
-    plugin_plan_text = await plugin_text(plan, marker="PLUGIN_PLAN_OK")
-
-    result["cards"]["volcengine_agent_plan"] = {
-        "provider_type": "chat_completion",
-        "configured_public_model": plan.get_model(),
-        "configured_upstream_model": AGENT_PLAN_DEFAULT_MODEL,
-        "plugin_local_models": plan_models,
-        "raw_text": raw_plan_text,
-        "plugin_text": plugin_plan_text,
-        "text_attribution": classify(
-            bool(raw_plan_text.get("success")), bool(plugin_plan_text.get("success"))
-        ),
-    }
+            "timeout": 90,
+            "enable": True,
+            "custom_headers": {},
+            "custom_extra_body": {},
+        }
+        plan = ProviderVolcengineAgentPlan(plan_config, settings)
+        plan_models = await plugin_models(plan)
+        raw_plan_text = await asyncio.to_thread(
+            raw_request,
+            f"{AGENT_PLAN_API_BASE}/chat/completions",
+            api_key=AGENT_PLAN_API_KEY,
+            method="POST",
+            payload={
+                "model": AGENT_PLAN_DEFAULT_MODEL,
+                "messages": [
+                    {"role": "user", "content": "Reply with exactly RAW_PLAN_OK"}
+                ],
+                "stream": False,
+            },
+        )
+        plugin_plan_text = await plugin_text(plan, marker="PLUGIN_PLAN_OK")
+        agent_plan_attribution = classify(
+            bool(raw_plan_text.get("success")),
+            bool(plugin_plan_text.get("success")),
+        )
+        result["cards"]["volcengine_agent_plan"] = {
+            "provider_type": "chat_completion",
+            "credential_scope": "dedicated_agent_plan_api_key",
+            "configured_public_model": plan.get_model(),
+            "configured_upstream_model": AGENT_PLAN_DEFAULT_MODEL,
+            "plugin_local_models": plan_models,
+            "raw_text": raw_plan_text,
+            "plugin_text": plugin_plan_text,
+            "text_attribution": agent_plan_attribution,
+        }
+    else:
+        agent_plan_attribution = "not_run_missing_dedicated_agent_plan_api_key"
+        result["cards"]["volcengine_agent_plan"] = {
+            "provider_type": "chat_completion",
+            "credential_scope": "dedicated_agent_plan_api_key_required",
+            "execution": "skipped",
+            "reason": "optional_agent_plan_credential_missing",
+            "text_attribution": agent_plan_attribution,
+            "ordinary_ark_key_reuse_forbidden": True,
+        }
 
     result["summary"] = {
         "ark_models": result["cards"]["volcengine_ark"]["models_attribution"],
         "ark_text": result["cards"]["volcengine_ark"]["text_attribution"],
         "ark_image": result["cards"]["volcengine_ark"]["image_attribution"],
-        "agent_plan_text": result["cards"]["volcengine_agent_plan"]["text_attribution"],
+        "agent_plan_text": agent_plan_attribution,
         "qq_audio_video_product_verdict": "not_claimed_by_this_matrix",
         "production_change_allowed_without_further_attribution": False,
     }
