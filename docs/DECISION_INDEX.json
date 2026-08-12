@@ -1,9 +1,12 @@
 {
-  "schema_version": 6,
-  "release": "0.1.18",
+  "schema_version": 7,
+  "role": "warm_navigation_only",
+  "hot_state": "docs/PROJECT_STATE.json",
+  "lifecycle_policy": "docs/KNOWLEDGE_LIFECYCLE.md",
   "entries": [
     {
       "id": "ADR-0001",
+      "lifecycle": "active_constraint",
       "topic": "provider capability authority",
       "question": "May the plugin infer permanent model capability from provider/model identity?",
       "decision": "No unscoped inference. Provider plugin owns protocol adaptation; future discovery needs explicit source/lifetime/scope authority.",
@@ -13,6 +16,7 @@
     },
     {
       "id": "ADR-0002",
+      "lifecycle": "active_constraint",
       "topic": "feedback lifetime",
       "question": "May dynamic provider feedback be stored as permanent capability truth?",
       "decision": "No. Current dynamic feedback is evidence with a scope and lifetime; missing feedback is not false and stale feedback must not defeat current feedback.",
@@ -22,24 +26,37 @@
     },
     {
       "id": "ADR-0003",
+      "lifecycle": "active_constraint_scope_narrowed_by_ADR_0005",
       "topic": "dashboard schema isolation",
-      "question": "How can users edit per-model Volcengine video transport when the shared generic model-card component lacks a reliable current-Provider identity boundary?",
-      "decision": "Do not show plugin video fields in generic model cards. On each owned Provider Source, persist volcengine_video_controls_visible as presentation-only state and project a temporary exact-current-Source model-card selector. When visible and saved, write choices to each card's canonical volcengine_video_input_enabled and strip the selector; hiding it preserves selections and runtime state. Snapshot the complete model-card list before translation. If host upsert raises, restore the in-memory snapshot and use available host save_config for a compensating persistent rollback because AstrBot may already have saved before Provider reload fails. Re-raise the original host error; if rollback persistence also fails, add that failure as a note and do not claim disk restoration. Foreign Sources receive neither field, and AstrBot modalities remain unchanged.",
+      "question": "How can provider-specific video controls avoid leaking through AstrBot's shared top capability/modalities surface?",
+      "decision": "Keep the 0.1.18 top/video capability presentation on exact owned Provider Sources, with per-card volcengine_video_input_enabled as runtime truth. This decision governs the unreliable shared top capability/modalities extension surface; it does not prohibit owned saved-model edit-body rows added by 0.1.19.",
       "doc": "docs/ADR/ADR-0003-dashboard-schema-isolation.md",
       "code": ["registry.py", "capabilities/model_scope.py"],
       "tests": ["tests/test_model_card_ui_scope.py", "tests/test_dashboard_save_boundary.py", "tests/test_dashboard_bridge_compat.py", "tests/e2e/provider_card_matrix/service_matrix.py", "tests/e2e/provider_card_matrix/browser_matrix.py"]
     },
     {
       "id": "ADR-0004",
+      "lifecycle": "active_constraint",
       "topic": "legacy migration precedence",
       "question": "What does migration preserve?",
-      "decision": "Preserve user configuration intent, not a model capability fact. Precedence is canonical per-card bool > exact-provider_source_id retired 0.1.17 UI bool > older per-card bool > legacy Source bool including false > modalities clue. Wrong-Source and foreign fields never promote; remove all temporary/wrong-layer debris and leave modalities unchanged.",
+      "decision": "Preserve user configuration intent, not a model capability fact. Wrong-Source and foreign fields never promote; temporary/wrong-layer debris is removed and modalities remain host-owned.",
       "doc": "docs/ADR/ADR-0004-migration-preserves-intent.md",
       "code": ["capabilities/model_scope.py", "capabilities/source_migration.py"],
       "tests": ["tests/test_0_1_15_feedback_boundary.py"]
     },
     {
+      "id": "ADR-0005",
+      "lifecycle": "active_constraint",
+      "topic": "knowledge lifecycle and drift control",
+      "question": "How does the project retain rich history without letting old goals/frontiers remain current authority?",
+      "decision": "PROJECT_STATE is the single HOT authority. Other documents are WARM/COLD references, completed frontiers are demoted, rejected/superseded strategies retain lifecycle metadata, and CI guards version/frontier consistency.",
+      "doc": "docs/ADR/ADR-0005-knowledge-lifecycle-and-drift-control.md",
+      "code": ["tools/release/check_knowledge_state.py"],
+      "tests": [".github/workflows/runtime-distribution-gate.yml"]
+    },
+    {
       "id": "KB-0001",
+      "lifecycle": "active_constraint",
       "topic": "interaction versus judgment",
       "question": "Does successful or failed interaction grant authority to make a global capability verdict?",
       "decision": "No. Interaction is lower-level evidence; judgment requires sufficient conditions, scope, and decision authority.",
@@ -49,6 +66,7 @@
     },
     {
       "id": "REG-0001",
+      "lifecycle": "active_constraint",
       "topic": "impact-based media regression",
       "question": "Must every release repeat the full QQ audio/video E2E?",
       "decision": "No. Historical product-path evidence remains evidence until a relevant dependency edge changes; full QQ-equivalent revalidation is impact-triggered.",
@@ -57,32 +75,10 @@
       "tests": ["docs/TEST_HISTORY.md"]
     }
   ],
-  "active_evidence": {
-    "doc": "docs/E2E_MATRIX.md",
-    "goal": "Record the released 0.1.18 repository/runtime state while preserving historical 0.1.17 migration and runtime-distribution evidence and tracking the still-external AstrBot Store/Windows observation frontier",
-    "reason": "Each layer may judge only the interface it actually exercises. The Source save contract passed L3 on 4.26.1/4.27.2 and the dated 2026-08-12 real 4.27.2 Dashboard DOM run passed L4; main gate 31589741300 and publisher 31589815606 then proved the allow-list artifact, promotion, and pre/post-promotion native installer paths. Neither those results, UI evidence, nor raw provider fixtures silently redefine model capability or QQ product compatibility.",
-    "release_0_1_18_source_video_ui": {
-      "l3_service_matrix": ["4.26.1_pass", "4.27.2_pass"],
-      "l4_dashboard_4_27_2": "2026-08-12_pass",
-      "l4_observations": "Ark/Plan masters 1/1, selectors 1/1 scoped to their own 2/1 cards; close/reopen preserved selection with zero API requests; foreign 0/0; generic Ark/Plan/foreign dialogs exposed zero canonical/retired/new plugin video fields; pageErrors empty",
-      "upgrade_migration": "exact-Source boolean retired 0.1.17 UI residue is second only to canonical; wrong-Source and foreign state never promotes; all temporary and wrong-layer fields are cleaned; modalities unchanged",
-      "failed_source_upsert": {
-        "in_memory": "complete pre-call Source/model-card lists and manager mirrors restored",
-        "post_save_reload_regression": "4.26.1/4.27.2 same-id and rename cases restored persisted snapshots through host save_config and invoked reload for old Source cards",
-        "error_precedence": "original host error re-raised",
-        "secondary_failure": "persistence or old-instance reload failure attached as note; unobserved restoration not claimed"
-      }
-    },
-    "distribution_status": "0.1.18 repository/runtime release complete: release main 22444f47154f4f88ff3157d6e6ffcce9ad2689f0, gate run 31589741300 passed, publisher run 31589815606 prepare/prepublish-4/promotion/postpublish-4 passed, and runtime 4586aa2eb573eb97a72baaaa152c727e3b35530e has 21 blobs byte-for-byte equal to the gated artifact with metadata 0.1.18. PR 5 repaired the cleanup execution context at main 9feb0d5902f4bdc88ea69b08f6d3bee25fcf8f2e; main gate 31590820116 and no-op publisher 31590908018 passed, the unchanged runtime was not re-promoted, and no runtime-candidate ref remains. External AstrBot Store refresh and real Windows Store installation remain unobserved."
+  "historical_state": {
+    "release_snapshots": "docs/archive/",
+    "test_history": "docs/TEST_HISTORY.md",
+    "release_history": "CHANGELOG.md"
   },
-  "ai_entry_points": [
-    "AGENTS.md",
-    "docs/AI_RULES.md",
-    "docs/KNOWLEDGE_BOUNDARY.md",
-    "docs/AI_ONBOARDING.md",
-    "docs/PROJECT_STATE.json",
-    "docs/TEST_HISTORY.md",
-    "docs/REGRESSION_SCOPE.md"
-  ],
-  "warning": "This index is navigation metadata for humans and AI agents. It has no runtime authority."
+  "warning": "Navigation only. Do not add release/current_goal/active_evidence/current_frontier copies here; read docs/PROJECT_STATE.json for HOT state."
 }
