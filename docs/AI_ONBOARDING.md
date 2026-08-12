@@ -25,6 +25,7 @@ This document lets an AI or new maintainer reconstruct the project quickly witho
 | Machine semantics | Stable meanings for capability/feedback/config fields | `capabilities/SEMANTICS.json` |
 | Persistent regressions | Current contract tests | `tests/test_*` |
 | Product-path evidence | Host integration, UI evidence, real API attribution | `docs/E2E_MATRIX.md` |
+| Runtime distribution and publication | Development/runtime boundary, package allow-list, promotion safety, and external validation frontier | `docs/RELEASE_BOUNDARY.md`, `docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md`, `docs/PROJECT_STATE.json` |
 
 ## The five questions to answer before editing
 
@@ -72,11 +73,17 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - Use `TEST_HISTORY` + `REGRESSION_SCOPE` before deciding whether audio/video needs a full QQ-equivalent rerun.
 - Never broaden media production code merely to make a non-equivalent raw fixture pass.
 
-## Current release candidate
+## Current release state
 
-`0.1.16` is a stabilization release for capability/feedback boundaries, failure provenance, migration, Dashboard isolation, runtime attribution, and AI/project explainability. The historical branch name still contains `0.1.15`; do not infer the release version from the branch name.
+`0.1.17` is released at the repository/runtime-distribution layer. `main` remains the development state; the minimal user package is published from `runtime`. It is not an active release candidate, and historical release branch names must not be used to infer current status.
 
-Current ordinary Ark `/models`, text, and image raw-vs-plugin checks provide downstream L5 attribution evidence. Current Agent Plan checks with an ordinary-Ark credential fail in both raw and plugin paths with the same authentication/account boundary and therefore do not justify a production-code change. Audio/video product compatibility is not redefined by those raw probes; see `TEST_HISTORY` and `REGRESSION_SCOPE`.
+0.1.17 preserves the 0.1.16 Provider, media, capability-feedback, migration, and AstrBot fallback/retry semantics. Its release change is the development/runtime boundary: the store package is generated from an explicit allow-list instead of shipping the development repository archive.
+
+Publication safety is part of the release contract. The main gate covers all pull requests targeting `main` and all `main` pushes, and publication is serialized. The generated runtime tree is compared with `runtime` first; an identical tree is a no-op that skips both validation matrices and promotion. When content changes, the run creates one unique temporary candidate branch and explicitly calls the reusable AstrBot `4.26.1` / `4.27.2` × `repo_branch` / `download_url` validator before promotion. Immediately before promotion it re-reads `origin/main`, then updates `runtime` with an exact old-SHA `force-with-lease`. Git has no read-only compare-and-swap for an unchanged `main` ref, so these are deliberately not described as one atomic transaction: a main push in the final update interval receives its own subsequent gate/publisher, while publication serialization and the runtime lease prevent it from being overwritten by a concurrent publisher. After a real promotion, the same publish run explicitly calls the same reusable four-cell validator against the promoted `runtime`; this post-publish check is a blocking publication job.
+
+Current ordinary Ark `/models`, text, and image raw-vs-plugin checks remain downstream L5 attribution evidence. Current Agent Plan checks with an ordinary-Ark credential fail in both raw and plugin paths at the same authentication/account boundary and therefore do not justify a production-code change. Audio/video product compatibility is not redefined by those raw probes; see `TEST_HISTORY` and `REGRESSION_SCOPE`.
+
+The remaining external frontier is to observe the AstrBot Store showing `0.1.17`, resolving its install source to `runtime`, and completing a real Windows Store installation without development files or partial-install conflicts.
 
 ## Safe AI workflow
 

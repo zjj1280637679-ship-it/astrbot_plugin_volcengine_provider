@@ -1,9 +1,10 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "project": "astrbot_plugin_volcengine_provider",
   "active_release": "0.1.17",
   "active_branch": "main",
   "status": "released_with_runtime_distribution_branch",
+  "release_phase": "released_not_release_candidate",
   "objective_conditions": [
     "Volcengine Ark is both a first-party platform for Doubao/Seed models and a serving platform for third-party/open models.",
     "AstrBot owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and Dashboard rendering.",
@@ -15,7 +16,10 @@
     "AstrBot 4.27.2 marketplace schema permits repo URLs of the form https://github.com/{owner}/{repo}/tree/{branch}.",
     "AstrBot 4.26.1 RepoZipUpdator already parses /tree/{branch} and downloads the matching branch archive, so the runtime-branch source is compatible with the declared >=4.26.1 floor.",
     "AstrBot 4.27.2's documented support_platforms keys do not include webchat; 0.1.17 therefore declares aiocqhttp only instead of publishing an unsupported metadata token.",
-    "Development explainability and runtime distribution have different audiences: AI/ADR/tests/evidence belong in the development state unless a concrete runtime consumer requires them."
+    "Development explainability and runtime distribution have different audiences: AI/ADR/tests/evidence belong in the development state unless a concrete runtime consumer requires them.",
+    "The runtime branch is a user-consumed publication ref and must not change until a uniquely addressed candidate has passed the native installer matrix.",
+    "A runtime publication can race with newer main pushes unless publication is serialized and the triggering source SHA is rechecked immediately before promotion.",
+    "A locally generated ZIP cannot by itself prove the GitHub repo-branch and download-URL paths consumed by AstrBot; candidate-branch and post-promotion native installer checks have different evidence scopes."
   ],
   "expected_outcomes": [
     "Keep the 0.1.16 provider/runtime/capability semantics unchanged.",
@@ -25,7 +29,12 @@
     "Validate the artifact users receive, not merely a development checkout.",
     "Keep the runtime package small enough that abnormal growth is detected before publication.",
     "Publish a stable runtime branch whose metadata version and marketplace repository binding match the validated release.",
-    "Prove both the branch-repo path and direct ZIP download path through AstrBot's native installers on 4.26.1 and 4.27.2."
+    "Prove both the branch-repo path and direct ZIP download path through AstrBot's native installers on 4.26.1 and 4.27.2.",
+    "Run the main release gate for every pull request targeting main and every push to main.",
+    "Validate one unique temporary candidate branch on AstrBot 4.26.1 and 4.27.2 through both repo_branch and download_url before changing runtime.",
+    "Serialize publication, reject source SHAs that are already stale immediately before promotion, and update runtime with an exact old-SHA force-with-lease only after candidate validation.",
+    "Treat an unchanged runtime tree as a no-op instead of creating a redundant runtime commit.",
+    "After a real promotion, explicitly call the same reusable four-cell native-install validator against the promoted runtime as a blocking publish job."
   ],
   "current_strategy": {
     "development_branch": "main",
@@ -36,7 +45,15 @@
     "astrbot_market_hard_limit_bytes": 16777216,
     "runtime_secret_scan": "high_confidence_patterns_plus_forbidden_sensitive_filenames",
     "runtime_install_validation": "actual_generated_package_on_astrbot_4_26_1_and_4_27_2",
-    "runtime_branch_validation": "real_branch_archive_plus_version_native_updater_repo_and_download_url_paths",
+    "runtime_branch_validation": "unique_temporary_candidate_4_matrix_before_promotion_plus_explicit_reusable_4_matrix_after_promotion",
+    "main_gate_scope": "all_pull_requests_and_all_main_pushes",
+    "runtime_candidate_branch": "unique_temporary_branch_per_publication",
+    "runtime_candidate_install_matrix": "astrbot_4_26_1_and_4_27_2_x_repo_branch_and_download_url_before_promotion",
+    "runtime_publish_concurrency": "serialized",
+    "runtime_promotion_source_freshness": "immediate_pre_push_main_check_with_honest_non_atomic_boundary_and_successor_push_gate",
+    "runtime_ref_update": "force_with_lease_after_all_candidate_gates_pass",
+    "runtime_unchanged_content_policy": "no_op_skip_pre_and_post_matrices_and_promotion",
+    "runtime_post_publish_validation": "publish_run_explicitly_calls_the_same_reusable_4_matrix_as_a_blocking_job_after_real_promotion",
     "provider_runtime_changes_in_0_1_17": false,
     "video_control": "per_model_card_request_transport_switch",
     "astrbot_modalities_mutation": false,
@@ -77,6 +94,7 @@
   "validation_progress": {
     "0_1_16_core_release": "merged_to_main_and_passed",
     "0_1_17_main_version": "0.1.17_on_main",
+    "0_1_17_release_state": "released_not_release_candidate",
     "0_1_17_allow_list_artifact_build": "passed_runtime_package_21_files_about_195KB_zip_on_observed_gate",
     "0_1_17_artifact_inventory_and_secret_boundary": "passed",
     "0_1_17_astrbot_4_27_2_minimal_package_load": "passed",
@@ -87,12 +105,20 @@
     "native_updater_4_26_1_download_url": "passed",
     "native_updater_4_27_2_repo_branch": "passed",
     "native_updater_4_27_2_download_url": "passed",
+    "main_gate_all_pr_and_main_push": "configured",
+    "runtime_unique_candidate_branch_4_matrix": "configured_before_promotion",
+    "runtime_publish_serialization_and_stale_sha_guard": "configured",
+    "runtime_force_with_lease_promotion": "configured",
+    "runtime_unchanged_content_noop_skips_both_matrices_and_promotion": "configured",
+    "runtime_post_publish_explicit_reusable_4_matrix": "configured_as_blocking_publish_job",
+    "immutable_tag_or_github_release": "not_created_current_reproducible_install_source_is_runtime_branch",
+    "paid_volcengine_workflows": "manual_main_only_boolean_confirmation_shared_serial_concurrency_and_step_scoped_secret_configured_environment_settings_still_required",
     "marketplace_sync": "external_state_not_claimed_until_store_refresh_or_republish_is_observed"
   },
   "active_validation_frontier": {
-    "name": "0.1.17_real_user_store_refresh",
-    "current_stage": "repository_and_runtime_distribution_complete_waiting_for_external_marketplace_record_refresh_or_manual_republish_if_required",
-    "reason": "GitHub development state, runtime branch, real branch archive, and both version-native AstrBot installer paths are validated. AstrBot Cloud/Store registry refresh is an external publication state and is not inferred from repository success.",
+    "name": "0.1.17_external_store_and_windows_validation",
+    "current_stage": "released_on_runtime_branch_waiting_for_external_store_refresh_and_real_windows_store_install",
+    "reason": "0.1.17 is released at the repository/runtime-distribution layer; release-candidate terminology no longer applies. Repository gates, candidate validation, runtime promotion, and native installer checks cannot prove that the external AstrBot Store record has refreshed or that a real Windows Store installation has completed.",
     "dimensions": [
       "store_visible_version_0.1.17",
       "store_download_source_resolves_to_runtime_distribution",

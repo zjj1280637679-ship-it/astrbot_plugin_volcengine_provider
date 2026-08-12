@@ -71,14 +71,18 @@ The runtime artifact must not contain:
 
 A release is not complete until the **artifact itself** is checked.
 
-1. Build from the explicit runtime allow-list.
-2. Verify required AstrBot metadata and entry files exist.
-3. Verify forbidden paths are absent.
-4. Scan the artifact for high-confidence secret patterns.
-5. Reject abnormal package-size growth.
-6. Compile/load the artifact in the supported AstrBot compatibility matrix.
-7. Validate the same repository branch/archive form the AstrBot updater will consume.
-8. Only then advance the marketplace-visible version.
+1. Run the main gate for every pull request targeting `main` and every push to `main`.
+2. Build the runtime tree from the exact triggering source SHA and explicit allow-list.
+3. Verify required files, forbidden-path absence, secret boundaries, size policy, compilation, and supported AstrBot loading against the generated artifact.
+4. Compare the generated tree with the current `runtime` tree. If identical, finish as a no-op and skip both native-install matrices and promotion.
+5. When content changes, publish that exact tree to one unique temporary candidate branch; the candidate is not a marketplace source.
+6. Before `runtime` changes, explicitly call the reusable four-cell validator and run AstrBot `4.26.1` and `4.27.2` through both native `repo_branch` and `download_url` installation paths against the candidate.
+7. Serialize publication and immediately re-read `origin/main` before promotion. Stop if it has already moved away from the triggering source SHA.
+8. Update `runtime` with an exact old-runtime-SHA `force-with-lease` only after all candidate gates pass. Git cannot attach a read-only compare-and-swap to an unchanged `main` ref, so do not describe the main check and runtime update as one atomic transaction. If a main push lands in that final interval, the current candidate is still validated and the new push receives its own gate/publisher; the serialized publisher and runtime lease prevent concurrent overwrite.
+9. After a real promotion, the same publish run explicitly calls the same reusable four-cell validator against the promoted `runtime` branch and download URL. This post-promotion check is a blocking publication job.
+10. Keep marketplace/real-Windows observations separate: repository validation cannot assert that an external store record has refreshed or that a real Windows Store installation has succeeded.
+
+Publication must never mutate `runtime` first and use later validation as permission for an already-visible state. The post-promotion reusable validator is an identity/regression check of the promoted user source, not a substitute for candidate validation.
 
 A successful development checkout or CI run is not evidence that a distribution artifact is safe or installable.
 

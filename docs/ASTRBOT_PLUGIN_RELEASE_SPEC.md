@@ -83,32 +83,43 @@ The runtime artifact must not contain information merely because it helped devel
 
 Public development material can still be inappropriate for the runtime package: disclosure risk and runtime noise are separate from repository visibility.
 
-## 7. Artifact gates
+## 7. Artifact and promotion gates
 
-Before a marketplace-visible version is considered released, the generated runtime package must pass all of these gates:
+The main gate runs for every pull request targeting `main` and every push to `main`, and publication is serialized. Each publish run builds the exact triggering source SHA, verifies manifest inventory, required files, forbidden-path absence, high-confidence secret patterns, size policy, Python compilation, and supported-AstrBot loading, then compares the generated tree with the current `runtime` tree. If the trees are identical, the run ends as a no-op and skips the pre-promotion matrix, promotion, and post-promotion matrix.
 
-- manifest-only file inventory;
-- required metadata/entry files present;
-- no forbidden development paths;
-- no high-confidence secret patterns;
-- package size within policy;
-- all packaged Python files compile;
-- runtime package loads against supported AstrBot versions;
-- actual `runtime` branch/archive can be inspected as an AstrBot plugin;
-- store/source metadata version equals runtime `metadata.yaml.version`.
+When content changes, the exact tree is published to one unique temporary candidate branch. Before `runtime` changes, the publish run explicitly calls the reusable four-cell validator against that candidate:
+
+```text
+AstrBot 4.26.1 × repo_branch
+AstrBot 4.26.1 × download_url
+AstrBot 4.27.2 × repo_branch
+AstrBot 4.27.2 × download_url
+```
+
+Immediately before promotion, the workflow re-reads `origin/main` and stops if it has already moved away from the triggering source SHA. It then updates `runtime` with an exact old-runtime-SHA `force-with-lease`. Git cannot express a read-only compare-and-swap for an unchanged `main` ref, so the policy must not claim these are one atomic transaction. If a main push lands in the final update interval, the current candidate remains fully validated and the new push receives its own gate/publisher; publication serialization and the runtime lease prevent concurrent overwrite. After a real promotion, the same publish run explicitly calls the same reusable four-cell validator against the promoted `runtime`; this post-promotion validator is a blocking job and does not authorize a publish that failed candidate validation.
 
 ## 8. Update invariant
 
 A version update means:
 
 ```text
-main development state advances
+all-PR/main-push gate passes
         +
-runtime branch is regenerated from that validated state
+exact source SHA produces a runtime tree
         +
-marketplace source points to runtime
+identical runtime tree exits as a no-op with both matrices and promotion skipped
+        OR
+changed tree becomes one unique temporary candidate
         +
-version metadata matches
+candidate passes artifact gates and the reusable four-cell native-install validator
+        +
+source SHA is still the observed main tip immediately before promotion
+        +
+runtime changes with an exact old-SHA force-with-lease
+        +
+the same publish run blocks on the reusable four-cell validator against promoted runtime
+        +
+marketplace source points to runtime and version metadata matches
 ```
 
-Adding development files to `main` must not change the contents or size of `runtime` unless those files become explicitly necessary for execution.
+Adding development files to `main` must not change the contents or size of `runtime` unless those files become explicitly necessary for execution. External AstrBot Store refresh and real Windows Store installation remain separate observations; repository success must not claim them.

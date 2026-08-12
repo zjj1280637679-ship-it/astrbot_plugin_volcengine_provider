@@ -1,106 +1,330 @@
 name: Publish Minimal Runtime Branch
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - metadata.yaml
-      - __init__.py
-      - main.py
-      - providers.py
-      - registry.py
-      - adapters/**
-      - capabilities/**
-      - compatibility/**
-      - metadata/**
-      - logo.png
-      - LICENSE
-      - tools/release/**
-      - .github/workflows/publish-runtime-branch.yml
+  workflow_run:
+    workflows: [0.1.17 Runtime Distribution Gate]
+    types: [completed]
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
+
+concurrency:
+  group: runtime-publisher-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
-  publish-runtime:
+  prepare-candidate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      GATE_RUN_ID: ${{ github.event.workflow_run.id }}
+    outputs:
+      publish_needed: ${{ steps.candidate.outputs.publish_needed }}
+      source_sha: ${{ steps.candidate.outputs.source_sha }}
+      candidate_branch: ${{ steps.candidate.outputs.candidate_branch }}
+      candidate_sha: ${{ steps.candidate.outputs.candidate_sha }}
+      old_runtime_sha: ${{ steps.candidate.outputs.old_runtime_sha }}
+      manifest_artifact: ${{ steps.candidate.outputs.manifest_artifact }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 1
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - name: Build and audit runtime closure
-        run: python tools/release/build_runtime_package.py
-      - name: Publish generated runtime state to dedicated branch
+      - name: Reject a gate for a source that is no longer main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          main_tip=$(git ls-remote \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            refs/heads/main | awk '{print $1}')
+          test "$main_tip" = "$SOURCE_SHA"
+      - name: Download the exact artifact accepted by the upstream gate
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version=$(python - <<'PY'
-          import re
-          from pathlib import Path
-          text=Path('metadata.yaml').read_text('utf-8')
-          m=re.search(r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', text)
-          if not m: raise SystemExit('missing version')
-          print(m.group(1).strip())
-          PY
-          )
-          work="$RUNNER_TEMP/runtime-branch"
-          rm -rf "$work"
-          mkdir -p "$work"
-          rsync -a dist/runtime/astrbot_plugin_volcengine_provider/ "$work"/
-          cd "$work"
-          git init -b runtime
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git add --all
-          git commit -m "runtime: ${version} minimal AstrBot distribution"
-          git push --force origin runtime
-      - name: Validate the real branch archive AstrBot will consume
+          prefix="runtime-${SOURCE_SHA}-"
+          artifact=$(gh api \
+            --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.expired == false) | .name' \
+            | awk -v prefix="$prefix" 'index($0, prefix) == 1' \
+            | sort -V \
+            | tail -n 1)
+          test -n "$artifact"
+          destination="$RUNNER_TEMP/gate-artifact"
+          mkdir -p "$destination"
+          gh run download "$GATE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$artifact" \
+            --dir "$destination"
+          test -f "$destination/astrbot_plugin_volcengine_provider-runtime.zip"
+          test -f "$destination/runtime-manifest.json"
+      - name: Prepare an immutable candidate or finish as a content no-op
+        id: candidate
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/heads/runtime.zip"
-          for i in $(seq 1 12); do
-            if curl -fL --retry 2 --retry-delay 2 "$url" -o /tmp/runtime.zip; then
-              break
-            fi
-            sleep 5
-          done
-          test -s /tmp/runtime.zip
-          python - <<'PY'
-          import re, zipfile
-          from pathlib import PurePosixPath
-          z=zipfile.ZipFile('/tmp/runtime.zip')
-          names=[PurePosixPath(n) for n in z.namelist() if not n.endswith('/')]
-          if not names: raise SystemExit('runtime branch archive empty')
-          stripped=[]
-          for p in names:
-              if len(p.parts) < 2: continue
-              stripped.append(PurePosixPath(*p.parts[1:]))
-          forbidden={'.github','tests','docs','evidence','governance','strategy','model_cards','assets','tools','dist'}
-          bad=[str(p) for p in stripped if p.parts and p.parts[0] in forbidden]
-          if bad: raise SystemExit(f'forbidden paths in real runtime archive: {bad}')
-          metadata=next((p for p in names if p.name=='metadata.yaml' and len(p.parts)==2), None)
-          if metadata is None: raise SystemExit('metadata.yaml missing at runtime archive root')
-          text=z.read(str(metadata)).decode('utf-8')
-          version=re.search(r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', text).group(1).strip()
-          repo=re.search(r'(?m)^repo:\s*["\x27]?([^"\x27\r\n#]+)', text).group(1).strip()
-          if not repo.endswith('/tree/runtime'): raise SystemExit(f'wrong runtime repo binding: {repo}')
-          print(f'REAL_RUNTIME_BRANCH_ARCHIVE=OK version={version} files={len(stripped)}')
+          candidate="runtime-candidate-${SOURCE_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          manifest_artifact="runtime-manifest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          work="$RUNNER_TEMP/runtime-candidate"
+          archive="$RUNNER_TEMP/gate-artifact/astrbot_plugin_volcengine_provider-runtime.zip"
+          manifest="$RUNNER_TEMP/gate-artifact/runtime-manifest.json"
+
+          rm -rf "$work"
+          mkdir -p "$work"
+          WORK="$work" ARCHIVE="$archive" MANIFEST="$manifest" python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import zipfile
+          from pathlib import Path, PurePosixPath
+
+          work = Path(os.environ['WORK'])
+          archive = Path(os.environ['ARCHIVE'])
+          manifest_path = Path(os.environ['MANIFEST'])
+          manifest = json.loads(manifest_path.read_text('utf-8'))
+          if manifest['package'] != 'astrbot_plugin_volcengine_provider':
+              raise SystemExit('unexpected runtime package name')
+          if manifest['version'] != '0.1.17':
+              raise SystemExit('unexpected runtime version')
+
+          expected = {item['path']: item for item in manifest['files']}
+          if len(expected) != len(manifest['files']):
+              raise SystemExit('duplicate path in runtime manifest')
+          allowed_root = {
+              'metadata.yaml', '__init__.py', 'main.py', 'providers.py',
+              'registry.py', 'logo.png', 'LICENSE',
+          }
+          allowed_packages = {
+              'adapters', 'capabilities', 'compatibility', 'metadata',
+          }
+          for relative in expected:
+              path = PurePosixPath(relative)
+              allowed = (
+                  len(path.parts) == 1 and relative in allowed_root
+              ) or (
+                  len(path.parts) == 2
+                  and path.parts[0] in allowed_packages
+                  and path.suffix == '.py'
+              )
+              if not allowed:
+                  raise SystemExit(f'path outside publisher allow-list: {relative}')
+          if manifest['uncompressed_bytes'] > 2 * 1024 * 1024:
+              raise SystemExit('runtime exceeds publisher size policy')
+
+          members = {}
+          with zipfile.ZipFile(archive) as package:
+              for info in package.infolist():
+                  path = PurePosixPath(info.filename)
+                  if info.is_dir():
+                      continue
+                  if path.is_absolute() or '..' in path.parts or len(path.parts) < 2:
+                      raise SystemExit(f'unsafe archive member: {path}')
+                  if path.parts[0] != manifest['package']:
+                      raise SystemExit(f'unexpected archive root: {path}')
+                  relative = PurePosixPath(*path.parts[1:]).as_posix()
+                  if relative in members:
+                      raise SystemExit(f'duplicate archive member: {relative}')
+                  members[relative] = info
+
+              if set(members) != set(expected):
+                  raise SystemExit({
+                      'missing': sorted(set(expected) - set(members)),
+                      'unexpected': sorted(set(members) - set(expected)),
+                  })
+
+              for relative, item in expected.items():
+                  data = package.read(members[relative])
+                  if len(data) != item['bytes']:
+                      raise SystemExit(f'byte count mismatch: {relative}')
+                  if hashlib.sha256(data).hexdigest() != item['sha256']:
+                      raise SystemExit(f'sha256 mismatch: {relative}')
+                  target = work.joinpath(*PurePosixPath(relative).parts)
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(data)
           PY
-      - uses: actions/upload-artifact@v4
+
+          cd "$work"
+          git init -b candidate
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git add --all
+          git commit -m "runtime candidate: 0.1.17 from ${SOURCE_SHA}"
+
+          candidate_sha=$(git rev-parse HEAD)
+          candidate_tree=$(git rev-parse 'HEAD^{tree}')
+          old_runtime_sha=$(git ls-remote origin refs/heads/runtime | awk '{print $1}')
+          publish_needed=true
+          if [ -n "$old_runtime_sha" ]; then
+            git fetch --no-tags --depth=1 origin \
+              "+refs/heads/runtime:refs/remotes/origin/runtime"
+            old_runtime_tree=$(git rev-parse 'refs/remotes/origin/runtime^{tree}')
+            if [ "$candidate_tree" = "$old_runtime_tree" ]; then
+              publish_needed=false
+            fi
+          fi
+
+          {
+            echo "publish_needed=${publish_needed}"
+            echo "source_sha=${SOURCE_SHA}"
+            echo "candidate_branch=${candidate}"
+            echo "candidate_sha=${candidate_sha}"
+            echo "old_runtime_sha=${old_runtime_sha}"
+            echo "manifest_artifact=${manifest_artifact}"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$publish_needed" = false ]; then
+            echo 'RUNTIME_PUBLICATION=NOOP_IDENTICAL_TREE'
+            exit 0
+          fi
+
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push origin \
+            "HEAD:refs/heads/${candidate}" \
+            "--force-with-lease=refs/heads/${candidate}:"
+          actual=$(git ls-remote origin "refs/heads/${candidate}" | awk '{print $1}')
+          test "$actual" = "$candidate_sha"
+          echo "RUNTIME_CANDIDATE=CREATED branch=${candidate} sha=${candidate_sha}"
+      - name: Upload the manifest used by both native-install matrices
+        if: steps.candidate.outputs.publish_needed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: published-runtime-package
-          path: |
-            dist/astrbot_plugin_volcengine_provider-runtime.zip
-            dist/runtime-manifest.json
+          name: ${{ steps.candidate.outputs.manifest_artifact }}
+          path: ${{ runner.temp }}/gate-artifact/runtime-manifest.json
           if-no-files-found: error
           retention-days: 7
+
+  prepublish-native-install:
+    needs: prepare-candidate
+    if: needs.prepare-candidate.outputs.publish_needed == 'true'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/validate-runtime-store-source.yml
+    with:
+      branch: ${{ needs.prepare-candidate.outputs.candidate_branch }}
+      expected_ref_sha: ${{ needs.prepare-candidate.outputs.candidate_sha }}
+      manifest_artifact: ${{ needs.prepare-candidate.outputs.manifest_artifact }}
+
+  promote-runtime:
+    needs: [prepare-candidate, prepublish-native-install]
+    if: needs.prepare-candidate.outputs.publish_needed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Promote only the validated, still-current candidate with an exact lease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.prepare-candidate.outputs.source_sha }}
+          CANDIDATE_BRANCH: ${{ needs.prepare-candidate.outputs.candidate_branch }}
+          CANDIDATE_SHA: ${{ needs.prepare-candidate.outputs.candidate_sha }}
+          OLD_RUNTIME_SHA: ${{ needs.prepare-candidate.outputs.old_runtime_sha }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/runtime-promotion"
+          mkdir -p "$work"
+          cd "$work"
+          git init
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/${CANDIDATE_BRANCH}:refs/remotes/origin/${CANDIDATE_BRANCH}"
+
+          test "$(git rev-parse refs/remotes/origin/main)" = "$SOURCE_SHA"
+          test "$(git rev-parse "refs/remotes/origin/${CANDIDATE_BRANCH}")" = "$CANDIDATE_SHA"
+          runtime_tip=$(git ls-remote origin refs/heads/runtime | awk '{print $1}')
+          test "$runtime_tip" = "$OLD_RUNTIME_SHA"
+
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          # Git cannot express a read-only compare-and-swap for an unchanged
+          # main ref. Keep this check immediately adjacent to the leased
+          # runtime update; every later main push gets its own gate/publisher.
+          main_tip=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          test "$main_tip" = "$SOURCE_SHA"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push origin \
+            "${CANDIDATE_SHA}:refs/heads/runtime" \
+            "--force-with-lease=refs/heads/runtime:${OLD_RUNTIME_SHA}"
+
+          promoted=$(git ls-remote origin refs/heads/runtime | awk '{print $1}')
+          test "$promoted" = "$CANDIDATE_SHA"
+          main_after=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          if test "$main_after" != "$SOURCE_SHA"; then
+            echo "::warning title=Main advanced during runtime promotion::The promoted candidate is validated; the newer main push will run its own gate and publisher."
+          fi
+          echo "RUNTIME_PROMOTION=OK source=${SOURCE_SHA} runtime=${promoted}"
+
+  postpublish-native-install:
+    needs: [prepare-candidate, promote-runtime]
+    if: needs.prepare-candidate.outputs.publish_needed == 'true'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/validate-runtime-store-source.yml
+    with:
+      branch: runtime
+      expected_ref_sha: ${{ needs.prepare-candidate.outputs.candidate_sha }}
+      manifest_artifact: ${{ needs.prepare-candidate.outputs.manifest_artifact }}
+
+  cleanup-candidate:
+    needs:
+      - prepare-candidate
+      - prepublish-native-install
+      - promote-runtime
+      - postpublish-native-install
+    if: >-
+      always() &&
+      needs.prepare-candidate.outputs.publish_needed == 'true' &&
+      needs.prepare-candidate.outputs.candidate_branch != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Delete only the unchanged candidate ref created by this run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_BRANCH: ${{ needs.prepare-candidate.outputs.candidate_branch }}
+          CANDIDATE_SHA: ${{ needs.prepare-candidate.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          actual=$(git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" | awk '{print $1}')
+          if [ -z "$actual" ]; then
+            echo 'RUNTIME_CANDIDATE_CLEANUP=ALREADY_ABSENT'
+            exit 0
+          fi
+          test "$actual" = "$CANDIDATE_SHA"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push "$remote" \
+            ":refs/heads/${CANDIDATE_BRANCH}" \
+            "--force-with-lease=refs/heads/${CANDIDATE_BRANCH}:${CANDIDATE_SHA}"
+          test -z "$(git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}")"
+          echo 'RUNTIME_CANDIDATE_CLEANUP=OK'

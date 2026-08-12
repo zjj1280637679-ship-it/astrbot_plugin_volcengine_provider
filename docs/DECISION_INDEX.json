@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "release": "0.1.16",
+  "release": "0.1.17",
   "entries": [
     {
       "id": "ADR-0001",
@@ -59,7 +59,7 @@
   ],
   "active_evidence": {
     "doc": "docs/E2E_MATRIX.md",
-    "goal": "0.1.16 release evidence across plugin contracts, AstrBot integration, downstream Ark attribution, and historical QQ product regressions",
+    "goal": "0.1.17 release evidence across plugin contracts, AstrBot integration, downstream Ark attribution, historical QQ product regressions, and the minimal runtime distribution boundary",
     "reason": "Each layer may judge only the interface it actually exercises; raw provider fixtures and brittle UI automation must not silently redefine QQ product compatibility."
   },
   "ai_entry_points": [

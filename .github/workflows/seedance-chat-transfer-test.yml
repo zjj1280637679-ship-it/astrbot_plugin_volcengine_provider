@@ -1,24 +1,34 @@
 name: Seedance Chat Transfer Test
 
 on:
-  push:
-    paths:
-      - '.github/seedance-trigger.txt'
   workflow_dispatch:
+    inputs:
+      confirm_paid_run:
+        description: Confirm that this run may call the paid Volcengine API
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: paid-volcengine-api-${{ github.repository }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   generate:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_paid_run == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: paid-volcengine
     env:
-      ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
       MODEL_ID: doubao-seedance-1-5-pro-251215
     steps:
       - name: Validate secret presence
         shell: bash
+        env:
+          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
         run: |
           if [ -z "$ARK_API_KEY" ]; then
             echo "HUOSHANYINQINGAPI is unavailable to this workflow"
@@ -29,6 +39,8 @@ jobs:
       - name: Create Seedance task
         id: create
         shell: bash
+        env:
+          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
         run: |
           python3 - <<'PY'
           import json, os, urllib.request, urllib.error
@@ -73,6 +85,8 @@ jobs:
 
       - name: Poll Seedance task and download video
         shell: bash
+        env:
+          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
         run: |
           python3 - <<'PY'
           import json, os, time, urllib.request, urllib.error
@@ -141,7 +155,7 @@ jobs:
           PY
 
       - name: Upload result for ChatGPT transfer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: seedance-chat-transfer-test
           path: |

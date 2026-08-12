@@ -202,4 +202,4 @@ A correct implementation must survive both directions of review:
 - **positive path:** legitimate supported behavior remains reachable;
 - **counterexample path:** a local rule must not destroy another legitimate path.
 
-The 0.1.16 release candidate therefore uses the layered evidence model in `docs/E2E_MATRIX.md`, the historical evidence index in `docs/TEST_HISTORY.md`, and the impact rules in `docs/REGRESSION_SCOPE.md`. The goal is not to maximize test count; it is to make every conclusion traceable to an interface that can actually support that conclusion.
+During 0.1.16 release preparation, the project used the layered evidence model in `docs/E2E_MATRIX.md`, the historical evidence index in `docs/TEST_HISTORY.md`, and the impact rules in `docs/REGRESSION_SCOPE.md`. The goal is not to maximize test count; it is to make every conclusion traceable to an interface that can actually support that conclusion.

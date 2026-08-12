@@ -3,47 +3,31 @@ name: 0.1.17 Runtime Distribution Gate
 on:
   workflow_dispatch:
   push:
-    branches:
-      - release/0.1.17-runtime-package
-    paths:
-      - metadata.yaml
-      - __init__.py
-      - main.py
-      - providers.py
-      - registry.py
-      - adapters/**
-      - capabilities/**
-      - compatibility/**
-      - metadata/**
-      - logo.png
-      - LICENSE
-      - tools/release/**
-      - .github/workflows/release-0.1.17-runtime-gate.yml
+    branches: [main]
   pull_request:
-    paths:
-      - metadata.yaml
-      - __init__.py
-      - main.py
-      - providers.py
-      - registry.py
-      - adapters/**
-      - capabilities/**
-      - compatibility/**
-      - metadata/**
-      - logo.png
-      - LICENSE
-      - tools/release/**
+    branches: [main]
 
 permissions:
   contents: read
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.pull_request.number)
+      || github.ref
+    }}
+  cancel-in-progress: true
 
 jobs:
   artifact-boundary:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Build allow-list runtime artifact
@@ -71,9 +55,9 @@ jobs:
           }, indent=2))
           PY
           unzip -l dist/astrbot_plugin_volcengine_provider-runtime.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: astrbot-plugin-runtime-0.1.17
+          name: runtime-${{ github.sha }}-${{ github.run_attempt }}
           path: |
             dist/astrbot_plugin_volcengine_provider-runtime.zip
             dist/runtime-manifest.json
@@ -88,11 +72,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
       - name: Build minimal runtime package
         run: python tools/release/build_runtime_package.py
       - name: Clone tested AstrBot
@@ -130,8 +116,9 @@ jobs:
       - name: Compile only files that users receive
         shell: bash
         run: |
-          find dist/runtime/astrbot_plugin_volcengine_provider -name '*.py' -print0 \
-            | xargs -0 python -m py_compile
+          PYTHONPYCACHEPREFIX="$RUNNER_TEMP/runtime-pycache" \
+            python -m compileall -q \
+            dist/runtime/astrbot_plugin_volcengine_provider
       - name: Install only runtime package into a clean AstrBot data directory
         shell: bash
         run: |
@@ -147,6 +134,20 @@ jobs:
           test ! -e "$target/.github"
           test ! -e "$target/tests"
           test ! -e "$target/docs"
+      - name: Run packaged provider and Dashboard contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test_file in \
+            tests/test_0_1_15_feedback_boundary.py \
+            tests/test_dashboard_bridge_compat.py \
+            tests/test_dashboard_save_boundary.py \
+            tests/test_live_feedback_presence.py \
+            tests/test_model_card_ui_scope.py \
+            tests/e2e/provider_card_matrix/service_matrix.py
+          do
+            uv run --directory AstrBot python "../${test_file}"
+          done
       - name: Start AstrBot and prove packaged plugin loads
         shell: bash
         run: |

@@ -1,25 +1,35 @@
 name: Seedance Pro 250528 Exact I2V Probe
 
 on:
-  push:
-    paths:
-      - '.github/seedance-pro-250528-i2v-trigger.txt'
   workflow_dispatch:
+    inputs:
+      confirm_paid_run:
+        description: Confirm that this run may call the paid Volcengine API
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: paid-volcengine-api-${{ github.repository }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   probe:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_paid_run == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: paid-volcengine
     env:
-      ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
       MODEL_ID: doubao-seedance-1-0-pro-250528
       IMAGE_URL: https://raw.githubusercontent.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/main/assets/seedance_test/blond_mma_reference_upload_test.jpg
     steps:
       - name: Validate prerequisites
         shell: bash
+        env:
+          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
         run: |
           test -n "$ARK_API_KEY" || { echo 'HUOSHANYINQINGAPI unavailable'; exit 2; }
           python3 - <<'PY'
@@ -36,6 +46,8 @@ jobs:
 
       - name: Run exact Pro 250528 I2V probe
         shell: bash
+        env:
+          ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
         run: |
           mkdir -p probe_output
           mv reference.jpg probe_output/reference.jpg
@@ -131,7 +143,7 @@ jobs:
 
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: seedance-pro-250528-i2v-probe
           path: probe_output/

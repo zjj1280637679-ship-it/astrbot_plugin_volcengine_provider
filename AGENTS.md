@@ -53,17 +53,30 @@ Then locate the corresponding regression test, `TEST_HISTORY`, `REGRESSION_SCOPE
 
 Do not infer model capability from a model ID prefix, brand, vendor, historical result, or absence of a metadata icon. Volcengine is both a first-party platform for Doubao/Seed models and a cloud serving platform for third-party/open models, and model/platform behavior can change independently of this plugin.
 
-## Current release work
+## Current release state
 
-The active release candidate is **0.1.17** on `release/0.1.17-runtime-package`.
+The active release is **0.1.17**. `main` is the development state and the validated minimal user package is published from the stable `runtime` branch. This release is complete at the repository/runtime-distribution layer; it is **not** an active release candidate. `release/0.1.17-runtime-package` is historical release-preparation context and must not be treated as the current branch or status.
 
 0.1.17 does not expand provider functionality. It fixes the distribution boundary discovered by real AstrBot Store installation: the development repository had been packaged directly, allowing `.github/workflows/**` and other development material into the user ZIP. On Windows this caused extraction to fail partway through and left a partial plugin directory that then produced install-name conflicts.
 
-The new target topology is:
+The release topology is:
 
-`main (development + explainability + tests) -> allow-list build -> runtime branch (minimal user package)`.
+`main (development + explainability + tests) -> explicit allow-list build -> unique temporary candidate branch -> validated runtime promotion -> runtime (minimal user package)`.
 
-`metadata.yaml.repo` is bound to the stable `runtime` branch, which AstrBot supports as a `/tree/{branch}` repository source. Runtime publication must prove the generated artifact itself loads on supported AstrBot versions before the marketplace-visible version is considered complete.
+Runtime publication has these mandatory invariants:
+
+1. The main gate covers every pull request targeting `main` and every push to `main`.
+2. `publish-runtime` is serialized so two publication jobs cannot promote concurrently.
+3. The generated runtime tree is compared with the current `runtime` tree first. If they are identical, candidate validation, promotion, and post-promotion validation are all skipped as a no-op.
+4. When the tree changes, the run publishes the exact triggering source SHA to one unique temporary candidate branch.
+5. Before `runtime` changes, the publish run explicitly calls the reusable four-cell validator; the candidate must pass AstrBot `4.26.1` / `4.27.2` × `repo_branch` / `download_url` native installation.
+6. Immediately before promotion, the workflow must re-read `origin/main` and stop if it has already moved away from the triggering source SHA.
+7. Promotion updates `runtime` with an exact old-runtime-SHA `force-with-lease`, only after all candidate gates pass. Git has no read-only compare-and-swap for an unchanged `main` ref: if `main` moves in the narrow interval around the final ref update, the promoted candidate remains fully validated and the newer push runs its own gate/publisher. Do not claim that the `main` check and `runtime` update are one atomic transaction.
+8. After a real promotion, the same publish run explicitly calls the same reusable four-cell validator against the promoted `runtime`. This post-publish validator is a blocking job in the publication run, not an asynchronous side path.
+
+The remaining validation frontier is external: confirm that the AstrBot Store displays version `0.1.17`, resolves downloads to `runtime`, and completes a real Windows Store installation without development files or partial-install conflicts. Repository success must not be reported as proof of those external observations.
+
+No immutable tag or GitHub Release exists yet. Until release provenance is completed separately, the documented reproducible installation source remains the validated `runtime` branch; do not infer an immutable release archive from expiring Actions artifacts.
 
 ## AI intervention principle
 

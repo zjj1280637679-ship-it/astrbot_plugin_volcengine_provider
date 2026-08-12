@@ -6,7 +6,12 @@
 - 新增白名单式最小运行包构建器，只收集 `metadata.yaml`、插件入口/Provider/registry、必要 Python 包、`logo.png` 与 `LICENSE`；`.github`、tests、docs、证据、治理、模型研究、实验素材和发布工具默认全部不进入用户包。
 - 新增发行物秘密扫描、禁用路径检查、异常体积检查和 ZIP 清单；项目内部运行包预算设为 2 MiB，低于 AstrBot 市场公开的 16 MiB 上限，用于尽早发现误把开发仓库打包的回归。
 - 新增“实际发行物”双版本加载门：生成后的最小包分别在 AstrBot 4.26.1 与 4.27.2 中通过 AstrBot 自身插件检查器、Python 编译和干净数据目录加载，而不是继续拿开发 checkout 代替用户收到的包。
-- 新增 `runtime` 分支发布流水线：main 合并后由 CI 从白名单重新生成运行态分支，再下载真实 branch archive 做一次商店等价结构检查。开发文件新增到 main 不会自动扩大用户包。
+- 加固 `runtime` 分支发布流水线：主门禁覆盖所有目标为 `main` 的 Pull Request 与 `main` push；发布任务使用串行 concurrency，并为当前 source SHA 创建唯一临时候选分支。候选分支必须先通过 AstrBot 4.26.1 / 4.27.2 × `repo_branch` / `download_url` 四矩阵原生安装验证；晋升前紧邻更新再次检查 `main`，并用精确旧 SHA 的 `force-with-lease` 更新 `runtime`，避免先上线坏包、旧任务覆盖已发布源码或并发发布互相踩踏。Git 不提供对未变化 `main` ref 的只读原子 CAS；若新 push 恰落在最终更新窗口，它会运行自己的后续门禁与发布任务，而当前候选仍是完整验证过的包。
+- 若生成的运行包与当前 `runtime` 内容相同，发布前矩阵、晋升与发布后矩阵全部无操作跳过。若内容有变化，发布 run 会在候选分支通过四矩阵后晋升，并显式再次调用同一套可复用四矩阵验证工作流复核正式 `runtime`；postpublish 是发布 run 的阻断 job，不是异步旁路。
+- `0.1.17` 已在仓库/`runtime` 发行层完成发布，不是候选版；AstrBot 商店记录是否已刷新为 `0.1.17`、下载源是否实际解析到 `runtime`，以及真实 Windows 商店安装是否成功，仍作为外部验收前沿，不由仓库成功推断。
+- 当前尚未建立不可变 tag / GitHub Release；在后续补齐发行来源链之前，可复现安装入口仍以已验证的 `runtime` 分支为准，不能把会过期的 Actions artifact 当作永久发行包。
+- 旧 `0.1.16 Core Release Gate` 已由覆盖所有目标为 `main` 的 PR / `main` push 的 0.1.17 主门禁取代；Dashboard 可达性证据流保留为仅限 `main` 的手动任务，并固定全部第三方 Action 到完整 commit SHA。
+- 真实火山协议与 6 个 Seedance 付费任务全部改为仅限 `main` 的手动显式确认，统一进入 `paid-volcengine` environment 与共享串行并发组；API Key 只注入实际检查/调用步骤，不再暴露给 checkout、依赖安装或 artifact Action。environment 的审批人与同名 secret 仍需在仓库 Settings 中配置。
 - 记录本次实际错误模式：仓库 ZIP 中 `.github/workflows/**` 进入商店包，Windows 解压中途失败并留下半安装目录，随后重装出现文件名/目录冲突；同时确认“开发可解释性”属于开发仓库，不应通过把 AI/测试/架构资料塞进运行包来实现。
 - 本版本不改变 0.1.16 的 Provider、音频、视频、能力反馈、migration 或 AstrBot fallback/retry 语义；变化集中在发行/安装边界。
 

@@ -1,9 +1,9 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.16-e85d3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.17-e85d3f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
-[![Platform](https://img.shields.io/badge/platform-aiocqhttp%20%7C%20webchat-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
+[![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 装上这款插件，QQ 语音会在可靠转换后，连同完整聊天上下文交给你正在使用的火山方舟主模型；本轮发送或引用的视频，也能由同一个模型看懂并继续回应。你不需要另配 STT、转录模型，也不用再搭建一条互相失忆的旁路。
@@ -45,14 +45,31 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-1. 把解压后的插件目录放入 AstrBot 的 `data/plugins/`；不要把 ZIP 原样塞进插件目录。
-2. 完整关闭并重新启动 AstrBot。
-3. 打开 `模型提供商 → 对话 → 新增`。
-4. 确认列表里出现“火山方舟普通 API”和“火山方舟 Agent Plan API”。
+### AstrBot 插件市场
 
-插件最低支持 AstrBot `4.26.1`，不再人为设置未来版本上限；后续 AstrBot 新版本只要相关 Provider API 保持兼容即可继续使用。
+如果插件市场已经显示 `0.1.17`，可以直接安装或更新。若市场记录尚未刷新，请使用下面的 `runtime.zip` 手动安装入口。
+
+### 手动安装
+
+1. 下载最小运行包：[runtime.zip](https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip)。
+2. 解压一层，把顶层目录重命名为 `astrbot_plugin_volcengine_provider` 后放入 AstrBot 的 `data/plugins/`；不要把 ZIP 原样塞进插件目录，也不要额外套一层目录。确认 `metadata.yaml` 与 `main.py` 位于插件目录根部。
+3. 完整关闭并重新启动 AstrBot。
+4. 打开 `模型提供商 → 对话 → 新增`。
+5. 确认列表里出现“火山方舟普通 API”和“火山方舟 Agent Plan API”。
+
+> **不要下载 `main` 分支 ZIP 作为插件安装包。** GitHub 默认仓库页的 `Code → Download ZIP` 指向开发仓库，其中包含 CI、测试和内部文档；用户安装包只来自 `runtime` 分支。
+
+插件最低支持 AstrBot `4.26.1`，当前发布元数据只声明 `aiocqhttp` 平台；不再人为设置未来版本上限。后续 AstrBot 新版本只要相关 Provider API 保持兼容即可继续使用。
 
 当前 AstrBot 的 Provider 类型注册表没有安全的插件级热卸载钩子，所以安装、更新、禁用或卸载后都应完整重启。只刷新网页不能证明新版本已经生效。
+
+## 0.1.17：最小运行包已发布
+
+- **0.1.17 已发布，不是候选版。** `main` 保存开发源码、测试与说明，用户安装的最小运行包位于稳定的 `runtime` 分支；正式 tag / GitHub Release 尚未建立，当前可复现安装源仍以该分支为准。
+- **先判断是否需要发布。** 主门禁覆盖所有目标为 `main` 的 Pull Request 与 `main` push，发布任务串行执行。若生成的运行包与当前 `runtime` 内容相同，本次发布无操作结束，发布前矩阵、晋升和发布后矩阵全部跳过。
+- **有变化时先验收候选，再晋升。** 发布任务为当前 source SHA 创建唯一临时候选分支，并显式调用同一套可复用四矩阵验证工作流；候选包必须先通过 AstrBot `4.26.1` / `4.27.2` × `repo_branch` / `download_url` 原生安装验证。晋升前会紧邻更新再次检查 `main`，并用精确的 `runtime` 旧 SHA 租约执行 `force-with-lease`；若 `main` 恰在最终更新期间推进，新提交仍会触发自己的门禁与发布任务，已经发布的更新不会被并发任务覆盖。
+- **真实晋升后再次阻断复核。** 同一个发布 run 会再次显式调用这套可复用四矩阵验证工作流，对正式 `runtime` 的分支与下载 URL 做发布后复核；postpublish 是发布流程中的阻断 job，不是异步旁路。
+- **外部验收仍保持诚实。** 仓库与 `runtime` 发布已完成；AstrBot 商店是否已经显示 `0.1.17`、是否确实解析到 `runtime`，以及真实 Windows 商店安装是否成功，仍需在外部商店刷新后验证。
 
 ## 接通普通方舟 API
 
