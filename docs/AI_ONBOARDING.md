@@ -60,7 +60,7 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - Errors identify where a request failed without taking ownership of AstrBot's routing decision.
 - Provider-specific configuration remains isolated from foreign providers.
 - Upgrade migration preserves the strongest exact owned-card intent, removes temporary/wrong-layer debris, and leaves AstrBot `modalities` unchanged.
-- A failed host Source upsert leaves the in-memory model-card list exactly as it was before the attempted selector save.
+- A failed host Source upsert restores Source/model-card state and manager mirrors to their pre-call snapshot. Because AstrBot may have saved before a later Provider reload fails, the plugin uses host `save_config()` for a compensating persistent rollback and best-effort reloads the old Source's cards; secondary failures do not replace the original host error and are attached as notes.
 - Raw upstream tests are used for downstream protocol attribution, while QQ compatibility is judged only by a QQ-equivalent media path.
 - Historical successful paths remain evidence until an impact edge invalidates their conditions.
 
@@ -72,16 +72,16 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - Keep ordinary Ark `/models` feedback transient, Source-scoped, single-use, and async-context isolated.
 - Preserve explicit `false`, empty lists, integer `0`, and future unknown modality tokens when explicitly present in current feedback.
 - Preserve legacy user intent with ADR-0004's exact precedence: canonical > exact-Source boolean retired 0.1.17 UI key > older per-card > legacy Source boolean including `false` > `modalities: video`; then remove all temporary/wrong-layer fields without promoting wrong-Source or foreign state.
-- Treat Source selector write-back as transactional relative to the host upsert: snapshot first, restore the complete model-card list on any host failure, then re-raise.
+- Treat Source selector write-back as a snapshot plus compensating rollback around the host upsert: restore Source/cards and manager mirrors, use host `save_config()` to persist that restored snapshot when available, best-effort reload the old Source's card instances, and re-raise the original host error. Annotate persistence/reload compensation failures and do not claim unobserved state was restored.
 - Treat contract/service tests as hard gates according to ownership.
 - Treat Playwright as coarse reachability plus presentation evidence, not as an authority on fine UI layout.
 - Prefer AstrBot-native precedent and minimal existence experiments before constructing new automation around an assumed interface.
 - Use `TEST_HISTORY` + `REGRESSION_SCOPE` before deciding whether audio/video needs a full QQ-equivalent rerun.
 - Never broaden media production code merely to make a non-equivalent raw fixture pass.
 
-## Current released state and unreleased work
+## Current release candidate
 
-`0.1.17` is the released runtime-distribution state and its external marketplace refresh remains the active publication frontier. The Source-page video selector, exact 0.1.17 live-schema residue migration, wrong-layer cleanup, and failed-upsert rollback described here are unreleased work; do not silently rewrite them as already present in the published 0.1.17 runtime branch.
+`0.1.18` is the active release candidate. Its Source-page video selector, exact 0.1.17 live-schema residue migration, wrong-layer cleanup, and failed-upsert rollback have passed the recorded contract, AstrBot `4.26.1` / `4.27.2` service, and real `4.27.2` Dashboard presentation checks. They are 0.1.18 behavior, not part of the historical published 0.1.17 runtime branch. Do not call 0.1.18 fully published until the post-merge allow-list build has regenerated the stable `runtime` branch and the actual runtime artifact/install paths have passed the release gates.
 
 Current ordinary Ark `/models`, text, and image raw-vs-plugin checks provide downstream L5 attribution evidence. Current Agent Plan checks with an ordinary-Ark credential fail in both raw and plugin paths with the same authentication/account boundary and therefore do not justify a production-code change. Audio/video product compatibility is not redefined by those raw probes; see `TEST_HISTORY` and `REGRESSION_SCOPE`.
 

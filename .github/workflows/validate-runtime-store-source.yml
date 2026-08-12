@@ -1,15 +1,24 @@
 name: Validate Runtime Store Source
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/validate-runtime-store-source.yml
+  workflow_call:
+    inputs:
+      branch:
+        description: Runtime or temporary candidate branch to install
+        required: true
+        type: string
+      expected_ref_sha:
+        description: Exact commit the source branch must resolve to
+        required: true
+        type: string
+      manifest_artifact:
+        description: Artifact containing runtime-manifest.json for byte identity checks
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   native-updater-install:
@@ -20,30 +29,51 @@ jobs:
         source_mode: [repo_branch, download_url]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      SOURCE_BRANCH: ${{ inputs.branch }}
+      EXPECTED_REF_SHA: ${{ inputs.expected_ref_sha }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.manifest_artifact }}
+          path: validation-input
+      - name: Prove the requested source ref has not moved
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(git ls-remote \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/heads/${SOURCE_BRANCH}" | awk '{print $1}')
+          test -n "$actual"
+          test "$actual" = "$EXPECTED_REF_SHA"
       - name: Clone exact AstrBot compatibility target
         run: git clone --depth 1 --branch '${{ matrix.astrbot_ref }}' https://github.com/AstrBotDevs/AstrBot.git AstrBot
       - name: Install exact AstrBot runtime
         run: uv sync --directory AstrBot
+      - name: Initialize a clean AstrBot data directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          touch AstrBot/.astrbot
+          printf '\n' | uv run --directory AstrBot astrbot init
       - name: Install through the version-native AstrBot updater
         shell: bash
         env:
           SOURCE_MODE: ${{ matrix.source_mode }}
         run: |
           set -euo pipefail
-          mkdir -p AstrBot/data/plugins AstrBot/data/config AstrBot/data/temp
           uv run --directory AstrBot python - <<'PY'
           import asyncio
           import os
-          from pathlib import Path
 
-          repo_url = 'https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/tree/runtime'
-          archive_url = 'https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip'
+          repo = os.environ['GITHUB_REPOSITORY']
+          branch = os.environ['SOURCE_BRANCH']
+          repo_url = f'https://github.com/{repo}/tree/{branch}'
+          archive_url = f'https://github.com/{repo}/archive/refs/heads/{branch}.zip'
 
           try:
               from astrbot.core.star.updater import _PluginUpdater as RuntimeUpdater
@@ -63,35 +93,84 @@ jobs:
 
           asyncio.run(main())
           PY
-      - name: Verify the installed user tree is the minimal runtime closure
+      - name: Verify the installed tree matches the gated manifest byte for byte
         shell: bash
         run: |
           set -euo pipefail
-          root='AstrBot/data/plugins/astrbot_plugin_volcengine_provider'
-          test -f "$root/metadata.yaml"
-          test -f "$root/main.py"
-          test -f "$root/providers.py"
-          test -f "$root/registry.py"
-          test -f "$root/logo.png"
-          test ! -e "$root/.github"
-          test ! -e "$root/tests"
-          test ! -e "$root/docs"
-          test ! -e "$root/evidence"
-          test ! -e "$root/assets"
-          test ! -e "$root/AGENTS.md"
-          test ! -e "$root/README.md"
-          test ! -e "$root/CHANGELOG.md"
           python - <<'PY'
-          from pathlib import Path
+          import hashlib
+          import json
           import re
+          from pathlib import Path
+
           root = Path('AstrBot/data/plugins/astrbot_plugin_volcengine_provider')
-          text = (root / 'metadata.yaml').read_text('utf-8')
-          version = re.search(r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', text).group(1).strip()
-          repo = re.search(r'(?m)^repo:\s*["\x27]?([^"\x27\r\n#]+)', text).group(1).strip()
-          assert version == '0.1.17', version
+          manifest = json.loads(
+              Path('validation-input/runtime-manifest.json').read_text('utf-8')
+          )
+          assert manifest['package'] == 'astrbot_plugin_volcengine_provider'
+          assert manifest['version'] == '0.1.18'
+
+          expected = {item['path']: item for item in manifest['files']}
+          actual = {
+              path.relative_to(root).as_posix(): path
+              for path in root.rglob('*')
+              if path.is_file()
+              and '__pycache__' not in path.relative_to(root).parts
+              and path.suffix not in {'.pyc', '.pyo'}
+          }
+          if set(actual) != set(expected):
+              raise SystemExit({
+                  'missing': sorted(set(expected) - set(actual)),
+                  'unexpected': sorted(set(actual) - set(expected)),
+              })
+
+          for relative, item in expected.items():
+              data = actual[relative].read_bytes()
+              if len(data) != item['bytes']:
+                  raise SystemExit(f'byte count mismatch: {relative}')
+              if hashlib.sha256(data).hexdigest() != item['sha256']:
+                  raise SystemExit(f'sha256 mismatch: {relative}')
+
+          metadata = (root / 'metadata.yaml').read_text('utf-8')
+          version = re.search(
+              r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', metadata
+          ).group(1).strip()
+          repo = re.search(
+              r'(?m)^repo:\s*["\x27]?([^"\x27\r\n#]+)', metadata
+          ).group(1).strip()
+          assert version == manifest['version'], version
           assert repo.endswith('/tree/runtime'), repo
-          files = [p for p in root.rglob('*') if p.is_file()]
-          total = sum(p.stat().st_size for p in files)
-          assert total < 2 * 1024 * 1024, total
-          print(f'NATIVE_STORE_SOURCE_INSTALL=OK version={version} files={len(files)} bytes={total}')
+          print(
+              f'NATIVE_STORE_SOURCE_IDENTITY=OK '
+              f'version={version} files={len(actual)}'
+          )
           PY
+      - name: Recheck source identity after installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(git ls-remote \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/heads/${SOURCE_BRANCH}" | awk '{print $1}')
+          test "$actual" = "$EXPECTED_REF_SHA"
+      - name: Start AstrBot and prove the installed plugin loads
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup uv run --directory AstrBot astrbot run --port 6185 >native-install-load.log 2>&1 &
+          pid=$!
+          ready=0
+          for i in $(seq 1 75); do
+            if grep -q 'Volcengine providers registered' native-install-load.log; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat native-install-load.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat native-install-load.log
+          test "$ready" = '1'
+          kill "$pid" 2>/dev/null || true

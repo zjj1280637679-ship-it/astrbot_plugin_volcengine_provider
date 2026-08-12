@@ -23,8 +23,12 @@ from astrbot_plugin_volcengine_provider.capabilities import (
 class FakeManager:
     def __init__(self, providers: list[dict]) -> None:
         self.providers = providers
+        self.provider_sources_config: list[dict] = []
+        self.providers_config = providers
         self.created: list[dict] = []
         self.updated: list[tuple[str, dict]] = []
+        self.reloaded: list[dict] = []
+        self.reload_failures: list[str] = []
 
     async def create_provider(self, config: dict) -> None:
         self.created.append(copy.deepcopy(config))
@@ -38,10 +42,40 @@ class FakeManager:
                 return copy.deepcopy(provider)
         return None
 
+    async def reload(self, provider_config: dict) -> None:
+        saved = copy.deepcopy(provider_config)
+        self.reloaded.append(saved)
+        provider_id = str(saved.get("id") or "")
+        if self.reload_failures and provider_id == self.reload_failures[0]:
+            self.reload_failures.pop(0)
+            raise RuntimeError(
+                f"simulated provider reload failure after save: {provider_id}"
+            )
+
+
+class PersistedConfig(dict):
+    """Minimal AstrBotConfig double that records each durable save."""
+
+    def __init__(self, value: dict) -> None:
+        super().__init__(value)
+        self.persisted = copy.deepcopy(value)
+        self.save_count = 0
+        self.fail_next_save_message: str | None = None
+
+    def save_config(self, replace_config: dict | None = None, **_: object) -> None:
+        if self.fail_next_save_message:
+            message = self.fail_next_save_message
+            self.fail_next_save_message = None
+            raise RuntimeError(message)
+        if replace_config is not None:
+            self.update(replace_config)
+        self.save_count += 1
+        self.persisted = copy.deepcopy(dict(self))
+
 
 class FakeService:
     def __init__(self) -> None:
-        self.config = {
+        self.config = PersistedConfig({
             "provider_sources": [
                 {
                     "id": "ark-A",
@@ -84,10 +118,15 @@ class FakeService:
                     "model": "same-model",
                 },
             ],
-        }
+        })
         self.provider_manager = FakeManager(self.config["provider"])
+        self.provider_manager.provider_sources_config = self.config[
+            "provider_sources"
+        ]
         self.source_upserts: list[tuple[str, dict]] = []
-        self.fail_source_upsert = False
+        self.fail_source_reload_after_save = False
+        self.fail_rollback_persist = False
+        self.fail_rollback_reload_id: str | None = None
 
 
 def _has_temporary_ui_key(config: dict) -> bool:
@@ -112,14 +151,38 @@ async def exercise() -> None:
     original_source_upsert = ProviderConfigService.upsert_provider_source
 
     async def record_source_upsert(self, source_id: str, config: dict) -> None:
-        if self.fail_source_upsert:
-            raise RuntimeError("simulated host source save failure")
         saved = copy.deepcopy(config)
+        next_source_id = str(saved.get("id") or source_id)
+        affected_providers: list[dict] = []
         self.source_upserts.append((source_id, saved))
         for index, source in enumerate(self.config["provider_sources"]):
             if source.get("id") == source_id:
                 self.config["provider_sources"][index] = saved
+                for provider in self.config["provider"]:
+                    if provider.get("provider_source_id") == source_id:
+                        provider["provider_source_id"] = next_source_id
+                        affected_providers.append(provider)
                 break
+        self.provider_manager.provider_sources_config = self.config[
+            "provider_sources"
+        ]
+        # Real AstrBot 4.26.1 and 4.27.2 save the full config before
+        # reloading affected Providers. Exercise that exact failure boundary.
+        self.config.save_config()
+        if self.fail_source_reload_after_save:
+            if self.fail_rollback_persist:
+                self.config.fail_next_save_message = (
+                    "simulated compensating persistence failure"
+                )
+            self.provider_manager.reload_failures.append(
+                str(affected_providers[-1]["id"])
+            )
+            if self.fail_rollback_reload_id:
+                self.provider_manager.reload_failures.append(
+                    self.fail_rollback_reload_id
+                )
+            for provider in affected_providers:
+                await self.provider_manager.reload(provider)
 
     ProviderConfigService.upsert_provider_source = record_source_upsert
     assert registry.acquire_owned_dashboard_bridge() is True
@@ -265,10 +328,18 @@ async def exercise() -> None:
             raise AssertionError("duplicate Source rename should fail")
         assert service.config["provider"] == snapshot
 
-        # If the host Source save itself raises after the plugin has translated
-        # the selection, restore the entire per-card list to its pre-call state.
+        # If Provider reload raises after AstrBot has already saved the plugin's
+        # translated selection, restore the entire per-card list in memory and
+        # on disk while preserving the original reload error.
         snapshot = copy.deepcopy(service.config["provider"])
-        service.fail_source_upsert = True
+        source_snapshot = copy.deepcopy(service.config["provider_sources"])
+        persisted_snapshot = copy.deepcopy(service.config.persisted["provider"])
+        persisted_source_snapshot = copy.deepcopy(
+            service.config.persisted["provider_sources"]
+        )
+        saves_before_failure = service.config.save_count
+        reloads_before_failure = len(service.provider_manager.reloaded)
+        service.fail_source_reload_after_save = True
         try:
             await ProviderConfigService.upsert_provider_source(
                 service,
@@ -282,11 +353,146 @@ async def exercise() -> None:
                 },
             )
         except RuntimeError as exc:
-            assert "simulated host source save failure" in str(exc)
+            assert "simulated provider reload failure after save" in str(exc)
         else:
-            raise AssertionError("host Source save failure should propagate")
-        service.fail_source_upsert = False
+            raise AssertionError("post-save Provider reload failure should propagate")
+        service.fail_source_reload_after_save = False
         assert service.config["provider"] == snapshot
+        assert service.config["provider_sources"] == source_snapshot
+        assert service.config.persisted["provider"] == persisted_snapshot
+        assert (
+            service.config.persisted["provider_sources"]
+            == persisted_source_snapshot
+        )
+        assert service.provider_manager.provider_sources_config is service.config[
+            "provider_sources"
+        ]
+        assert service.provider_manager.providers_config is service.config["provider"]
+        rollback_reloads = service.provider_manager.reloaded[
+            reloads_before_failure + 2 :
+        ]
+        assert rollback_reloads == [
+            card for card in snapshot if card.get("provider_source_id") == "ark-A"
+        ]
+        assert service.config.save_count == saves_before_failure + 2
+
+        # A failed rename is the strongest rollback case: the real host changes
+        # both the Source ID and every matching card's provider_source_id before
+        # it saves and starts Provider reload. All live, persisted, and manager
+        # views must return to the exact pre-call state.
+        snapshot = copy.deepcopy(service.config["provider"])
+        source_snapshot = copy.deepcopy(service.config["provider_sources"])
+        persisted_snapshot = copy.deepcopy(service.config.persisted)
+        saves_before_failure = service.config.save_count
+        reloads_before_failure = len(service.provider_manager.reloaded)
+        service.fail_source_reload_after_save = True
+        try:
+            await ProviderConfigService.upsert_provider_source(
+                service,
+                "ark-A",
+                {
+                    "id": "ark-A-renamed",
+                    "provider": "volcengine",
+                    "type": ARK_PROVIDER_TYPE,
+                    VIDEO_CONTROLS_VISIBLE_KEY: True,
+                    ark_selector: ["ark-A/a"],
+                },
+            )
+        except RuntimeError as exc:
+            assert "simulated provider reload failure after save" in str(exc)
+        else:
+            raise AssertionError("post-save Source rename failure should propagate")
+        service.fail_source_reload_after_save = False
+        assert service.config["provider"] == snapshot
+        assert service.config["provider_sources"] == source_snapshot
+        assert service.config.persisted == persisted_snapshot
+        assert service.provider_manager.provider_sources_config is service.config[
+            "provider_sources"
+        ]
+        assert service.provider_manager.providers_config is service.config["provider"]
+        failed_host_reloads = service.provider_manager.reloaded[
+            reloads_before_failure : reloads_before_failure + 2
+        ]
+        assert all(
+            card.get("provider_source_id") == "ark-A-renamed"
+            for card in failed_host_reloads
+        )
+        rollback_reloads = service.provider_manager.reloaded[
+            reloads_before_failure + 2 :
+        ]
+        assert rollback_reloads == [
+            card for card in snapshot if card.get("provider_source_id") == "ark-A"
+        ]
+        assert all(
+            card.get("provider_source_id") != "ark-A-renamed"
+            for card in service.config["provider"]
+        )
+        assert service.config.save_count == saves_before_failure + 2
+
+        # A best-effort runtime restoration failure is diagnostic context, not
+        # a replacement for the host's original post-save reload exception.
+        snapshot = copy.deepcopy(service.config)
+        persisted_snapshot = copy.deepcopy(service.config.persisted)
+        service.fail_source_reload_after_save = True
+        service.fail_rollback_reload_id = "ark-A/a"
+        try:
+            await ProviderConfigService.upsert_provider_source(
+                service,
+                "ark-A",
+                {
+                    "id": "ark-A",
+                    "provider": "volcengine",
+                    "type": ARK_PROVIDER_TYPE,
+                    VIDEO_CONTROLS_VISIBLE_KEY: True,
+                    ark_selector: ["ark-A/a"],
+                },
+            )
+        except RuntimeError as exc:
+            assert str(exc).endswith("ark-A/b")
+            notes = getattr(exc, "__notes__", [])
+            assert any("ark-A/a" in note for note in notes)
+        else:
+            raise AssertionError("original Provider reload failure should propagate")
+        service.fail_source_reload_after_save = False
+        service.fail_rollback_reload_id = None
+        assert dict(service.config) == snapshot
+        assert service.config.persisted == persisted_snapshot
+
+        # A failed compensating disk write also remains diagnostic context. The
+        # wrapper must restore every in-memory view, report that durable state
+        # could not be restored, and still propagate the original host reload
+        # exception as the primary failure.
+        snapshot = copy.deepcopy(service.config)
+        persisted_snapshot = copy.deepcopy(service.config.persisted)
+        service.fail_source_reload_after_save = True
+        service.fail_rollback_persist = True
+        try:
+            await ProviderConfigService.upsert_provider_source(
+                service,
+                "ark-A",
+                {
+                    "id": "ark-A",
+                    "provider": "volcengine",
+                    "type": ARK_PROVIDER_TYPE,
+                    VIDEO_CONTROLS_VISIBLE_KEY: True,
+                    ark_selector: ["ark-A/a"],
+                },
+            )
+        except RuntimeError as exc:
+            assert str(exc).endswith("ark-A/b")
+            notes = getattr(exc, "__notes__", [])
+            assert any(
+                "simulated compensating persistence failure" in note
+                for note in notes
+            )
+        else:
+            raise AssertionError("original Provider reload failure should propagate")
+        service.fail_source_reload_after_save = False
+        service.fail_rollback_persist = False
+        assert dict(service.config) == snapshot
+        assert service.config.persisted != persisted_snapshot
+        service.config.save_config()
+        assert service.config.persisted == snapshot
 
         # Compatibility for a stale already-open 0.1.17 model dialog: its old
         # temporary bool is still translated and stripped at save.

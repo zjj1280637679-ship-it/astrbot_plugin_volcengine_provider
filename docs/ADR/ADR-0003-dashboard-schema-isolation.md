@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for 0.1.15; amended for the current Source-page selector design.
+Accepted for 0.1.15; amended for the 0.1.18 Source-page selector and durable rollback design.
 
 ## Context
 
@@ -21,7 +21,7 @@ Do not expose a video control in the generic model-card projection. For each own
 
 The selector key uses a reversible UTF-8-to-hex encoding of the Source ID so identity is not truncated or probabilistically hashed. When the selector is visible and submitted, the Source save boundary writes the chosen IDs to each matching card's canonical `volcengine_video_input_enabled`, then removes the temporary selector before Source persistence. When the display preference is false, or the hidden selector is omitted, existing per-card values are left untouched. Closing the UI therefore hides configuration only; it does not clear selections or disable runtime video transport.
 
-Before translating a selector, the bridge snapshots the complete model-card list. If the host Source upsert rejects or raises after translation, the bridge restores that snapshot and re-raises the original error. UI projection must not turn a failed Source save into partially committed in-memory card state.
+Before translating a selector, the bridge snapshots the complete Source and model-card lists. If the host Source upsert raises after translation, it restores those lists and the manager's config mirrors in memory. AstrBot 4.26/4.27 can persist the full config before reloading the affected Provider, so an exception does not prove that nothing reached disk; when the host config exposes `save_config()`, the bridge calls it to persist the restored snapshot as a compensating rollback. It then best-effort reloads every old model card belonging to the original Source, because a multi-card host reload may have partially applied before the exception. The original host exception is always re-raised. A rollback write or old-instance reload failure is attached as a note to that original exception; no unobserved layer is claimed restored after a secondary failure.
 
 Foreign Sources receive neither field. A stale already-open 0.1.17 model dialog may still use the retired model-card temporary key at create/update save time, but this is compatibility behavior rather than the current visible UI.
 
@@ -37,9 +37,10 @@ If the host lacks the complete `get_provider_schema` + `upsert_provider_source` 
 - a forged temporary key on a foreign Source cannot create Volcengine state;
 - Source/model-card field ownership remains distinct;
 - Source-save semantics are tested on both AstrBot 4.26.1 and 4.27.2;
-- host Source-save failure restores the complete pre-call model-card list and propagates the original error;
+- host Source-upsert failure restores the complete pre-call Source/model-card state and manager mirrors, attempts to persist that snapshot through host `save_config()`, best-effort reloads the old Source's cards, and propagates the original host error;
+- if compensating persistence or old-instance reload fails, the original host error remains primary and carries a rollback-failure note rather than falsely claiming full restoration;
 - layout correctness must be checked against the real AstrBot Dashboard Source layout, not schema/service data alone.
 
 ## Consequences
 
-The implementation is more explicit than one global schema field, but it avoids cross-provider UI pollution and preserves one per-card runtime truth. The real 4.26.1/4.27.2 service matrix supplies L3 save-boundary evidence. A separate 2026-08-12 real AstrBot 4.27.2 Dashboard DOM run supplies L4 presentation evidence: Ark/Plan each had one master and a selector scoped to their own 2/1 cards; closing hid it, reopening preserved the selection with zero API requests; foreign had 0/0; every Ark/Plan/foreign generic model dialog omitted canonical, retired temporary, and new temporary video fields; `pageErrors=[]`.
+The implementation is more explicit than one global schema field, but it avoids cross-provider UI pollution and preserves one per-card runtime truth. The real 4.26.1/4.27.2 service matrix supplies L3 save-boundary evidence. Focused regressions reproduce AstrBot's “save full config, then Provider reload raises” ordering, including a Source rename: Source/cards, persisted snapshots, manager mirrors, and calls to reload the old cards return to the tested pre-call contract. A separate 2026-08-12 real AstrBot 4.27.2 Dashboard DOM run supplies L4 presentation evidence: Ark/Plan each had one master and a selector scoped to their own 2/1 cards; closing hid it, reopening preserved the selection with zero API requests; foreign had 0/0; every Ark/Plan/foreign generic model dialog omitted canonical, retired temporary, and new temporary video fields; `pageErrors=[]`.

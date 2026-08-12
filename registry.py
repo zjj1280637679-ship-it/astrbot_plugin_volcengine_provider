@@ -8,6 +8,7 @@ Provider adapters themselves from registering or loading.
 from __future__ import annotations
 
 import copy
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -828,18 +829,75 @@ def acquire_owned_dashboard_bridge() -> bool:
                 if hasattr(service_config, "get")
                 else []
             )
+            provider_sources = (
+                service_config.get("provider_sources", [])
+                if hasattr(service_config, "get")
+                else []
+            )
             provider_snapshot = copy.deepcopy(providers)
+            source_snapshot = copy.deepcopy(provider_sources)
             _apply_source_video_ui_settings(self, source_id, normalized)
             _strip_source_transport_hint(normalized)
             try:
                 return await source_upsert_current(self, source_id, normalized)
-            except Exception:
+            except Exception as source_error:
                 # The Source selector is a projection over per-card persistent
-                # truth. If the host rejects/fails the Source save, restore the
-                # pre-call card list so a failed UI action has no plugin-created
-                # in-memory side effect.
+                # truth. AstrBot 4.26/4.27 persists the complete config before
+                # reloading affected Providers, so a reload failure can happen
+                # after the translated card values have reached disk. Restore
+                # both the live list and, when the host config exposes its
+                # normal persistence API, the persisted card snapshot. Preserve
+                # the original host exception even if the best-effort rollback
+                # write itself fails.
                 if isinstance(providers, list):
                     providers[:] = provider_snapshot
+                if isinstance(provider_sources, list):
+                    provider_sources[:] = source_snapshot
+                manager = getattr(self, "provider_manager", None)
+                if manager is not None and isinstance(provider_sources, list):
+                    manager.provider_sources_config = provider_sources
+                if manager is not None and isinstance(providers, list):
+                    manager.providers_config = providers
+                persist_rollback = getattr(service_config, "save_config", None)
+                if callable(persist_rollback):
+                    try:
+                        persist_rollback()
+                    except Exception as rollback_error:
+                        add_note = getattr(source_error, "add_note", None)
+                        if callable(add_note):
+                            add_note(
+                                "Volcengine restored the in-memory model-card "
+                                "snapshot, but persisting that rollback failed: "
+                                f"{rollback_error!r}"
+                            )
+                reload_provider = getattr(manager, "reload", None)
+                if callable(reload_provider):
+                    rollback_reload_errors: list[str] = []
+                    for provider in provider_snapshot:
+                        if not isinstance(provider, dict):
+                            continue
+                        if (
+                            str(provider.get("provider_source_id") or "").strip()
+                            != str(source_id).strip()
+                        ):
+                            continue
+                        try:
+                            reload_result = reload_provider(copy.deepcopy(provider))
+                            if inspect.isawaitable(reload_result):
+                                await reload_result
+                        except Exception as rollback_reload_error:
+                            rollback_reload_errors.append(
+                                f"{provider.get('id')!r}: {rollback_reload_error!r}"
+                            )
+                    if rollback_reload_errors:
+                        add_note = getattr(source_error, "add_note", None)
+                        if callable(add_note):
+                            add_note(
+                                "Volcengine restored the saved configuration, "
+                                "but reloading one or more previous Provider "
+                                "instances failed: "
+                                + "; ".join(rollback_reload_errors)
+                            )
                 raise
 
         source_upsert_wrapper._volcengine_source_save_wrapper = True  # type: ignore[attr-defined]
