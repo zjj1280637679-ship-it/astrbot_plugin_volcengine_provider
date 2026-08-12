@@ -1,5 +1,11 @@
 {
   "version": "0.1",
+  "lifecycle": {
+    "status": "superseded",
+    "scope": "Seedance exact-model executable routing snapshot",
+    "superseded_by": "strategy/executable-model-graph-v0.2.json",
+    "reconsider_if": []
+  },
   "principle": "Only exact model/mode edges with E2E evidence enter executable. Documentation-only edges remain candidates. Probabilistic quality/speed claims never become hard routing rules without Q-level evidence.",
   "models": {
     "doubao-seedance-1-5-pro-251215": {

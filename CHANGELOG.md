@@ -1,5 +1,18 @@
 # 更新记录
 
+## 0.1.19（候选，尚未发布）
+
+- **冻结 0.1.18 Provider Source 面板。** 本版本不改变“显示逐模型视频选项”、当前 Source 的模型选择器、保存/回滚语义或 `volcengine_video_input_enabled` 的运行权威；0.1.19 只增强火山 Ark / Agent Plan 已配置模型的编辑弹窗。
+- 新增中英双语的逐模型横向设置：`视频输入模式 / Video Input Mode`、`思考模式 / Thinking Mode`、`思考强度 / Reasoning Effort`、`温度 / Temperature`、`核采样 / Top P`、`最大输出 Token / Max Output Tokens`、`停止序列 / Stop Sequences`、`频率惩罚 / Frequency Penalty` 与 `存在惩罚 / Presence Penalty`。外国 Provider 的模型弹窗不投影、也不持久化这些火山字段。
+- 视频设置从单一布尔展示升级为 `关闭 / Off`、`压缩 / Compressed`、`原画 / Original Quality` 三态 UI，但保留 0.1.18 数据兼容：旧 `volcengine_video_input_enabled=true` 等价于 `Original`；关闭视频只切换旧 Boolean，不删除上次 `compressed/original` profile，重新启用可恢复上次模式。
+- `Original` 严格保留 0.1.18 视频解析与调用形状；`Compressed` 才显式使用系统 `ffmpeg` 将受信视频规范化为较紧凑的 H.264 MP4 后再形成 `video_url`。缺少 ffmpeg 或转码失败时 fail closed，不会静默退回原画。官方 AstrBot Docker 镜像包含 ffmpeg；原生/自定义部署需要保证 `ffmpeg` 在 PATH 中。
+- 横向模型字段的优先级明确为“显式横向设置 > 同名 `custom_extra_body` > AstrBot/Ark/模型默认”。数字项在 Dashboard 中以可空字符串承载，空值表示**不注入**而不是数值 0；保存时空字段会清理，真实 `0` 仍可作为合法值持久化。
+- 思考参数只提升已经有明确通用语义的 `thinking.type` 与 `reasoning_effort`；本版本没有伪造统一 `Thinking Budget` 字段。厂商/模型专属预算参数继续由 `custom_extra_body` 承载，直到存在可验证的 Ark 映射。
+- 同时兼容 AstrBot `4.26.1` 的 `_apply_provider_specific_extra_body_overrides` 与 `4.27.2+` 的 `_apply_provider_specific_request_overrides`，使横向字段在两条受支持宿主路径都于 `custom_extra_body` 合并后覆盖同名请求值。
+- 新增独立、可撤销的 0.1.19 model-fields Dashboard bridge，并叠在 0.1.18 Source bridge 外层；安装顺序为 Source bridge → model-fields bridge，卸载顺序反向。`registry.py` 与 0.1.18 Source UI 逻辑保持不变，AstrBot `modalities` 仍不改写。
+- AstrBot 的首次“新增模型”弹窗由前端本地构造，插件无法在不修改共享 Dashboard 的前提下把服务端投影字段塞进该未保存对象；因此新横向字段在模型**保存后重新打开编辑弹窗**时出现。这是宿主 UI 生命周期边界，不是保存失败。
+- 候选实现已经通过 AstrBot `4.26.1` / `4.27.2` 双版本最小运行包合同与真实启动；真实 `4.27.2` Dashboard 浏览器矩阵确认 Ark / Agent Plan 模型显示并持久化双语横向字段，foreign 模型保持干净，0.1.18 Source master/selector 不受影响且 `pageErrors=[]`。压缩正向合同会现场生成测试视频、走 `Compressed` 转码、再由 ffmpeg 完整解码生成结果，不依赖付费火山 API。
+
 ## 0.1.18
 
 - 把火山视频传输的可见配置入口从通用模型卡移到对应 Provider Source 页面，避免共享模型卡组件因缺少可靠的当前 Provider 身份而出现“所有供应商都显示”或“所有供应商都不显示”。

@@ -105,7 +105,7 @@ jobs:
           manifest = json.loads(manifest_path.read_text('utf-8'))
           if manifest['package'] != 'astrbot_plugin_volcengine_provider':
               raise SystemExit('unexpected runtime package name')
-          if manifest['version'] != '0.1.18':
+          if manifest['version'] != '0.1.19':
               raise SystemExit('unexpected runtime version')
 
           expected = {item['path']: item for item in manifest['files']}
@@ -170,7 +170,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
           git add --all
-          git commit -m "runtime candidate: 0.1.18 from ${SOURCE_SHA}"
+          git commit -m "runtime candidate: 0.1.19 from ${SOURCE_SHA}"
 
           candidate_sha=$(git rev-parse HEAD)
           candidate_tree=$(git rev-parse 'HEAD^{tree}')

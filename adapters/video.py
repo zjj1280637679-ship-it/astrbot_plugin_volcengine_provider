@@ -8,7 +8,13 @@ AstrBot MediaResolver, and emits Ark ``video_url`` blocks.
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import os
 import re
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from astrbot.core.agent.message import ContentPart, TextPart
@@ -26,6 +32,9 @@ VIDEO_ATTACHMENT_PATTERN = re.compile(
     r"name (?P<name>.*?), (?P<source_kind>path|ref) "
     r"(?P<source>.+)\]$"
 )
+
+VIDEO_MODE_ORIGINAL = "original"
+VIDEO_MODE_COMPRESSED = "compressed"
 
 
 def _video_attachments_from_current_request(
@@ -73,14 +82,108 @@ def _replace_last_text_block(
     return False
 
 
-async def resolve_video_reference(media_ref: str) -> str:
+async def _compress_video_reference(media_ref: str) -> str:
+    """Resolve and compress one trusted video to a compact H.264 MP4 data URL."""
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise AdapterInputTransportError(
+            "当前环境未安装 ffmpeg，无法使用“压缩 / Compressed”视频模式。",
+            media_type="video",
+            stage="compress_media",
+        )
+
+    resolver = MediaResolver(
+        media_ref.strip(),
+        media_type="video",
+        default_suffix=".mp4",
+    )
+    fd, output_name = tempfile.mkstemp(prefix="volcengine_video_", suffix=".mp4")
+    os.close(fd)
+    output_path = Path(output_name)
+    try:
+        async with resolver.as_path() as resolved:
+            process = await asyncio.create_subprocess_exec(
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(resolved.path),
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-vf",
+                "scale=min(1280\\,iw):-2,fps=5",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "28",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "96k",
+                "-movflags",
+                "+faststart",
+                str(output_path),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await process.communicate()
+        if process.returncode != 0:
+            detail = stderr.decode("utf-8", errors="replace").strip()
+            if len(detail) > 400:
+                detail = detail[-400:]
+            raise AdapterInputTransportError(
+                "视频压缩失败，未向火山方舟发送请求。"
+                + (f" ffmpeg: {detail}" if detail else ""),
+                media_type="video",
+                stage="compress_media",
+            )
+        if not output_path.exists() or output_path.stat().st_size <= 0:
+            raise AdapterInputTransportError(
+                "视频压缩结果为空，未向火山方舟发送请求。",
+                media_type="video",
+                stage="compress_media",
+            )
+        data = await asyncio.to_thread(output_path.read_bytes)
+        encoded = base64.b64encode(data).decode("utf-8")
+        return f"data:video/mp4;base64,{encoded}"
+    except AdapterInputTransportError:
+        raise
+    except Exception as exc:
+        raise AdapterInputTransportError(
+            "视频压缩或读取失败，未向火山方舟发送请求。",
+            media_type="video",
+            stage="compress_media",
+        ) from exc
+    finally:
+        try:
+            output_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+async def resolve_video_reference(media_ref: str, *, mode: str = VIDEO_MODE_ORIGINAL) -> str:
     """Resolve one trusted AstrBot video reference for Ark Chat Completions.
+
+    ``original`` preserves the exact 0.1.18 behavior: remote/data URLs pass
+    through, while local references are materialized to a data URL. ``compressed``
+    explicitly downloads/materializes then transcodes to a compact MP4 first.
 
     Failures here are transport evidence only: no valid Ark request has reached
     the model, so model capability remains unknown.
     """
 
     normalized = media_ref.strip()
+    if mode == VIDEO_MODE_COMPRESSED:
+        return await _compress_video_reference(normalized)
     if normalized.startswith(("http://", "https://", "data:video/")):
         return normalized
 
@@ -114,6 +217,7 @@ async def inject_current_request_videos(
     extra_user_content_parts: list[ContentPart] | None,
     *,
     enabled: bool,
+    mode: str = VIDEO_MODE_ORIGINAL,
 ) -> None:
     """Replace only trusted current-request video envelopes in assembled messages."""
 
@@ -137,7 +241,13 @@ async def inject_current_request_videos(
 
     replacements: list[tuple[str, dict[str, Any]]] = []
     for marker_text, media_ref in attachments:
-        video_url = await resolve_video_reference(media_ref)
+        # Preserve the exact 0.1.18 resolver call shape for Original mode. Some
+        # regression fixtures (and potential third-party monkeypatches) provide
+        # a one-argument resolver. Only the new compressed path needs ``mode``.
+        if mode == VIDEO_MODE_ORIGINAL:
+            video_url = await resolve_video_reference(media_ref)
+        else:
+            video_url = await resolve_video_reference(media_ref, mode=mode)
         replacements.append(
             (
                 marker_text,

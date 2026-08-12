@@ -1,8 +1,8 @@
 """Service-level provider-card lifecycle matrix.
 
 Runs the actual AstrBot ProviderConfigService create/update methods after the
-plugin Dashboard bridge is installed. This verifies that both Volcengine Source
-types and a foreign reference cross the same host save boundary correctly.
+plugin Dashboard bridges are installed. This verifies that both Volcengine
+Source types and a foreign reference cross the same host save boundary correctly.
 """
 
 from __future__ import annotations
@@ -23,9 +23,18 @@ from astrbot_plugin_volcengine_provider import registry
 from astrbot_plugin_volcengine_provider.capabilities import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
+    REASONING_EFFORT_KEY,
+    REASONING_MODE_KEY,
+    STOP_SEQUENCES_KEY,
+    TEMPERATURE_KEY,
     VIDEO_CONTROLS_VISIBLE_KEY,
     VIDEO_INPUT_ENABLED_KEY,
+    VIDEO_INPUT_MODE_UI_KEY,
+    VIDEO_INPUT_PROFILE_KEY,
+    acquire_model_fields_bridge,
+    release_model_fields_bridge,
 )
+from astrbot_plugin_volcengine_provider.capabilities import model_fields_bridge
 
 from assertions import (
     assert_foreign_config_is_clean,
@@ -100,6 +109,7 @@ def make_service() -> ProviderConfigService:
                     "provider_source_id": "ark-A",
                     "model": "existing",
                     VIDEO_INPUT_ENABLED_KEY: False,
+                    VIDEO_INPUT_PROFILE_KEY: "compressed",
                 },
                 {
                     "id": "plan-A/existing",
@@ -148,6 +158,8 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
     persisted = service.provider_manager.get_provider_config_by_id(existing_id)
     assert persisted is not None
     assert persisted[VIDEO_INPUT_ENABLED_KEY] is True
+    if source_id == "ark-A":
+        assert persisted[VIDEO_INPUT_PROFILE_KEY] == "compressed"
 
     await ProviderConfigService.upsert_provider_source(
         service,
@@ -165,15 +177,32 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
     persisted = service.provider_manager.get_provider_config_by_id(existing_id)
     assert persisted is not None
     assert persisted[VIDEO_INPUT_ENABLED_KEY] is True
+    if source_id == "ark-A":
+        assert persisted[VIDEO_INPUT_PROFILE_KEY] == "compressed"
 
     await ProviderConfigService.create_provider(
         service,
-        {"id": f"{source_id}/new", "model": "new", ui_key: True},
+        {
+            "id": f"{source_id}/new",
+            "model": "new",
+            ui_key: True,
+            VIDEO_INPUT_MODE_UI_KEY: "compressed",
+            TEMPERATURE_KEY: "0.6",
+            REASONING_MODE_KEY: "auto",
+            REASONING_EFFORT_KEY: "high",
+            STOP_SEQUENCES_KEY: ["STOP"],
+        },
         source_id,
     )
     created = service.provider_manager.created[-1]
     assert created["provider_source_id"] == source_id
     assert_owned_model_card_saved(created, expected_video_enabled=True)
+    assert created[VIDEO_INPUT_PROFILE_KEY] == "compressed"
+    assert VIDEO_INPUT_MODE_UI_KEY not in created
+    assert created[TEMPERATURE_KEY] == 0.6
+    assert created[REASONING_MODE_KEY] == "auto"
+    assert created[REASONING_EFFORT_KEY] == "high"
+    assert created[STOP_SEQUENCES_KEY] == ["STOP"]
 
     await ProviderConfigService.create_provider(
         service,
@@ -182,6 +211,9 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
     )
     created_default = service.provider_manager.created[-1]
     assert_owned_model_card_saved(created_default, expected_video_enabled=False)
+    assert TEMPERATURE_KEY not in created_default
+    assert REASONING_MODE_KEY not in created_default
+    assert VIDEO_INPUT_PROFILE_KEY not in created_default
 
     existing_model = "agentplan/existing" if source_id == "plan-A" else "existing"
     await ProviderConfigService.update_provider(
@@ -193,10 +225,14 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
             "model": existing_model,
             VIDEO_INPUT_ENABLED_KEY: False,
             ui_key: True,
+            VIDEO_INPUT_MODE_UI_KEY: "original",
+            TEMPERATURE_KEY: "0.4",
         },
     )
     _, updated = service.provider_manager.updated[-1]
     assert_owned_model_card_saved(updated, expected_video_enabled=True)
+    assert updated[VIDEO_INPUT_PROFILE_KEY] == "original"
+    assert updated[TEMPERATURE_KEY] == 0.4
 
     return {
         "source_id": source_id,
@@ -204,6 +240,7 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
         "create_default": False,
         "update_enabled": True,
         "source_hide_preserved": True,
+        "model_fields": "normalized",
     }
 
 
@@ -215,6 +252,12 @@ async def _exercise_foreign(service: ProviderConfigService) -> dict:
             "id": "foreign-A/new",
             "model": "new",
             forged: True,
+            VIDEO_INPUT_MODE_UI_KEY: "compressed",
+            VIDEO_INPUT_PROFILE_KEY: "compressed",
+            TEMPERATURE_KEY: "0.5",
+            REASONING_MODE_KEY: "auto",
+            REASONING_EFFORT_KEY: "high",
+            STOP_SEQUENCES_KEY: ["FORGED"],
             "custom_extra_body": {"foreign": "kept"},
         },
         "foreign-A",
@@ -222,6 +265,15 @@ async def _exercise_foreign(service: ProviderConfigService) -> dict:
     created = service.provider_manager.created[-1]
     assert_no_temporary_ui_keys_persisted(created)
     assert_foreign_config_is_clean(created)
+    for key in (
+        VIDEO_INPUT_MODE_UI_KEY,
+        VIDEO_INPUT_PROFILE_KEY,
+        TEMPERATURE_KEY,
+        REASONING_MODE_KEY,
+        REASONING_EFFORT_KEY,
+        STOP_SEQUENCES_KEY,
+    ):
+        assert key not in created
     assert created["custom_extra_body"] == {"foreign": "kept"}
 
     return {
@@ -232,11 +284,15 @@ async def _exercise_foreign(service: ProviderConfigService) -> dict:
 
 
 async def exercise() -> dict:
+    while model_fields_bridge._FIELD_BRIDGE_LEASE_COUNT > 0:
+        release_model_fields_bridge()
     while registry._DASHBOARD_LEASE_COUNT > 0:
         registry.release_owned_dashboard_bridge()
 
     if registry.acquire_owned_dashboard_bridge() is not True:
-        raise AssertionError("expected Dashboard bridge to install in supported host")
+        raise AssertionError("expected 0.1.18 Dashboard bridge to install")
+    if acquire_model_fields_bridge() is not True:
+        raise AssertionError("expected 0.1.19 model-fields bridge to install")
 
     try:
         service = make_service()
@@ -246,6 +302,8 @@ async def exercise() -> dict:
             "foreign": await _exercise_foreign(service),
         }
     finally:
+        while model_fields_bridge._FIELD_BRIDGE_LEASE_COUNT > 0:
+            release_model_fields_bridge()
         while registry._DASHBOARD_LEASE_COUNT > 0:
             registry.release_owned_dashboard_bridge()
 

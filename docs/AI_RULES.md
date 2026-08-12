@@ -4,6 +4,8 @@
 
 This document is a fast safety boundary for AI coding agents and maintainers. It makes the project easier to extend without turning explanatory metadata, test output, or one observed interaction into hidden runtime authority.
 
+**HOT-state authority:** `docs/PROJECT_STATE.json`. Read it before using any present-tense goal, release, strategy, blocker, or validation-frontier statement from another document. Lifecycle rules are in `docs/KNOWLEDGE_LIFECYCLE.md`.
+
 ## Core rules
 
 ### 1. Interaction is not judgment
@@ -64,6 +66,18 @@ A synthetic WAV or MP4 sent directly to a Provider is not equivalent to a QQ eve
 ### 6. Historical validated behavior is evidence, not amnesia
 
 Do not treat "not re-run in this release" as "never worked". Check `docs/TEST_HISTORY.md` and `docs/REGRESSION_SCOPE.md` first. Re-run the full QQ-equivalent media path when the media path, host media contract, or payload contract changes; otherwise use the narrowest regression that covers the changed layer.
+
+### 7. Current state must not be duplicated
+
+`docs/PROJECT_STATE.json` is the only HOT/current state authority.
+
+- `AGENTS.md`, `AI_ONBOARDING.md`, `DESIGN_DECISIONS.md`, ADRs, test history, and decision indexes may explain constraints/history, but they must not keep an independent current release goal or active validation frontier.
+- When a release goal changes, demote the old HOT frontier to `docs/archive/` or another historical ledger instead of leaving both in present tense.
+- Superseded and rejected strategies must remain identifiable as such; do not let two versions look equally current.
+- When an invalidator fires, old evidence becomes a baseline to re-check, not automatic current authority.
+- Before implementing a historical requirement or strategy, verify that `PROJECT_STATE` still makes it action-driving.
+
+See `docs/KNOWLEDGE_LIFECYCLE.md` and ADR-0005.
 
 ## Safe extension pattern
 

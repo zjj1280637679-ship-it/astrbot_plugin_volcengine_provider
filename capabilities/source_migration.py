@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .model_fields import strip_model_fields
 from .model_scope import (
     LEGACY_MODEL_VIDEO_INPUT_KEY,
     OWNED_SOURCE_TYPES,
@@ -27,5 +28,7 @@ def cleanup_owned_settings_on_source_change(
         if key in provider_config:
             provider_config.pop(key, None)
             changed = True
+    if strip_model_fields(provider_config):
+        changed = True
     # AstrBot-native feedback (including modalities) is host-owned.
     return changed

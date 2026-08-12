@@ -1,6 +1,8 @@
 # AI / Agent Project Entry Point
 
-This file is the fastest safe entry point for an AI, coding agent, reviewer, or new maintainer.
+Lifecycle role: **WARM entry point**. This file provides stable ownership and navigation rules only.
+
+**HOT/current state authority: `docs/PROJECT_STATE.json`.** Do not reconstruct the current release goal, blocker, or validation frontier from this file, README, CHANGELOG, old PR text, or historical test output. Read `docs/KNOWLEDGE_LIFECYCLE.md` for HOT/WARM/COLD rules.
 
 ## What this project is
 
@@ -8,67 +10,72 @@ This repository implements Volcengine Ark providers for AstrBot. It adapts Volce
 
 ## Read in this order
 
-1. `docs/AI_RULES.md` — safe modification and ownership rules.
-2. `docs/KNOWLEDGE_BOUNDARY.md` — why interaction, evidence, inference, and judgment are different layers.
-3. `docs/RELEASE_BOUNDARY.md` — why the development repository and user runtime package are separate products.
-4. `docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md` — concrete minimal-runtime packaging and marketplace rules.
-5. `docs/AI_ONBOARDING.md` — project map and safe first actions.
-6. `docs/PROJECT_STATE.json` — machine-readable current release state and validation frontier.
-7. `docs/TEST_HISTORY.md` — important historical validations that must not disappear merely because they were not re-run.
-8. `docs/REGRESSION_SCOPE.md` — change-to-test impact map and QQ-equivalent revalidation triggers.
-9. `docs/DESIGN_DECISIONS.md` and `docs/ADR/` — objective conditions, rejected designs, and architectural reasons.
-10. `docs/CAPABILITY_BOUNDARY.md` — adapter/model/system capability boundaries and feedback semantics.
-11. `docs/E2E_MATRIX.md` — validation layers and product-path evidence.
-12. `capabilities/SEMANTICS.json` — machine-readable capability/feedback contract.
+1. `docs/PROJECT_STATE.json` — current version, goal, strategy, blockers/frontier.
+2. `docs/KNOWLEDGE_LIFECYCLE.md` — HOT/WARM/COLD demotion, invalidators, superseded/rejected rules.
+3. `docs/AI_RULES.md` — safe modification and ownership rules.
+4. `docs/KNOWLEDGE_BOUNDARY.md` — interaction/evidence/judgment boundary.
+5. `docs/RELEASE_BOUNDARY.md` — development repository versus user runtime package.
+6. `docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md` — minimal-runtime packaging/marketplace rules.
+7. `docs/AI_ONBOARDING.md` — project map and safe workflow.
+8. `docs/TEST_HISTORY.md` — historical validations that remain evidence within their premises.
+9. `docs/REGRESSION_SCOPE.md` — when historical evidence becomes stale and must be rerun.
+10. `docs/DESIGN_DECISIONS.md` and `docs/ADR/` — stable constraints and rejected strategies.
+11. `docs/CAPABILITY_BOUNDARY.md` — adapter/model/system capability boundaries.
+12. `docs/E2E_MATRIX.md` — validation layers and evidence ledger.
+13. `capabilities/SEMANTICS.json` — machine-readable capability/feedback semantics.
 
 ## Non-negotiable ownership boundaries
 
 - Adapter capability means “this plugin can express/transport a request shape”; it is not a claim that a model supports it.
-- Runtime feedback is evidence from the current interaction, not permanent model truth.
-- **Interaction is not judgment:** enough information to translate/send/display a request does not imply enough information or authority to make a global capability decision.
+- Runtime feedback is scoped evidence, not permanent model truth.
+- Interaction is not judgment: receiving/translating/sending/displaying information does not grant authority for a global capability verdict.
 - Missing feedback is not `false`.
 - Historical feedback must not override current feedback.
 - A local media/input transport failure is not evidence that the model lacks the modality.
-- A raw provider API success/failure is downstream protocol evidence; it is not by itself proof of the QQ/NapCat/AstrBot product path.
+- A raw provider API result is downstream protocol evidence; it is not by itself proof of the QQ/NapCat/AstrBot product path.
 - The plugin must not recreate AstrBot routing, fallback, retry, provider lifecycle, or global model capability ownership.
 - Provider-specific Dashboard fields must not leak into foreign providers.
 - Migration preserves user intent/configuration, not model facts.
-- **Development explainability is not runtime payload:** tests, CI, ADRs, AI onboarding, evidence, experiments, and internal research stay on the development branch unless a concrete runtime consumer requires them.
+- Development explainability is not runtime payload: tests, CI, ADRs, evidence, experiments, internal research, and lifecycle documents stay outside the generated runtime artifact unless a concrete runtime consumer requires them.
 - The marketplace artifact is generated from an allow-list. Never publish the development repository archive as the user package.
+
+## Dashboard scope rule
+
+Do not overgeneralize the 0.1.18 Source-UI decision.
+
+- The shared **top capability/modalities** surface is not a reliable provider-specific extension boundary for the fifth video capability checkbox/icon.
+- Ordinary **saved-model edit-body rows** can be provider-specific when the owned Source/model identity is known and the fields are projected only onto owned model copies.
+
+ADR-0003 governs the first problem; ADR-0005 records the scope correction and knowledge-lifecycle rule.
 
 ## Before changing production code
 
-Identify the affected layers before editing:
+Identify the affected layers:
 
-1. **product input path** — what real QQ/NapCat/AstrBot representation reaches the plugin;
-2. **UI/config path** — what card/source exposes state and where it is saved;
-3. **runtime path** — what provider/adapter actually sends to Ark or Agent Plan;
-4. **feedback path** — what current upstream feedback is shown, and whether it is transient or persistent;
-5. **historical evidence path** — which validated behavior becomes stale if this dependency changes;
-6. **release path** — whether the change belongs in the generated `runtime` distribution or only in the development repository.
+1. product input path;
+2. UI/config path;
+3. runtime request path;
+4. feedback path;
+5. historical evidence path;
+6. release/distribution path;
+7. knowledge lifecycle: is the requirement/strategy HOT, WARM, COLD, superseded, rejected, or invalidated?
 
-Then locate the corresponding regression test, `TEST_HISTORY`, `REGRESSION_SCOPE`, release manifest/rules, and ADR. If none exists for a new behavior, add the explanation before or with the behavior.
+Then locate the corresponding regression test, `TEST_HISTORY`, `REGRESSION_SCOPE`, release rules, and ADR. If the behavior is new, add the smallest explanation that should survive the current release.
 
 ## Do not infer from names alone
 
-Do not infer model capability from a model ID prefix, brand, vendor, historical result, or absence of a metadata icon. Volcengine is both a first-party platform for Doubao/Seed models and a cloud serving platform for third-party/open models, and model/platform behavior can change independently of this plugin.
+Do not infer model capability from a model ID prefix, brand, vendor, historical result, or absence of a metadata icon. Volcengine is both a first-party platform for Doubao/Seed models and a serving platform for third-party/open models, and model/platform behavior can change independently.
 
-## Current release state
+## Release/history lookup
 
-**0.1.18 is released at both the repository and runtime-distribution layers.** PR #4 was squash-merged to `main` at `22444f47154f4f88ff3157d6e6ffcce9ad2689f0`; main gate run `31589741300` passed. Publisher run `31589815606` passed prepare, all four pre-promotion native-installer cells, promotion, and all four blocking post-promotion cells. The stable `runtime` branch is `4586aa2eb573eb97a72baaaa152c727e3b35530e`, contains 21 runtime blobs byte-for-byte identical to the gated artifact, and reports metadata version 0.1.18.
+Do **not** maintain release state here. Use:
 
-0.1.18 moves the visible per-model video configuration surface out of the shared generic model card and into each owned Ark / Agent Plan Provider Source. The persistent Source switch only shows or hides the exact-Source selector; the canonical per-card transport value remains `volcengine_video_input_enabled`, hidden selections remain active, foreign Sources receive no field, and a failed host Source upsert restores the complete pre-call model-card state. Migration deliberately preserves the historical 0.1.17 exact-Source UI residue only when its encoded Source identity matches the card.
+- current/HOT: `docs/PROJECT_STATE.json`;
+- published/historical validation: `docs/TEST_HISTORY.md` and `CHANGELOG.md`;
+- completed state snapshots: `docs/archive/`.
 
-0.1.17 established the distribution boundary after a real AstrBot Store installation exposed development files such as `.github/workflows/**` in the user ZIP. That historical release separated development state from the minimal user package and remains the basis for the 0.1.18 publication path.
-
-The publication topology is:
-
-`main -> all-PR/main-push gate -> exact allow-list artifact -> unique candidate -> 4-cell native installer gate -> leased runtime promotion -> blocking 4-cell runtime recheck`.
-
-`metadata.yaml.repo` is bound to the stable `runtime` branch, which AstrBot supports as a `/tree/{branch}` repository source. For 0.1.18, the regenerated artifact, actual runtime branch/archive, and native installer paths supplied that repository/runtime publication proof. External AstrBot Store refresh and a real Windows Store installation remain unobserved external state and must not be inferred from repository success.
-
-The first 0.1.18 publisher run exposed an operational-only cleanup bug after the validated runtime had already been promoted: its final candidate deletion ran outside a Git worktree. PR #5 fixed the cleanup execution context at main commit `9feb0d5902f4bdc88ea69b08f6d3bee25fcf8f2e` and made every remote-ref query fail closed. Main gate run `31590820116` and no-op publisher run `31590908018` then passed; the latter skipped runtime promotion because the 21-file tree was unchanged and removed the residual candidate branch. No `runtime-candidate-*` ref remains.
+This separation is intentional: old release facts stay searchable without remaining action-driving.
 
 ## AI intervention principle
 
-These files are explanatory hooks, not runtime authority. They should make future AI intervention faster and safer by exposing assumptions, evidence, rejected paths, test entry points, historical validations, release boundaries, and the current decision frontier. They must not become a hidden control plane and must not be copied into the runtime distribution merely because they are useful to developers.
+Project documentation is an explanatory layer, not runtime authority. It should expose assumptions, evidence, rejected paths, test entry points, invalidators, and current decision frontier while preventing historical goals from silently becoming current instructions.
