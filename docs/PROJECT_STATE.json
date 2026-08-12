@@ -1,21 +1,23 @@
 {
-  "schema_version": 10,
+  "schema_version": 11,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "development": {
     "version": "0.1.19",
-    "branch": "fix/0.1.19-release",
-    "status": "release_repair",
-    "pull_request": null,
+    "branch": "main",
+    "status": "released_repository_and_runtime",
+    "pull_request": 8,
     "merged_feature_pull_request": 7,
-    "merged_main_commit": "a43b678e664c7884e5e18b58487fa73b7a4cd359"
+    "feature_main_commit": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
+    "merged_main_commit": "9f406dda365213685f7c67d04b3d0cac583fb153"
   },
   "published_baseline": {
-    "version": "0.1.18",
+    "version": "0.1.19",
     "main_branch": "main",
-    "main_release_commit": "22444f47154f4f88ff3157d6e6ffcce9ad2689f0",
+    "main_release_commit": "9f406dda365213685f7c67d04b3d0cac583fb153",
     "runtime_branch": "runtime",
-    "runtime_commit": "4586aa2eb573eb97a72baaaa152c727e3b35530e",
+    "runtime_commit": "d7dc0f171cca237304b24604137659bc98a3d962",
+    "runtime_tree": "d394a878ee250c6d6d116b9a954589ab0df59ae2",
     "history": [
       "docs/archive/PROJECT_STATE-0.1.18.md",
       "docs/TEST_HISTORY.md",
@@ -23,21 +25,20 @@
     ]
   },
   "current_goal": {
-    "id": "0.1.19-release-repair",
-    "goal": "Preserve the validated 0.1.19 model-card behavior while repairing runtime publication, removing duplicated release-version literals, and rejecting non-finite numeric request settings.",
+    "id": "0.1.19-external-distribution-observation",
+    "goal": "Preserve the published 0.1.19 repository/runtime baseline while keeping external AstrBot Store refresh and a real Windows Store installation explicitly unverified until directly observed.",
     "non_goals": [
       "Do not redesign or extend the 0.1.18 Provider Source panel.",
       "Do not modify AstrBot modalities or claim model capability from request settings.",
       "Do not leak Volcengine fields into foreign provider model cards.",
       "Do not invent a generic Thinking Budget field without a verified Ark mapping.",
-      "Do not bypass candidate or post-promotion native-install validation to force a release."
+      "Do not infer marketplace refresh or Windows installation success from repository/runtime CI.",
+      "Do not spend paid Volcengine API quota merely to observe distribution state."
     ],
     "success_conditions": [
-      "Active release packaging and publication derive the release version from metadata.yaml instead of duplicated literals.",
-      "The native updater matrix tolerates bounded transient GitHub archive failures without retrying deterministic validation errors.",
-      "Every string-backed float field rejects NaN and positive or negative infinity before persistence or request injection.",
-      "AstrBot 4.26.1 and 4.27.2 packaged runtime contracts pass without changing the 0.1.18 Source UI contract.",
-      "The repaired publisher promotes 0.1.19 to runtime and the post-promotion four-cell matrix passes."
+      "Published repository and runtime identities remain explicit and reproducible from the recorded gate and publisher runs.",
+      "AstrBot Store is called refreshed only after it is directly observed serving 0.1.19.",
+      "Windows Store installation is called verified only after a real installation is directly observed."
     ]
   },
   "frozen_constraints": [
@@ -109,11 +110,11 @@
       "setup_uv_post_cleanup": "passed",
       "artifact_upload": "passed"
     },
-    "merged_main_runtime_distribution_gate": {
+    "merged_feature_runtime_distribution_gate": {
       "run_id": 31625904337,
       "head": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
       "status": "passed",
-      "meaning": "the merged 0.1.19 runtime artifact and packaged behavior passed before publication"
+      "meaning": "the initially merged 0.1.19 runtime artifact and packaged behavior passed before the publication blocker was found"
     },
     "failed_runtime_publisher": {
       "run_id": 31626139699,
@@ -122,22 +123,31 @@
       "deterministic_root_cause": "validate-runtime-store-source.yml compared the 0.1.19 manifest with a stale literal 0.1.18",
       "runtime_unchanged": "4586aa2eb573eb97a72baaaa152c727e3b35530e",
       "candidate_cleanup": "passed_no_residual_candidate_branch"
+    },
+    "released_main_runtime_distribution_gate": {
+      "run_id": 31630774583,
+      "head": "9f406dda365213685f7c67d04b3d0cac583fb153",
+      "status": "passed",
+      "astrbot_versions": ["4.26.1", "4.27.2"],
+      "meaning": "the exact repaired main release artifact and packaged behavior passed before promotion"
+    },
+    "successful_runtime_publisher": {
+      "run_id": 31630921686,
+      "attempt": 4,
+      "head": "9f406dda365213685f7c67d04b3d0cac583fb153",
+      "status": "passed",
+      "prepare_candidate": "passed",
+      "pre_promotion_native_installer_cells": "4_of_4_passed",
+      "promotion": "passed",
+      "post_promotion_native_installer_cells": "4_of_4_passed",
+      "runtime_commit": "d7dc0f171cca237304b24604137659bc98a3d962",
+      "runtime_tree": "d394a878ee250c6d6d116b9a954589ab0df59ae2",
+      "runtime_metadata_version": "0.1.19",
+      "candidate_cleanup": "passed_no_candidate_refs",
+      "paid_volcengine_api_calls": false
     }
   },
-  "known_false_failures": [
-    {
-      "id": "PUBLISH-0.1.19-GITHUB-ARCHIVE-TRANSIENTS",
-      "lifecycle": "active_harness_repair",
-      "run_id": 31626139699,
-      "jobs": [94212920906, 94212921033],
-      "observations": [
-        "GitHub archive returned HTTP 503",
-        "GitHub archive disconnected before sending a response"
-      ],
-      "product_meaning": "none; the same candidate was downloaded by the other matrix cells",
-      "repair": "bounded retry only for retryable HTTP status or transport failures"
-    }
-  ],
+  "known_false_failures": [],
   "resolved_harness_history": [
     {
       "id": "UI-EVIDENCE-UV-POST-CLEANUP-LOCK",
@@ -153,16 +163,40 @@
       ],
       "verification_run": 31624873834,
       "verification": "complete job green including explicit Stop AstrBot evidence server and Post Run astral-sh/setup-uv"
+    },
+    {
+      "id": "PUBLISH-0.1.19-STALE-VERSION-LITERAL",
+      "lifecycle": "historical_resolved",
+      "failed_run": 31626139699,
+      "failed_layer": "pre_promotion_native_install_validation",
+      "root_cause": "validate-runtime-store-source.yml compared the generated 0.1.19 manifest with a stale hardcoded 0.1.18 literal",
+      "fix": "derive the runtime manifest from metadata.yaml and compare candidate and installed metadata with the manifest instead of a duplicated release literal",
+      "verification_run": 31630921686,
+      "verification": "publisher attempt 4 passed all pre-promotion and post-promotion cells"
+    },
+    {
+      "id": "PUBLISH-0.1.19-GITHUB-ARCHIVE-TRANSIENTS",
+      "lifecycle": "historical_resolved",
+      "failed_run": 31626139699,
+      "jobs": [94212920906, 94212921033],
+      "observations": [
+        "GitHub archive returned HTTP 503",
+        "GitHub archive disconnected before sending a response"
+      ],
+      "product_meaning": "none; the same candidate was downloaded by the other matrix cells",
+      "fix": "bounded retry only for retryable HTTP status or transport failures, with partial-install cleanup",
+      "verification_run": 31630921686,
+      "verification": "publisher attempt 4 passed all eight native-installer cells"
     }
   ],
   "active_validation_frontier": {
     "release": "0.1.19",
-    "name": "release_repair_and_republication",
-    "current_stage": "main_feature_merged_runtime_still_0_1_18_repair_in_progress",
+    "name": "external_distribution_observation",
+    "current_stage": "repository_and_runtime_published_external_store_and_windows_install_unobserved",
     "next_actions": [
-      "Validate and merge the focused release repair without changing the released 0.1.18 Source UI contract.",
-      "Require the exact-main 0.1.19 gate plus pre-promotion, runtime promotion, and post-promotion native-install validation before calling 0.1.19 published.",
-      "After successful runtime publication, demote this repair frontier into release history and make the published runtime SHA explicit."
+      "Observe whether AstrBot Store refreshes to metadata version 0.1.19 without inferring that state from repository CI.",
+      "Record a real Windows Store installation only if it is directly performed and observed.",
+      "Keep repository/runtime publication complete even while those external states remain unknown."
     ]
   },
   "knowledge_lifecycle": {
