@@ -99,19 +99,33 @@ jobs:
         run: git clone --depth 1 --branch '${{ matrix.astrbot_ref }}' https://github.com/AstrBotDevs/AstrBot.git AstrBot
       - name: Install exact AstrBot runtime
         run: uv sync --directory AstrBot
-      - name: Validate with AstrBot's plugin package inspector
+      - name: Validate package metadata with the host API available in this AstrBot version
         shell: bash
         run: |
           uv run --directory AstrBot python - <<'PY'
           from pathlib import Path
-          from astrbot.core.star.updater import _PluginUpdater
+          import yaml
+
           root = Path.cwd().parent / 'dist' / 'runtime' / 'astrbot_plugin_volcengine_provider'
-          result = _PluginUpdater.inspect_plugin_directory(root)
-          metadata = result['metadata']
+          metadata = yaml.safe_load((root / 'metadata.yaml').read_text('utf-8'))
           assert metadata['name'] == 'astrbot_plugin_volcengine_provider'
           assert metadata['version'] == '0.1.17'
           assert str(metadata['repo']).endswith('/tree/runtime')
-          print('ASTRBOT_PACKAGE_INSPECTOR=OK')
+
+          # Newer AstrBot versions expose an explicit package inspector. 4.26.1
+          # predates astrbot.core.star.updater, so requiring that newer helper
+          # would test the harness rather than the declared minimum host. The
+          # following real startup remains the cross-version integration proof.
+          try:
+              from astrbot.core.star.updater import _PluginUpdater
+          except ModuleNotFoundError:
+              print('ASTRBOT_PACKAGE_INSPECTOR=UNAVAILABLE_ON_THIS_HOST')
+          else:
+              inspected = _PluginUpdater.inspect_plugin_directory(root)['metadata']
+              assert inspected['name'] == metadata['name']
+              assert inspected['version'] == metadata['version']
+              print('ASTRBOT_PACKAGE_INSPECTOR=OK')
+          print('RUNTIME_METADATA_CONTRACT=OK')
           PY
       - name: Compile only files that users receive
         shell: bash
