@@ -9,7 +9,11 @@ from astrbot.api import logger, star
 
 from . import providers as _providers  # noqa: F401
 from .adapters.logging import install_video_log_redaction, remove_video_log_redaction
-from .capabilities import migrate_legacy_video_settings
+from .capabilities import (
+    acquire_model_fields_bridge,
+    migrate_legacy_video_settings,
+    release_model_fields_bridge,
+)
 from .registry import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
@@ -22,20 +26,29 @@ class VolcengineProviderPlugin(star.Star):
     def __init__(self, context: star.Context):
         super().__init__(context)
         self._dashboard_bridge_acquired = False
+        self._model_fields_bridge_acquired = False
         self._video_log_filter = install_video_log_redaction()
         try:
             self._dashboard_bridge_acquired = acquire_owned_dashboard_bridge()
+            self._model_fields_bridge_acquired = acquire_model_fields_bridge()
         except Exception:
+            if self._model_fields_bridge_acquired:
+                release_model_fields_bridge()
+                self._model_fields_bridge_acquired = False
+            if self._dashboard_bridge_acquired:
+                release_owned_dashboard_bridge()
+                self._dashboard_bridge_acquired = False
             remove_video_log_redaction(self._video_log_filter)
             self._video_log_filter = None
             raise
         logger.info(
             "Volcengine providers registered: %s, %s; dashboard_bridge=%s; "
-            "restart AstrBot after install/update/disable because the provider "
-            "type registry has no safe plugin-owned unload hook",
+            "model_fields_bridge=%s; restart AstrBot after install/update/disable "
+            "because the provider type registry has no safe plugin-owned unload hook",
             ARK_PROVIDER_TYPE,
             AGENT_PLAN_PROVIDER_TYPE,
             "active" if self._dashboard_bridge_acquired else "host-unavailable",
+            "active" if self._model_fields_bridge_acquired else "host-unavailable",
         )
 
     async def initialize(self) -> None:
@@ -61,6 +74,9 @@ class VolcengineProviderPlugin(star.Star):
     async def terminate(self) -> None:
         remove_video_log_redaction(self._video_log_filter)
         self._video_log_filter = None
+        if getattr(self, "_model_fields_bridge_acquired", False):
+            release_model_fields_bridge()
+            self._model_fields_bridge_acquired = False
         if getattr(self, "_dashboard_bridge_acquired", False):
             release_owned_dashboard_bridge()
             self._dashboard_bridge_acquired = False
