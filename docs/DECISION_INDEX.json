@@ -59,8 +59,8 @@
   ],
   "active_evidence": {
     "doc": "docs/E2E_MATRIX.md",
-    "goal": "Prepare the 0.1.18 Source-video UI release while preserving the historical 0.1.17 runtime-distribution evidence and tracking plugin contracts, AstrBot 4.26.1/4.27.2 service integration, real 4.27.2 Dashboard presentation, downstream Ark attribution, and historical QQ product regressions",
-    "reason": "Each layer may judge only the interface it actually exercises. The Source save contract passed L3 on 4.26.1/4.27.2 and the dated 2026-08-12 real 4.27.2 Dashboard DOM run passed L4; neither UI evidence nor raw provider fixtures silently redefine model capability or QQ product compatibility.",
+    "goal": "Record the released 0.1.18 repository/runtime state while preserving historical 0.1.17 migration and runtime-distribution evidence and tracking the still-external AstrBot Store/Windows observation frontier",
+    "reason": "Each layer may judge only the interface it actually exercises. The Source save contract passed L3 on 4.26.1/4.27.2 and the dated 2026-08-12 real 4.27.2 Dashboard DOM run passed L4; main gate 31589741300 and publisher 31589815606 then proved the allow-list artifact, promotion, and pre/post-promotion native installer paths. Neither those results, UI evidence, nor raw provider fixtures silently redefine model capability or QQ product compatibility.",
     "release_0_1_18_source_video_ui": {
       "l3_service_matrix": ["4.26.1_pass", "4.27.2_pass"],
       "l4_dashboard_4_27_2": "2026-08-12_pass",
@@ -73,7 +73,7 @@
         "secondary_failure": "persistence or old-instance reload failure attached as note; unobserved restoration not claimed"
       }
     },
-    "distribution_status": "0.1.18 release candidate awaits post-merge runtime branch regeneration and actual artifact/native-updater validation; the recorded runtime commit is historical 0.1.17 evidence"
+    "distribution_status": "0.1.18 repository/runtime release complete: release main 22444f47154f4f88ff3157d6e6ffcce9ad2689f0, gate run 31589741300 passed, publisher run 31589815606 prepare/prepublish-4/promotion/postpublish-4 passed, and runtime 4586aa2eb573eb97a72baaaa152c727e3b35530e has 21 blobs byte-for-byte equal to the gated artifact with metadata 0.1.18. PR 5 repaired the cleanup execution context at main 9feb0d5902f4bdc88ea69b08f6d3bee25fcf8f2e; main gate 31590820116 and no-op publisher 31590908018 passed, the unchanged runtime was not re-promoted, and no runtime-candidate ref remains. External AstrBot Store refresh and real Windows Store installation remain unobserved."
   },
   "ai_entry_points": [
     "AGENTS.md",

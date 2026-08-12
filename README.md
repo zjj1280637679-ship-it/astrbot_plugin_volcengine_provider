@@ -45,7 +45,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-如果 AstrBot 插件市场已经显示 `0.1.18`，可以直接安装或更新。市场记录尚未刷新时，请按下面的最小运行包手动安装：
+`0.1.18` 已在仓库与经过门禁验证的 `runtime` 分支发布；AstrBot 插件市场刷新与真实 Windows 商店安装仍属于尚未观察到的外部状态。如果市场已经显示 `0.1.18`，可以直接安装或更新；尚未刷新时，请按下面的最小运行包手动安装：
 
 1. 下载 [runtime.zip](https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip)。
 2. 解压 ZIP，把其中唯一的插件目录放入 AstrBot 的 `data/plugins/`；不要把 ZIP 原样塞进插件目录，也不要额外套一层目录。确认 `metadata.yaml` 与 `main.py` 位于插件目录根部。
@@ -247,6 +247,8 @@ registry.py
 ### 0.1.18 Source 视频 UI 证据
 
 - 新的 Source 页面视频选择保存语义已在 AstrBot `4.26.1` 与 `4.27.2` 的真实服务矩阵通过 L3 验证；2026-08-12 又在真实 AstrBot `4.27.2` Dashboard DOM 完成 L4 观察：Ark / Agent Plan Source 各只出现 1 个显示开关，展开后分别只列出自己的 2 / 1 张模型卡；外国 Source 为 0 个开关、0 个选择器；关闭会隐藏列表，再打开时选择仍保留且过程没有产生 API 请求；三类通用模型弹窗都没有 canonical、旧临时或新临时视频字段，浏览器 `pageErrors=[]`。这是界面呈现证据，不是模型能力或完整视频链证据。
+- PR #4 已 squash 合并到 `main` 提交 `22444f47154f4f88ff3157d6e6ffcce9ad2689f0`，主门禁与发布器的发布前/发布后 4 格原生安装验证均通过。稳定 `runtime` 提交为 `4586aa2eb573eb97a72baaaa152c727e3b35530e`：21 个运行文件与门禁产物逐文件一致，`metadata.yaml` 报告 `0.1.18`。这些结果证明仓库与运行分发层发布完成；不代替 AstrBot 商店刷新或真实 Windows 商店安装观察。
+- PR #5 随后在 `main` 提交 `9feb0d5902f4bdc88ea69b08f6d3bee25fcf8f2e` 修复发布后的候选分支清理执行环境；主门禁 `31590820116` 与无内容变化发布器 `31590908018` 均成功。发布器确认运行包树未变化，因此未重复晋升，只清除了残留候选分支；当前没有 `runtime-candidate-*` 分支。
 
 真实额度测试默认跳过，只有显式注入临时环境变量时才运行。测试代码不会主动读取正式配置或保存密钥。
 

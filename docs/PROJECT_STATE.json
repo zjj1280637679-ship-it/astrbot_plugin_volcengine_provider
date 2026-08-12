@@ -3,7 +3,7 @@
   "project": "astrbot_plugin_volcengine_provider",
   "active_release": "0.1.18",
   "active_branch": "main",
-  "status": "release_candidate_0_1_18_awaiting_runtime_regeneration",
+  "status": "released_0_1_18_repository_and_runtime_external_store_observation_pending",
   "objective_conditions": [
     "Volcengine Ark is both a first-party platform for Doubao/Seed models and a serving platform for third-party/open models.",
     "AstrBot owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and Dashboard rendering.",
@@ -49,7 +49,7 @@
     "0_1_18_source_configuration_changes": true,
     "video_control": "per_model_card_request_transport_switch",
     "release_0_1_18_source_video_ui": {
-      "status": "implemented_and_validated_release_candidate_awaiting_runtime_regeneration",
+      "status": "released_repository_and_runtime_validated",
       "configuration_surface": "owned_provider_source_page",
       "persistent_presentation_field": "volcengine_video_controls_visible",
       "presentation_field_runtime_authority": false,
@@ -127,7 +127,8 @@
     "0_1_17_native_updater_4_26_1_download_url": "passed",
     "0_1_17_native_updater_4_27_2_repo_branch": "passed",
     "0_1_17_native_updater_4_27_2_download_url": "passed",
-    "0_1_18_main_version": "release_candidate_branch_metadata_0_1_18_pending_main_merge",
+    "0_1_18_main_version": "released_0.1.18_main_commit_22444f47154f4f88ff3157d6e6ffcce9ad2689f0",
+    "0_1_18_main_gate": "passed_run_31589741300",
     "0_1_18_source_video_ui_service_4_26_1": "L3_pass",
     "0_1_18_source_video_ui_service_4_27_2": "L3_pass",
     "0_1_18_upgrade_from_0_1_17_live_schema_residue_migration": "contract_regression_passed_exact_source_bool_only_wrong_source_and_foreign_never_promoted_all_debris_removed",
@@ -160,19 +161,30 @@
       },
       "page_errors": []
     },
-    "0_1_17_marketplace_sync": "external_state_not_claimed_until_store_refresh_or_republish_is_observed",
-    "0_1_18_runtime_branch_regeneration": "pending_main_merge_and_publish_runtime_workflow",
-    "0_1_18_actual_runtime_archive_and_native_updater_validation": "pending_runtime_branch_regeneration"
+    "0_1_17_marketplace_sync": "historical_external_state_not_reinterpreted_by_0.1.18_release",
+    "0_1_18_runtime_artifact": "passed_21_blobs_byte_for_byte_equal_to_main_gate_artifact_metadata_0.1.18",
+    "0_1_18_publisher_run": {
+      "run_id": 31589815606,
+      "prepare": "passed",
+      "prepublish_native_updater_matrix": "passed_4_cells_astrbot_4.26.1_and_4.27.2_repo_branch_and_download_url",
+      "promotion": "passed",
+      "postpublish_native_updater_matrix": "passed_4_cells_astrbot_4.26.1_and_4.27.2_repo_branch_and_download_url",
+      "candidate_cleanup_initial_run": "failed_after_release_push_executed_outside_git_worktree_without_affecting_promoted_runtime",
+      "candidate_cleanup_repair": "pr_5_merged_main_9feb0d5902f4bdc88ea69b08f6d3bee25fcf8f2e_gate_31590820116_passed_noop_publisher_31590908018_passed_residual_candidate_removed",
+      "release_validity": "promoted_byte_verified_runtime_and_completed_pre_and_postpublish_gates_remained_valid_through_cleanup_repair"
+    },
+    "0_1_18_runtime_branch": "released_commit_4586aa2eb573eb97a72baaaa152c727e3b35530e",
+    "0_1_18_actual_runtime_archive_and_native_updater_validation": "passed_pre_and_postpromotion_4_cell_matrices",
+    "0_1_18_marketplace_sync": "external_astrbot_store_refresh_and_real_windows_store_installation_not_yet_observed"
   },
   "active_validation_frontier": {
-    "name": "0.1.18_runtime_regeneration_and_distribution_validation",
-    "current_stage": "release_candidate_validated_waiting_for_main_merge_and_runtime_branch_regeneration",
-    "reason": "The 0.1.18 Source UI, migration, rollback, and supported-host service/presentation contracts are validated. The stable runtime branch still represents the historical 0.1.17 distribution until the post-merge allow-list publisher regenerates it; repository metadata or a merge alone must not be reported as a completed user release.",
+    "name": "0.1.18_external_store_observation",
+    "current_stage": "repository_runtime_and_candidate_cleanup_complete_external_observation_pending",
+    "reason": "The 0.1.18 repository, allow-list artifact, stable runtime branch, both pre/post-promotion native-installer matrices, and follow-up candidate cleanup are validated. PR 5 merged the fail-closed cleanup repair at main 9feb0d5902f4bdc88ea69b08f6d3bee25fcf8f2e; main gate 31590820116 and no-op publisher 31590908018 passed, and no runtime-candidate ref remains. External AstrBot Store refresh and a real Windows Store installation remain unobserved.",
     "dimensions": [
-      "0.1.18_allow_list_artifact_loads_on_astrbot_4.26.1_and_4.27.2",
-      "runtime_branch_and_archive_report_version_0.1.18",
-      "0.1.18_native_updater_repo_branch_and_download_url_paths",
-      "external_store_visibility_not_inferred_from_repository_success"
+      "external_astrbot_store_refresh_visibility",
+      "real_windows_store_installation_of_0.1.18",
+      "do_not_reopen_repository_or_runtime_release_validation_without_new_evidence"
     ]
   },
   "authoritative_docs": [

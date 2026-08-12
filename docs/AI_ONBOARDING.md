@@ -79,9 +79,13 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - Use `TEST_HISTORY` + `REGRESSION_SCOPE` before deciding whether audio/video needs a full QQ-equivalent rerun.
 - Never broaden media production code merely to make a non-equivalent raw fixture pass.
 
-## Current release candidate
+## Current release
 
-`0.1.18` is the active release candidate. Its Source-page video selector, exact 0.1.17 live-schema residue migration, wrong-layer cleanup, and failed-upsert rollback have passed the recorded contract, AstrBot `4.26.1` / `4.27.2` service, and real `4.27.2` Dashboard presentation checks. They are 0.1.18 behavior, not part of the historical published 0.1.17 runtime branch. Do not call 0.1.18 fully published until the post-merge allow-list build has regenerated the stable `runtime` branch and the actual runtime artifact/install paths have passed the release gates.
+`0.1.18` is released at the repository and runtime-distribution layers. PR #4 was squash-merged to `main` at `22444f47154f4f88ff3157d6e6ffcce9ad2689f0`; main gate run `31589741300` passed. Publisher run `31589815606` passed prepare, all four pre-promotion native-installer cells, promotion, and all four blocking post-promotion cells. The stable `runtime` commit is `4586aa2eb573eb97a72baaaa152c727e3b35530e`: its 21 blobs are byte-for-byte identical to the gate artifact and its metadata reports 0.1.18.
+
+The Source-page video selector, exact 0.1.17 live-schema residue migration, wrong-layer cleanup, and failed-upsert rollback remain the behavioral scope of 0.1.18. Their recorded contract, AstrBot `4.26.1` / `4.27.2` service, real `4.27.2` Dashboard presentation, generated-package, and native-installer evidence must not be generalized into a model-capability or QQ-product-path claim.
+
+The first publisher run's post-release candidate deletion exposed a cleanup-only execution-context bug after the validated runtime was already promoted. PR #5 fixed it at main commit `9feb0d5902f4bdc88ea69b08f6d3bee25fcf8f2e` and made remote-ref checks fail closed; main gate `31590820116` and no-op publisher `31590908018` passed, the unchanged runtime tree was not promoted again, and the residual candidate branch was removed. The only remaining release frontier is external observation: AstrBot Store refresh and a real Windows Store installation have not yet been observed.
 
 Current ordinary Ark `/models`, text, and image raw-vs-plugin checks provide downstream L5 attribution evidence. Current Agent Plan checks with an ordinary-Ark credential fail in both raw and plugin paths with the same authentication/account boundary and therefore do not justify a production-code change. Audio/video product compatibility is not redefined by those raw probes; see `TEST_HISTORY` and `REGRESSION_SCOPE`.
 
