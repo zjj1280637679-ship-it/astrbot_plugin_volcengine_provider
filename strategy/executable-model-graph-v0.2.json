@@ -1,5 +1,12 @@
 {
   "version": "0.2",
+  "lifecycle": {
+    "status": "warm",
+    "scope": "Seedance exact-model executable graph; valid within recorded premises but not the current provider-release goal",
+    "supersedes": "strategy/executable-model-graph-v0.1.json",
+    "last_verified": "2026-08-12",
+    "invalidators": ["model/version retirement", "account entitlement change", "request contract change", "new exact E2E evidence"]
+  },
   "principle": "Only exact model/mode edges with E2E evidence enter executable. Documentation-only edges remain candidates. Probabilistic quality/speed claims never become hard routing rules without Q-level evidence.",
   "models": {
     "doubao-seedance-1-5-pro-251215": {
