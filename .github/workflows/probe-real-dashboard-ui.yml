@@ -28,6 +28,11 @@ jobs:
         with:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v6
+        with:
+          # This workflow owns a long-running `uv run astrbot` evidence server.
+          # Caching provides little value here and previously caused the action's
+          # post-step `uv cache prune --ci` to wait 300 s on the live server lock.
+          enable-cache: false
       - run: uv sync --directory AstrBot
       - name: Setup pnpm exactly as AstrBot v4.27.2 Dashboard CI
         uses: pnpm/action-setup@v6.0.9
@@ -86,7 +91,9 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Start AstrBot and verify plugin runtime
         run: |
-          nohup uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-e2e.log 2>&1 &
+          # `setsid` gives the evidence server its own process group so teardown
+          # can terminate uv and every AstrBot child before action post-steps.
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-e2e.log 2>&1 &
           echo $! >/tmp/astrbot-e2e.pid
           ready=0
           for i in $(seq 1 90); do
@@ -113,6 +120,29 @@ jobs:
       - name: Capture final AstrBot log
         if: always()
         run: cp /tmp/astrbot-e2e.log e2e-artifacts/startup.log || true
+      - name: Stop AstrBot evidence server
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [ -s /tmp/astrbot-e2e.pid ]; then
+            pid=$(cat /tmp/astrbot-e2e.pid)
+            if kill -0 "$pid" 2>/dev/null; then
+              # The server was started with setsid, so negative PID terminates
+              # the whole uv/AstrBot process group rather than only the wrapper.
+              kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+              for i in $(seq 1 25); do
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 0.2
+              done
+              if kill -0 "$pid" 2>/dev/null; then
+                kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+              fi
+            fi
+          fi
+          # Fail-open cleanup fallback only; product evidence has already been
+          # captured and uploaded separately from teardown semantics.
+          pkill -f 'astrbot run --port 6185' 2>/dev/null || true
       - name: Show AstrBot log on hard failure
         if: failure()
         run: cat /tmp/astrbot-e2e.log || true
