@@ -241,7 +241,13 @@ async def inject_current_request_videos(
 
     replacements: list[tuple[str, dict[str, Any]]] = []
     for marker_text, media_ref in attachments:
-        video_url = await resolve_video_reference(media_ref, mode=mode)
+        # Preserve the exact 0.1.18 resolver call shape for Original mode. Some
+        # regression fixtures (and potential third-party monkeypatches) provide
+        # a one-argument resolver. Only the new compressed path needs ``mode``.
+        if mode == VIDEO_MODE_ORIGINAL:
+            video_url = await resolve_video_reference(media_ref)
+        else:
+            video_url = await resolve_video_reference(media_ref, mode=mode)
         replacements.append(
             (
                 marker_text,
