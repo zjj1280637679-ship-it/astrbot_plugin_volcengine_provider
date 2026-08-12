@@ -21,10 +21,11 @@ from .adapters.video import inject_current_request_videos
 from .compatibility.astrbot import _ApiKeyLogView
 from .capabilities import (
     VIDEO_CONTROLS_VISIBLE_KEY,
+    apply_request_overrides,
     clear_source_model_hints,
     remember_source_model_hint,
     source_scope_id,
-    video_input_enabled,
+    video_input_mode,
 )
 from .metadata.agent_plan import KNOWN_AGENT_PLAN_MODELS
 from .metadata.ark import normalize_ark_model_metadata
@@ -160,12 +161,37 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
             *args,
             **kwargs,
         )
+        mode = video_input_mode(self.provider_config)
         await inject_current_request_videos(
             context_query,
             extra_user_content_parts,
-            enabled=video_input_enabled(self.provider_config),
+            enabled=mode != "off",
+            mode="original" if mode == "off" else mode,
         )
         return payloads, context_query
+
+    def _apply_provider_specific_extra_body_overrides(
+        self,
+        extra_body: dict,
+    ) -> None:
+        """AstrBot 4.26.x hook: apply 0.1.19 rows after custom_extra_body."""
+
+        parent = getattr(super(), "_apply_provider_specific_extra_body_overrides", None)
+        if callable(parent):
+            parent(extra_body)
+        apply_request_overrides(self.provider_config, {}, extra_body)
+
+    def _apply_provider_specific_request_overrides(
+        self,
+        payloads: dict,
+        extra_body: dict,
+    ) -> None:
+        """AstrBot 4.27.x+ hook: apply 0.1.19 rows after custom_extra_body."""
+
+        parent = getattr(super(), "_apply_provider_specific_request_overrides", None)
+        if callable(parent):
+            parent(payloads, extra_body)
+        apply_request_overrides(self.provider_config, payloads, extra_body)
 
     async def _handle_api_error(
         self,
