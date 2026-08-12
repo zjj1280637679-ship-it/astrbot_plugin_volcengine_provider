@@ -8,9 +8,10 @@
       "owned": true,
       "card_paths": ["source_create", "source_edit", "model_create", "model_edit", "save_reload"],
       "ui": {
-        "video_transport_control": "visible_on_model_card",
+        "video_transport_control": "source_scoped_model_checkbox_list",
+        "video_controls_visibility_master": "source_only_hide_without_runtime_change",
         "canonical_shared_schema_field": "must_not_be_unconditional",
-        "temporary_ui_key_persisted": false
+        "temporary_source_selector_persisted": false
       },
       "runtime": ["models", "text", "image", "audio", "video_off", "video_on", "tools"]
     },
@@ -21,9 +22,10 @@
       "owned": true,
       "card_paths": ["source_create", "source_edit", "model_create", "model_edit", "save_reload"],
       "ui": {
-        "video_transport_control": "visible_on_model_card",
+        "video_transport_control": "source_scoped_model_checkbox_list",
+        "video_controls_visibility_master": "source_only_hide_without_runtime_change",
         "canonical_shared_schema_field": "must_not_be_unconditional",
-        "temporary_ui_key_persisted": false
+        "temporary_source_selector_persisted": false
       },
       "runtime": ["text", "image", "audio", "video_off", "video_on", "tools"]
     },
@@ -69,6 +71,7 @@
   "global_invariants": [
     "foreign_provider_has_no_volcengine_ui",
     "temporary_ui_keys_never_persist",
+    "closing_source_video_controls_preserves_per_model_runtime_values",
     "canonical_video_transport_field_is_not_unconditional_shared_schema",
     "astrbot_modalities_are_not_mutated_by_plugin_migration",
     "skip_requires_reason",

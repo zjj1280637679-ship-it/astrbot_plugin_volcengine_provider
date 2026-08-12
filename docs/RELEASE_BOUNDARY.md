@@ -69,18 +69,33 @@ The runtime artifact must not contain:
 
 ## Validation before publication
 
-A release is not complete until the **artifact itself** is checked.
+A release is not complete until the **artifact itself** and the exact user-facing
+source have been checked.
 
-1. Build from the explicit runtime allow-list.
-2. Verify required AstrBot metadata and entry files exist.
-3. Verify forbidden paths are absent.
-4. Scan the artifact for high-confidence secret patterns.
-5. Reject abnormal package-size growth.
-6. Compile/load the artifact in the supported AstrBot compatibility matrix.
-7. Validate the same repository branch/archive form the AstrBot updater will consume.
-8. Only then advance the marketplace-visible version.
+1. Run the runtime distribution gate for every pull request and every push to
+   `main`.
+2. Build the exact source SHA from the explicit allow-list; verify required
+   files, forbidden-path absence, secret boundaries, size policy, compilation,
+   plugin loading, and the packaged behavior contracts.
+3. Compare the generated tree with the current `runtime` tree. If identical,
+   finish as a no-op.
+4. If content changed, publish that exact tree to one uniquely named temporary
+   candidate branch.
+5. Before `runtime` changes, install the candidate with the AstrBot 4.26.1 and
+   4.27.2 native updaters through both `repo_branch` and `download_url`.
+6. Serialize publication, reject a gate whose source is no longer the current
+   `main`, and promote only the candidate commit using an exact
+   `force-with-lease` against the previously observed `runtime` SHA.
+7. After promotion, block the same publication run on the same four-cell native
+   installer matrix against the real `runtime` branch and archive.
+8. Delete only the unchanged temporary candidate ref created by that run.
+9. Keep external marketplace refresh and real Windows Store observations
+   separate; repository success cannot assert those external states.
 
-A successful development checkout or CI run is not evidence that a distribution artifact is safe or installable.
+Publication must never mutate `runtime` first and use a later validation as
+permission for the already-visible state. A successful development checkout or
+unrelated CI run is not evidence that a distribution artifact is safe or
+installable.
 
 ## Repository/source binding
 

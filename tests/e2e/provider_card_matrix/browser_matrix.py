@@ -35,10 +35,13 @@ ARTIFACT_DIR = (
 # construction to succeed; it never presses connection-test/fetch-models.
 DUMMY_API_KEY = "e2e-dummy-key"
 
-VIDEO_LABEL = "视频请求通道（当前模型卡）"
+LEGACY_MODEL_VIDEO_LABEL = "视频请求通道（当前模型卡）"
+SOURCE_VIDEO_MASTER_LABEL = "显示逐模型视频选项"
+SOURCE_VIDEO_SELECTOR_LABEL = "启用视频请求通道的模型"
 TEMP_UI_PREFIX = "_volcengine_video_transport_ui_"
+SOURCE_SELECTOR_PREFIX = "_volcengine_video_models_ui_"
 CANONICAL_VIDEO_KEY = "volcengine_video_input_enabled"
-SOURCE_HINT_MARKER = "视频请求通道是逐模型卡的请求转发设置"
+SOURCE_HINT_MARKER = "视频请求通道是当前火山 Source 内的逐模型请求转发设置"
 
 
 @dataclass(frozen=True)
@@ -195,16 +198,12 @@ async def dismiss_first_run_dialog(page: Page, *, wait_ms: int = 0) -> bool:
 async def open_providers(page: Page) -> None:
     await page.goto(f"{BASE_URL}/#/providers", wait_until="domcontentloaded")
     await page.locator(".provider-page").wait_for(state="visible", timeout=30_000)
-    await page.locator(".provider-workbench").wait_for(
-        state="visible", timeout=30_000
-    )
+    await page.locator(".provider-workbench").wait_for(state="visible", timeout=30_000)
     await dismiss_first_run_dialog(page, wait_ms=300)
 
 
 async def add_source(page: Page, case: Case) -> str:
-    add_button = page.locator(
-        ".provider-sources-controls button:has(.mdi-plus)"
-    ).first
+    add_button = page.locator(".provider-sources-controls button:has(.mdi-plus)").first
     await expect(add_button).to_be_visible(timeout=10_000)
     await add_button.click()
 
@@ -230,7 +229,10 @@ async def add_source(page: Page, case: Case) -> str:
     title = page.locator(".provider-config-title")
     await expect(title).to_be_visible(timeout=15_000)
     actual_source_id = (await title.inner_text()).strip()
-    if case.expected_source_id is not None and actual_source_id != case.expected_source_id:
+    if (
+        case.expected_source_id is not None
+        and actual_source_id != case.expected_source_id
+    ):
         raise AssertionError(
             f"{case.name}: expected Source id {case.expected_source_id!r}, got {actual_source_id!r}"
         )
@@ -315,7 +317,7 @@ async def open_configured_model(page: Page, model_id: str) -> Locator:
 
 
 def video_row(dialog: Locator) -> Locator:
-    return dialog.locator(".config-row", has_text=VIDEO_LABEL)
+    return dialog.locator(".config-row", has_text=LEGACY_MODEL_VIDEO_LABEL)
 
 
 async def set_video_switch(dialog: Locator, enabled: bool) -> bool:
@@ -329,6 +331,29 @@ async def set_video_switch(dialog: Locator, enabled: bool) -> bool:
     else:
         await expect(checkbox).not_to_be_checked(timeout=5_000)
     return True
+
+
+def source_video_master_row(page: Page) -> Locator:
+    return page.locator(
+        ".provider-config-shell .config-row", has_text=SOURCE_VIDEO_MASTER_LABEL
+    )
+
+
+def source_video_selector_row(page: Page) -> Locator:
+    return page.locator(
+        ".provider-config-shell .config-row", has_text=SOURCE_VIDEO_SELECTOR_LABEL
+    )
+
+
+async def set_source_video_master(page: Page, enabled: bool) -> None:
+    row = source_video_master_row(page)
+    await expect(row).to_be_visible(timeout=10_000)
+    checkbox = row.locator('input[type="checkbox"]').first
+    await checkbox.set_checked(enabled, force=True)
+    if enabled:
+        await expect(checkbox).to_be_checked(timeout=5_000)
+    else:
+        await expect(checkbox).not_to_be_checked(timeout=5_000)
 
 
 async def select_source(page: Page, source_id: str) -> None:
@@ -380,6 +405,21 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
 
         await fill_dummy_source_key(page)
         result["stages"]["dummy_key_entered"] = True
+        result["source_master_count_on_create"] = await source_video_master_row(
+            page
+        ).count()
+        result["source_selector_count_before_models"] = await source_video_selector_row(
+            page
+        ).count()
+        expected_master_count = 1 if case.owned else 0
+        if result["source_master_count_on_create"] != expected_master_count:
+            result["errors"].append(
+                "Source video visibility master ownership/count is incorrect"
+            )
+        if result["source_selector_count_before_models"] != 0:
+            result["errors"].append(
+                "Source video model selector appeared before any model card exists"
+            )
         await page.screenshot(
             path=str(case_dir / "01-source-created.png"), full_page=True
         )
@@ -387,8 +427,8 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
 
         await save_source(page)
         result["stages"]["source_save"] = True
-        result["source_transport_hint_visible"] = (
-            await source_transport_hint_visible(page, wait=case.owned)
+        result["source_transport_hint_visible"] = await source_transport_hint_visible(
+            page, wait=case.owned
         )
         if not case.owned and result["source_transport_hint_visible"]:
             result["errors"].append(
@@ -401,33 +441,88 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
         create_dialog = await open_manual_model_add(page, case.model_id)
         create_rows = await visible_config_rows(create_dialog)
         result["model_create_rows"] = create_rows
-        create_video_rows = [
-            row for row in create_rows if VIDEO_LABEL in row["name"]
-        ]
-        result["model_create_video_control_count"] = len(create_video_rows)
+        result["model_create_video_control_count"] = len(
+            [row for row in create_rows if LEGACY_MODEL_VIDEO_LABEL in row["name"]]
+        )
         result["model_create_temp_keys"] = [
             row["key"]
             for row in create_rows
-            if row["key"].startswith(TEMP_UI_PREFIX)
+            if row["key"].startswith((TEMP_UI_PREFIX, SOURCE_SELECTOR_PREFIX))
         ]
-        result["model_create_canonical_raw_field_visible"] = canonical_raw_field_visible(
-            create_rows
+        result["model_create_canonical_raw_field_visible"] = (
+            canonical_raw_field_visible(create_rows)
         )
+        if (
+            result["model_create_video_control_count"]
+            or result["model_create_temp_keys"]
+            or result["model_create_canonical_raw_field_visible"]
+        ):
+            result["errors"].append(
+                "generic model-create dialog exposes retired/raw Volcengine video UI"
+            )
         await page.screenshot(
             path=str(case_dir / "03-model-create-dialog.png"), full_page=True
         )
         await save_model_dialog(create_dialog)
         result["stages"]["model_create"] = True
 
+        # Model creation reloads Provider schema. Select the current Source again
+        # so its concrete per-Source checkbox list is the live form object.
+        await page.locator(".provider-workbench").wait_for(
+            state="visible", timeout=20_000
+        )
+        await select_source(page, actual_source_id)
+
+        if case.owned:
+            if await source_video_master_row(page).count() != 1:
+                result["errors"].append(
+                    "owned Source lost its video visibility master after model create"
+                )
+            await set_source_video_master(page, True)
+            selector = source_video_selector_row(page)
+            await expect(selector).to_be_visible(timeout=10_000)
+            model_checks = selector.locator('input[type="checkbox"]')
+            result["source_selector_checkbox_count"] = await model_checks.count()
+            if result["source_selector_checkbox_count"] != 1:
+                result["errors"].append(
+                    "owned Source selector does not contain exactly its one model card"
+                )
+            else:
+                await model_checks.first.set_checked(True, force=True)
+                await expect(model_checks.first).to_be_checked(timeout=5_000)
+            result["stages"]["source_video_selected"] = True
+            await save_source(page)
+
+            # Closing is presentation-only: the checkbox row disappears, then a
+            # save/reload/reopen must recover the previous checked value.
+            await select_source(page, actual_source_id)
+            await set_source_video_master(page, False)
+            await expect(source_video_selector_row(page)).to_have_count(
+                0, timeout=5_000
+            )
+            result["stages"]["source_video_selector_hidden"] = True
+            await save_source(page)
+        else:
+            if await source_video_master_row(page).count() != 0:
+                result["errors"].append(
+                    "foreign Source exposes Volcengine video visibility master"
+                )
+            if await source_video_selector_row(page).count() != 0:
+                result["errors"].append(
+                    "foreign Source exposes Volcengine video model selector"
+                )
+
         edit_dialog = await open_configured_model(page, case.model_id)
         edit_rows = await visible_config_rows(edit_dialog)
         result["model_edit_rows_before"] = edit_rows
-        edit_video = [row for row in edit_rows if VIDEO_LABEL in row["name"]]
+        edit_video = [
+            row for row in edit_rows if LEGACY_MODEL_VIDEO_LABEL in row["name"]
+        ]
         result["model_edit_video_control_count"] = len(edit_video)
         result["model_edit_temp_keys"] = [
             row["key"]
             for row in edit_rows
-            if row["key"].startswith(TEMP_UI_PREFIX)
+            if row["key"].startswith((TEMP_UI_PREFIX, SOURCE_SELECTOR_PREFIX))
         ]
         result["model_edit_canonical_raw_field_visible"] = canonical_raw_field_visible(
             edit_rows
@@ -435,54 +530,16 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
         await page.screenshot(
             path=str(case_dir / "04-model-edit-dialog.png"), full_page=True
         )
-
-        if case.owned:
-            if result["model_edit_canonical_raw_field_visible"]:
-                result["errors"].append(
-                    "owned model edit dialog exposes the canonical transport key as a raw fallback field"
-                )
-            toggled = await set_video_switch(edit_dialog, True)
-            result["stages"]["video_toggle_available_on_edit"] = toggled
-            if not toggled:
-                result["errors"].append(
-                    "owned model edit dialog has no video transport control"
-                )
-        else:
-            if edit_video:
-                result["errors"].append(
-                    "foreign model edit dialog leaked Volcengine video transport control"
-                )
-            if result["model_edit_canonical_raw_field_visible"]:
-                result["errors"].append(
-                    "foreign model edit dialog leaked Volcengine canonical transport field"
-                )
-
-        await save_model_dialog(edit_dialog)
-        result["stages"]["model_edit_save"] = True
-
-        reopen = await open_configured_model(page, case.model_id)
-        result["model_edit_rows_after_save"] = await visible_config_rows(reopen)
-        if case.owned:
-            row = video_row(reopen)
-            if await row.count() == 1:
-                result["video_value_after_save"] = await row.locator(
-                    'input[type="checkbox"]'
-                ).first.is_checked()
-                if result["video_value_after_save"] is not True:
-                    result["errors"].append(
-                        "video transport value did not survive save/reopen"
-                    )
-            else:
-                result["errors"].append(
-                    "video transport control disappeared after save"
-                )
-        elif await video_row(reopen).count() != 0:
+        if (
+            edit_video
+            or result["model_edit_temp_keys"]
+            or result["model_edit_canonical_raw_field_visible"]
+        ):
             result["errors"].append(
-                "foreign model gained Volcengine video control after save"
+                "generic model-edit dialog exposes retired/raw Volcengine video UI"
             )
-        await reopen.locator(".v-card-actions button").first.click()
-        await expect(reopen).to_be_hidden(timeout=10_000)
-        result["stages"]["model_reopen_after_save"] = True
+        await edit_dialog.locator(".v-card-actions button").first.click()
+        await expect(edit_dialog).to_be_hidden(timeout=10_000)
 
         # Network-idle is not a valid reload completion criterion for the real
         # Dashboard because background requests may stay active.  The actual UI
@@ -493,68 +550,48 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
         )
         await dismiss_first_run_dialog(page, wait_ms=300)
         await select_source(page, actual_source_id)
-        post_reload = await open_configured_model(page, case.model_id)
-        result["model_edit_rows_after_page_reload"] = await visible_config_rows(
-            post_reload
-        )
         if case.owned:
-            row = video_row(post_reload)
-            if await row.count() == 1:
-                result["video_value_after_page_reload"] = await row.locator(
-                    'input[type="checkbox"]'
-                ).first.is_checked()
-                if result["video_value_after_page_reload"] is not True:
-                    result["errors"].append(
-                        "video transport value did not survive full page reload"
-                    )
-            else:
+            master = source_video_master_row(page)
+            await expect(master).to_be_visible(timeout=10_000)
+            result["master_after_reload"] = await master.locator(
+                'input[type="checkbox"]'
+            ).first.is_checked()
+            if result["master_after_reload"] is not False:
                 result["errors"].append(
-                    "video transport control missing after full page reload"
+                    "closed Source visibility master did not persist"
                 )
-        elif await video_row(post_reload).count() != 0:
-            result["errors"].append(
-                "foreign model leaked Volcengine video control after full reload"
-            )
+            if await source_video_selector_row(page).count() != 0:
+                result["errors"].append("closed Source selector is still visible")
+
+            await set_source_video_master(page, True)
+            reopened_selector = source_video_selector_row(page)
+            await expect(reopened_selector).to_be_visible(timeout=10_000)
+            reopened_checks = reopened_selector.locator('input[type="checkbox"]')
+            if await reopened_checks.count() != 1:
+                result["errors"].append(
+                    "reopened Source selector lost its model-card identity"
+                )
+            else:
+                result[
+                    "video_value_after_hide_reopen"
+                ] = await reopened_checks.first.is_checked()
+                if result["video_value_after_hide_reopen"] is not True:
+                    result["errors"].append(
+                        "per-model video selection was lost while selector was hidden"
+                    )
+            await save_source(page)
+        else:
+            if (
+                await source_video_master_row(page).count()
+                or await source_video_selector_row(page).count()
+            ):
+                result["errors"].append(
+                    "foreign Source gained Volcengine video controls after reload"
+                )
         await page.screenshot(
             path=str(case_dir / "05-after-page-reload.png"), full_page=True
         )
-        await post_reload.locator(".v-card-actions button").first.click()
-        await expect(post_reload).to_be_hidden(timeout=10_000)
         result["stages"]["page_reload_reopen"] = True
-
-        # A model-specific transport control should be reachable while creating
-        # that model card; create-then-edit is a hidden detour, not an equivalent
-        # user path.
-        if case.owned:
-            direct_create_path = result["model_create_video_control_count"] == 1
-            guided_edit_path = (
-                result.get("source_transport_hint_visible") is True
-                and result["model_edit_video_control_count"] == 1
-            )
-            result["model_create_transport_path"] = (
-                "direct"
-                if direct_create_path
-                else "native_source_hint_then_edit"
-                if guided_edit_path
-                else "unreachable"
-            )
-            if not (direct_create_path or guided_edit_path):
-                result["errors"].append(
-                    "owned video transport setting has neither a direct create control nor a native discoverable save-then-edit path"
-                )
-            if result["model_edit_video_control_count"] != 1:
-                result["errors"].append(
-                    "owned model edit dialog does not expose exactly one video transport control"
-                )
-        else:
-            if result["model_create_video_control_count"] != 0:
-                result["errors"].append(
-                    "foreign model create dialog leaked Volcengine video transport control"
-                )
-            if result["model_create_canonical_raw_field_visible"]:
-                result["errors"].append(
-                    "foreign model create dialog leaked Volcengine canonical transport field"
-                )
 
         result["success"] = not result["errors"]
     except Exception as exc:
@@ -562,9 +599,7 @@ async def run_case(page: Page, case: Case) -> dict[str, Any]:
         result["errors"].append(f"{type(exc).__name__}: {exc}")
         result["traceback"] = traceback.format_exc()[-12000:]
         try:
-            await page.screenshot(
-                path=str(case_dir / "99-failure.png"), full_page=True
-            )
+            await page.screenshot(path=str(case_dir / "99-failure.png"), full_page=True)
             await semantic_page_snapshot(page, case_dir / "99-failure.dom.json")
         except Exception as capture_error:
             result["capture_error"] = str(capture_error)
@@ -604,9 +639,7 @@ async def main() -> None:
         "schema_version": 1,
         "cases": results,
         "all_passed": all(case.get("success") for case in results),
-        "failed_cases": [
-            case["case"] for case in results if not case.get("success")
-        ],
+        "failed_cases": [case["case"] for case in results if not case.get("success")],
     }
     write_json(ARTIFACT_DIR / "matrix-result.json", summary)
     write_json(ARTIFACT_DIR / "browser-console.json", console_events)

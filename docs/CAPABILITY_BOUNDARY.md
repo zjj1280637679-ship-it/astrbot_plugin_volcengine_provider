@@ -83,6 +83,12 @@ It is not:
 - a reason to mutate AstrBot `modalities`;
 - a router/fallback instruction.
 
+`volcengine_video_controls_visible` is separate Source-page presentation state:
+
+> show or hide the current owned Source's per-model video selection area.
+
+It is not a master video switch. Setting it to `false` must not clear any model-card selection, change `volcengine_video_input_enabled`, stop an already enabled runtime path, or express provider/model capability. The checkbox list itself is only a temporary Dashboard projection of the current Source's model-card IDs; on an open-selector save, it updates the per-card canonical fields and is removed before Source persistence.
+
 ## 6. Failure provenance
 
 Two broad classes must remain distinguishable.
@@ -108,7 +114,8 @@ The plugin should expose provenance but should not copy AstrBot's router to deci
 | Information | Plugin may produce | Plugin may persist as permanent model truth | May alter AstrBot routing itself |
 |---|---:|---:|---:|
 | Adapter transport support | yes | n/a | no |
-| User transport switch | yes/save | no | no |
+| User per-card transport switch | yes/save | no | no |
+| Source selector visibility preference | yes/save as presentation state | no | no |
 | Current Ark `/models` feedback | translate/display | no | no |
 | Local failure provenance | yes | no | no |
 | Bare model-ID capability guess | no | no | no |

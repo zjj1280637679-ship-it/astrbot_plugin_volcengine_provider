@@ -55,15 +55,17 @@ Do not infer model capability from a model ID prefix, brand, vendor, historical 
 
 ## Current release work
 
-The active release candidate is **0.1.17** on `release/0.1.17-runtime-package`.
+The active release candidate is **0.1.18** on the current release PR branch. Its Source-video UI, migration, and transactional-save behavior are implemented and validated, but the stable `runtime` branch must still be regenerated and revalidated after merge before publication is complete.
 
-0.1.17 does not expand provider functionality. It fixes the distribution boundary discovered by real AstrBot Store installation: the development repository had been packaged directly, allowing `.github/workflows/**` and other development material into the user ZIP. On Windows this caused extraction to fail partway through and left a partial plugin directory that then produced install-name conflicts.
+0.1.18 moves the visible per-model video configuration surface out of the shared generic model card and into each owned Ark / Agent Plan Provider Source. The persistent Source switch only shows or hides the exact-Source selector; the canonical per-card transport value remains `volcengine_video_input_enabled`, hidden selections remain active, foreign Sources receive no field, and a failed host Source upsert restores the complete pre-call model-card state. Migration deliberately preserves the historical 0.1.17 exact-Source UI residue only when its encoded Source identity matches the card.
 
-The new target topology is:
+0.1.17 established the distribution boundary after a real AstrBot Store installation exposed development files such as `.github/workflows/**` in the user ZIP. That historical release separated development state from the minimal user package and remains the basis for 0.1.18 publication.
 
-`main (development + explainability + tests) -> allow-list build -> runtime branch (minimal user package)`.
+The publication topology is:
 
-`metadata.yaml.repo` is bound to the stable `runtime` branch, which AstrBot supports as a `/tree/{branch}` repository source. Runtime publication must prove the generated artifact itself loads on supported AstrBot versions before the marketplace-visible version is considered complete.
+`main -> all-PR/main-push gate -> exact allow-list artifact -> unique candidate -> 4-cell native installer gate -> leased runtime promotion -> blocking 4-cell runtime recheck`.
+
+`metadata.yaml.repo` is bound to the stable `runtime` branch, which AstrBot supports as a `/tree/{branch}` repository source. For 0.1.18, merge and metadata changes alone are not publication proof: the regenerated artifact must load on supported AstrBot versions, the actual runtime branch/archive must report 0.1.18, and the native installer paths must pass before the marketplace-visible version is considered complete.
 
 ## AI intervention principle
 

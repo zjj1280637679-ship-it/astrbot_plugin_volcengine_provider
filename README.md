@@ -1,23 +1,23 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.16-e85d3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.18-e85d3f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
-[![Platform](https://img.shields.io/badge/platform-aiocqhttp%20%7C%20webchat-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
+[![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 装上这款插件，QQ 语音会在可靠转换后，连同完整聊天上下文交给你正在使用的火山方舟主模型；本轮发送或引用的视频，也能由同一个模型看懂并继续回应。你不需要另配 STT、转录模型，也不用再搭建一条互相失忆的旁路。
 
-插件同时为 AstrBot 补齐普通 API 与 Agent Plan 两张独立供应商卡：图片、音频与工具继续使用 AstrBot 原生模型能力，视频则使用逐模型卡的火山请求通道开关；密钥、端点与计费互不混线。让你的 AstrBot 不只是“接入火山方舟”，而是真正在 QQ 对话中获得听、看、理解与回应的能力。
+插件同时为 AstrBot 补齐普通 API 与 Agent Plan 两张独立供应商卡：图片、音频与工具继续使用 AstrBot 原生模型能力；视频请求通道仍逐模型保存，但在对应火山供应商 Source 页面集中勾选；密钥、端点与计费互不混线。让你的 AstrBot 不只是“接入火山方舟”，而是真正在 QQ 对话中获得听、看、理解与回应的能力。
 
 交流与反馈：**QQ 群 916646029**
 
 ## 你会得到什么
 
 - **QQ 语音真正交给主模型理解**：Silk、AMR 等 QQ 常见输入会先规范化成可靠 WAV，再随完整上下文进入同一个聊天模型；不是旁路转录，也不需要另配 STT。
-- **当前视频直接进入火山协议**：在当前火山模型卡开启“视频请求通道”后，本次发送或引用的视频会转换为官方 `video_url` 内容块，让主模型在同一轮对话里看见动态内容。
+- **当前视频直接进入火山协议**：在对应火山供应商 Source 打开“显示逐模型视频选项”，勾选当前模型并保存后，本次发送或引用的视频会转换为官方 `video_url` 内容块，让主模型在同一轮对话里看见动态内容。
 - **听、看、回答仍是一条主对话**：语音、视频、图片、文字和工具结果共享 AstrBot 组装的完整上下文，不会拆成互相失忆的多个模型流程。
-- **不污染 AstrBot 的公共能力轴**：图片、音频与工具仍按 AstrBot 原生模型卡配置；AstrBot 当前还没有原生 `video` modality，因此插件只给自己的模型卡增加“视频请求通道”布尔开关，且不把它写入 `modalities`。由于 AstrBot 4.26/4.27 使用共享模型卡 schema，插件会用 `provider_source_id` 条件生成只属于当前火山 Source 的临时 UI 字段；其他 Provider 不显示它，保存时临时字段会先转换成正式传输设置再删除。
+- **不污染 AstrBot 的公共能力轴**：图片、音频与工具仍按 AstrBot 原生模型卡配置；AstrBot 当前还没有原生 `video` modality，因此插件不修改 `modalities`，也不再把视频字段放进通用模型卡。每个火山 Source 只在自己的页面显示一个持久的“显示逐模型视频选项”开关；打开后出现该 Source 当前模型卡的复选列表，保存时写回各模型卡自己的 `volcengine_video_input_enabled`。关闭显示开关只隐藏列表，不清除已选项，也不停止这些模型的视频转发；其他 Provider 不出现这些字段。
 - **两条不会混线的计费通道**：普通 API 与 Agent Plan 分别使用独立供应商类型、固定端点和独立密钥。
 - **完整的模型选择**：普通 API 在线读取当前密钥真正可见的模型；Agent Plan 提供带 `agentplan/` 前缀的套餐模型候选。
 - **失败时不装懂**：附件进入插件后若解析或验证失败，本次请求会明确停止，不会把没看见、没听见伪装成理解成功。
@@ -45,10 +45,15 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-1. 把解压后的插件目录放入 AstrBot 的 `data/plugins/`；不要把 ZIP 原样塞进插件目录。
-2. 完整关闭并重新启动 AstrBot。
-3. 打开 `模型提供商 → 对话 → 新增`。
-4. 确认列表里出现“火山方舟普通 API”和“火山方舟 Agent Plan API”。
+如果 AstrBot 插件市场已经显示 `0.1.18`，可以直接安装或更新。市场记录尚未刷新时，请按下面的最小运行包手动安装：
+
+1. 下载 [runtime.zip](https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip)。
+2. 解压 ZIP，把其中唯一的插件目录放入 AstrBot 的 `data/plugins/`；不要把 ZIP 原样塞进插件目录，也不要额外套一层目录。确认 `metadata.yaml` 与 `main.py` 位于插件目录根部。
+3. 完整关闭并重新启动 AstrBot。
+4. 打开 `模型提供商 → 对话 → 新增`。
+5. 确认列表里出现“火山方舟普通 API”和“火山方舟 Agent Plan API”。
+
+> 不要下载 `main` 分支 ZIP 作为插件安装包。GitHub 默认仓库页的 `Code → Download ZIP` 指向开发仓库，其中包含 CI、测试和内部说明；用户安装包只来自经过验证的 `runtime` 分支。
 
 插件最低支持 AstrBot `4.26.1`，不再人为设置未来版本上限；后续 AstrBot 新版本只要相关 Provider API 保持兼容即可继续使用。
 
@@ -59,8 +64,8 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 1. 新增 `volcengine_ark_chat_completion`。
 2. 填写你的普通方舟推理 API Key。
 3. 获取模型列表，或手动填写官方模型 ID / 推理接入点 ID（`ep-...`）。
-4. 打开具体模型的编辑卡，按该模型实际能力配置图片、音频与工具；需要视频时，在当前火山模型卡开启“视频请求通道”；它只是传输设置，不是模型能力结论。
-5. 保存后，把这张模型卡选为当前聊天模型并测试。旧版视频字段和旧插件曾写入的 `modalities: video` 会一次性迁移为新的逐模型卡传输开关；AstrBot `modalities` 本身保持不动。
+4. 图片、音频与工具仍在具体模型卡按实际情况配置；需要视频时，回到当前火山供应商 Source，打开“显示逐模型视频选项”，在“启用视频请求通道的模型”里勾选目标模型卡并保存。这个选择只是请求传输设置，不是模型能力结论。
+5. 保存后，把该模型卡选为当前聊天模型并测试。以后关闭“显示逐模型视频选项”只会隐藏复选列表，已保存的选择和运行状态保持不变；重新打开即可继续调整。旧版视频字段和旧插件曾写入的 `modalities: video` 会一次性迁移为新的逐模型卡传输开关；AstrBot `modalities` 本身保持不动。
 
 普通通道会使用你当前填写的推理 Key 调用同一 `api_base` 下的 `/models`，不会再用离线白名单把结果截成少数几项。若 `/models` 明确返回模态、工具、reasoning、上下文或输出限制，这些字段只作为**当前这一轮 Source 回执**展示：缺失字段保持未反馈；明确返回的字段（包括 `False`）只在本次模型列表响应中替换同名旧展示值，读取后即丢弃，不写回 AstrBot 全局模型元数据。
 
@@ -70,7 +75,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 2. 填写你的 **Agent Plan 专属 API Key**；不要填普通方舟或 Coding Plan Key。
 3. 选择一个带 `agentplan/` 的套餐模型。
 4. 如果你希望使用控制台托管路由，可以选择 `agentplan/ark-code-latest`；它代表可变路由，不是固定模型。
-5. 图片、音频与工具继续沿 AstrBot 原生模型卡反馈配置；需要视频时，在当前 Agent Plan 模型卡开启“视频请求通道”。这个开关不作为模型能力先验。
+5. 图片、音频与工具继续沿 AstrBot 原生模型卡反馈配置；需要视频时，在当前 Agent Plan 供应商 Source 打开“显示逐模型视频选项”，勾选目标模型卡并保存。这个选择不作为模型能力先验；以后隐藏选择区也不会清除或停用它。
 
 Agent Plan 没有可由专属推理 Key 读取的 OpenAI 风格 `/models`。官方 `ListArkAgentPlanModel` 控制面接口需要权限更广的云账号 AK/SK，而且只返回 ModelID，不能证明模态、工具和长度能力。为了不给你索要不必要的高权限凭据，插件只提供控制台可见 model-name 候选并允许手动填写新模型，不再按 model ID 预填能力。
 
@@ -99,11 +104,18 @@ QQ Record
 
 ### 视频
 
-在当前火山模型卡开启“视频请求通道”后，本次消息或本次引用中的受信视频附件会转换为火山官方 `video_url`。HTTP(S) 视频保持远程引用，本地路径、`file://` 与 Base64 引用通过 AstrBot 原生 `MediaResolver` 转成带 MIME 的 data URL。
+在对应火山供应商 Source 打开“显示逐模型视频选项”、勾选当前模型卡并保存后，本次消息或本次引用中的受信视频附件会转换为火山官方 `video_url`。显示开关只管配置区是否可见：关闭后已勾选模型仍照常转发视频，重新打开时原选择仍在。HTTP(S) 视频保持远程引用，本地路径、`file://` 与 Base64 引用通过 AstrBot 原生 `MediaResolver` 转成带 MIME 的 data URL。
 
 你手打一个像路径的字符串、旧历史里只剩下的附件标记，都不会让插件打开本地文件。需要模型在后续独立回合重新观看时，请重新引用或附加原视频。
 
 如果音频/视频在 QQ/NapCat/AstrBot 媒体解析或 Ark payload 组装阶段失败，插件会把它标成 `input_transport`：这表示有效请求**尚未到达模型**，模型能力仍未知。若火山 API 已返回模态拒绝或其他上游错误，则继续沿 AstrBot/OpenAI SDK 原生错误链处理。插件只区分失败发生在哪一层，不把一次失败写成永久能力结论，也不自行接管 fallback。
+
+## 0.1.18：视频选项只属于当前火山 Source
+
+- 通用模型卡不再承载插件视频字段；每个火山 Ark / Agent Plan Source 各自提供“显示逐模型视频选项”开关与只包含本 Source 模型卡的选择列表，外国 Source 不显示这些控件。
+- 显示开关只控制列表是否可见。关闭后已保存的逐模型选择与视频转发状态继续保留，重新打开即可继续调整。
+- Source 保存把临时选择写回每张模型卡的 `volcengine_video_input_enabled`。若宿主 upsert 抛错，插件会恢复调用前的 Source/模型卡与 manager 镜像；考虑到 AstrBot 可能已经写盘、只在后续 Provider reload 失败，还会调用宿主 `save_config()` 补偿回滚，并尽力按旧快照重新加载该 Source 的 Provider 实例。4.26.1/4.27.2 回归已覆盖 post-save reload 失败与 Source rename 失败时的内存、落盘、manager 和旧 Provider reload 恢复调用。回滚写或旧实例重载若再次失败，原始宿主异常仍是主错误并附带说明，不伪称所有状态已恢复。从 0.1.17 升级时只迁移与卡片 Source 身份精确匹配的旧布尔值。
+- 这套 Source 配置与保存语义已通过 AstrBot `4.26.1` / `4.27.2` 服务矩阵，并在真实 `4.27.2` Dashboard DOM 中验证 Ark、Agent Plan、外国 Source 与通用模型弹窗的隔离、隐藏和重开保留行为。
 
 ## 0.1.16：运行证据不是产品接口替身
 
@@ -117,7 +129,7 @@ QQ Record
 ## 0.1.15：请求通道不是能力真值表
 
 - AstrBot 模型卡上的图片、音频、工具等信息继续由 AstrBot 管理；没有某个标注只代表当前没有反馈，不自动等于不支持。
-- 视频在 AstrBot 4.27 还没有原生反馈选项，因此插件提供逐模型卡“视频请求通道”；它只控制 Ark `video_url` 是否发送，不写 `modalities`，也不替模型下能力结论。这个 UI 使用当前火山 `provider_source_id` 作为宿主原生显示条件，外国 Provider 看不到；临时 UI 键不会进入持久配置或请求 payload。
+- 视频在 AstrBot 4.27 还没有原生反馈选项，因此插件仍以逐模型卡 `volcengine_video_input_enabled` 控制 Ark `video_url` 是否发送，不写 `modalities`，也不替模型下能力结论。当前配置入口位于火山供应商 Source：持久显示开关只控制选择区可见性，临时复选列表按 Source 的真实身份和模型卡 ID 投影，保存后写回逐模型正式字段并删除临时键；外国 Provider 看不到这些字段。
 - 普通 Ark `/models` 只贡献当前这一轮 Source 的稀疏反馈：请求前清旧值、并发请求隔离、读取一次即消费；当前回执明确字段可在本次响应覆盖同名旧展示值，但绝不写全局模型元数据。Agent Plan 只提供 model-name 候选，不维护跨模型厂商的能力先验表。
 
 ## 0.1.14 的工程结构
@@ -187,7 +199,7 @@ registry.py
 
 ### 模型没有看见视频
 
-先确认当前火山模型卡的“视频请求通道”已开启，再确认视频属于本次消息或本次引用。随后查看 AstrBot 媒体转换日志：如果附件在形成 Provider 句柄之前就失败，聊天 Provider 无法从普通文本中反推出原视频。
+先到当前火山供应商 Source 打开“显示逐模型视频选项”，确认当前模型卡已在“启用视频请求通道的模型”中勾选并保存；显示开关之后可以关闭，不影响已保存选择。再确认视频属于本次消息或本次引用。随后查看 AstrBot 媒体转换日志：如果附件在形成 Provider 句柄之前就失败，聊天 Provider 无法从普通文本中反推出原视频。
 
 ### 明明选择 Agent Plan 却产生普通 API 调用
 
@@ -214,7 +226,7 @@ registry.py
 - `features.tools.function_calling`；
 - 明确的思考能力字段。
 
-这些字段是当前 Source 的单次反馈，不自动持久化成模型卡能力真值，也不授权插件自动开关运行路径。AstrBot 当前的公共 `modalities` 仍只有文本、图片、音频与工具，没有原生视频能力轴；插件因此只对自己的模型卡提供专属“视频请求通道”传输设置，不修改公共 `modalities`、AstrBot 源码或 Dashboard 文件。未来宿主提供原生 video capability 后，这层桥可以直接收缩或移除。
+这些字段是当前 Source 的单次反馈，不自动持久化成模型卡能力真值，也不授权插件自动开关运行路径。AstrBot 当前的公共 `modalities` 仍只有文本、图片、音频与工具，没有原生视频能力轴；插件因此只为自己的 Source 提供逐模型视频请求通道的配置入口，正式值仍保存在每张模型卡，不修改公共 `modalities`、AstrBot 源码或 Dashboard 文件。未来宿主提供原生 video capability 后，这层桥可以直接收缩或移除。
 
 ## 已完成的真实验收与当前证据
 
@@ -231,6 +243,10 @@ registry.py
 - 当前普通 Ark `/models`、文本以及同字节 PNG 图片完成 raw-vs-plugin 对照；这些结果用于确认下游协议/插件路径，而不是生成永久模型能力表。
 - 当前普通 Ark 凭据调用 Agent Plan 时，raw 与插件路径同时落在同一认证/账户边界，因此不会为了让 CI 变绿而修改 Agent Plan Provider。
 - 直接 WAV/视频等裸 fixture 若与 QQ 输入条件不等价，不作为 QQ 产品链是否可用的单独裁决依据。
+
+### 0.1.18 Source 视频 UI 证据
+
+- 新的 Source 页面视频选择保存语义已在 AstrBot `4.26.1` 与 `4.27.2` 的真实服务矩阵通过 L3 验证；2026-08-12 又在真实 AstrBot `4.27.2` Dashboard DOM 完成 L4 观察：Ark / Agent Plan Source 各只出现 1 个显示开关，展开后分别只列出自己的 2 / 1 张模型卡；外国 Source 为 0 个开关、0 个选择器；关闭会隐藏列表，再打开时选择仍保留且过程没有产生 API 请求；三类通用模型弹窗都没有 canonical、旧临时或新临时视频字段，浏览器 `pageErrors=[]`。这是界面呈现证据，不是模型能力或完整视频链证据。
 
 真实额度测试默认跳过，只有显式注入临时环境变量时才运行。测试代码不会主动读取正式配置或保存密钥。
 

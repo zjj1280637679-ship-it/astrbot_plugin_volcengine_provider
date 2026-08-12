@@ -83,9 +83,10 @@ The runtime artifact must not contain information merely because it helped devel
 
 Public development material can still be inappropriate for the runtime package: disclosure risk and runtime noise are separate from repository visibility.
 
-## 7. Artifact gates
+## 7. Artifact and promotion gates
 
-Before a marketplace-visible version is considered released, the generated runtime package must pass all of these gates:
+The runtime distribution gate runs for every pull request and every push to
+`main`. It must validate:
 
 - manifest-only file inventory;
 - required metadata/entry files present;
@@ -93,18 +94,44 @@ Before a marketplace-visible version is considered released, the generated runti
 - no high-confidence secret patterns;
 - package size within policy;
 - all packaged Python files compile;
-- runtime package loads against supported AstrBot versions;
-- actual `runtime` branch/archive can be inspected as an AstrBot plugin;
-- store/source metadata version equals runtime `metadata.yaml.version`.
+- the package loads against supported AstrBot versions;
+- packaged Provider/Dashboard behavior contracts pass.
+
+Publication is serialized and consumes the exact artifact accepted by the
+successful `main` push gate. An unchanged runtime tree is a no-op. A changed
+tree becomes one uniquely named temporary candidate, which must pass this
+native-install matrix before `runtime` changes:
+
+```text
+AstrBot 4.26.1 × repo_branch
+AstrBot 4.26.1 × download_url
+AstrBot 4.27.2 × repo_branch
+AstrBot 4.27.2 × download_url
+```
+
+The publisher must reject a stale source SHA and update `runtime` only with an
+exact lease against the previously observed runtime SHA. After a real
+promotion, the same publication run must block on the same four-cell matrix
+against the promoted `runtime` branch and archive. Candidate validation
+authorizes promotion; the post-promotion matrix verifies the actual
+user-facing source and is not a substitute for candidate validation.
 
 ## 8. Update invariant
 
 A version update means:
 
 ```text
-main development state advances
+all-PR/main-push runtime gate passes
         +
-runtime branch is regenerated from that validated state
+exact accepted artifact is unchanged and publication ends as a no-op
+        OR
+changed artifact becomes a uniquely named candidate
+        +
+candidate passes the four-cell native installer matrix
+        +
+source is still current and runtime advances with an exact lease
+        +
+promoted runtime passes the same four-cell matrix
         +
 marketplace source points to runtime
         +

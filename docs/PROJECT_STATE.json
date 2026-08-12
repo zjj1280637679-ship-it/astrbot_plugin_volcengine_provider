@@ -1,9 +1,9 @@
 {
-  "schema_version": 4,
+  "schema_version": 8,
   "project": "astrbot_plugin_volcengine_provider",
-  "active_release": "0.1.17",
+  "active_release": "0.1.18",
   "active_branch": "main",
-  "status": "released_with_runtime_distribution_branch",
+  "status": "release_candidate_0_1_18_awaiting_runtime_regeneration",
   "objective_conditions": [
     "Volcengine Ark is both a first-party platform for Doubao/Seed models and a serving platform for third-party/open models.",
     "AstrBot owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and Dashboard rendering.",
@@ -15,17 +15,24 @@
     "AstrBot 4.27.2 marketplace schema permits repo URLs of the form https://github.com/{owner}/{repo}/tree/{branch}.",
     "AstrBot 4.26.1 RepoZipUpdator already parses /tree/{branch} and downloads the matching branch archive, so the runtime-branch source is compatible with the declared >=4.26.1 floor.",
     "AstrBot 4.27.2's documented support_platforms keys do not include webchat; 0.1.17 therefore declares aiocqhttp only instead of publishing an unsupported metadata token.",
-    "Development explainability and runtime distribution have different audiences: AI/ADR/tests/evidence belong in the development state unless a concrete runtime consumer requires them."
+    "Development explainability and runtime distribution have different audiences: AI/ADR/tests/evidence belong in the development state unless a concrete runtime consumer requires them.",
+    "0.1.18 Source-video UI work confirmed that AstrBot 4.26/4.27's shared generic model-card component is not a reliable provider-identity boundary for an extra Volcengine field; the Provider Source form owns the exact Source id/type needed for isolation.",
+    "The Source-level volcengine_video_controls_visible value is presentation state only. Per-card volcengine_video_input_enabled remains the sole persistent/runtime video-transport truth.",
+    "AstrBot 4.26.1 may return live provider dictionaries from schema projection, so a retired 0.1.17 _volcengine_video_transport_ui_<source-hex> key can become upgrade residue on a real card. Only an exact provider_source_id-matching boolean carries user intent; wrong-Source and foreign values are non-authoritative debris.",
+    "Source selector translation mutates per-card truth before the host Source upsert completes. AstrBot can persist the full config and then raise while reloading the affected Provider, so an upsert exception does not prove disk was untouched; recovery must restore the in-memory card snapshot and attempt a compensating host save_config write."
   ],
   "expected_outcomes": [
-    "Keep the 0.1.16 provider/runtime/capability semantics unchanged.",
+    "Keep the established provider endpoints, media payloads, AstrBot lifecycle ownership, and capability-feedback semantics unchanged while changing only the owned Source configuration surface.",
     "Separate the development repository from the user runtime distribution.",
     "Generate the runtime distribution from an explicit allow-list so new development files are excluded by default.",
     "Prevent CI, tests, internal docs, evidence, experimental assets, secrets, private test data, and other non-runtime information from entering the AstrBot Store package.",
     "Validate the artifact users receive, not merely a development checkout.",
     "Keep the runtime package small enough that abnormal growth is detected before publication.",
     "Publish a stable runtime branch whose metadata version and marketplace repository binding match the validated release.",
-    "Prove both the branch-repo path and direct ZIP download path through AstrBot's native installers on 4.26.1 and 4.27.2."
+    "Prove both the branch-repo path and direct ZIP download path through AstrBot's native installers on 4.26.1 and 4.27.2.",
+    "For 0.1.18 Source-video UI, expose one owned-Source master plus an exact current-Source model-card selector, preserve selections when hidden, keep foreign Sources and all generic model dialogs free of plugin video fields, and leave AstrBot modalities unchanged.",
+    "Upgrade safely from 0.1.17 on AstrBot 4.26.1 by preserving exact owned-card intent with canonical > exact retired UI > older per-card > legacy Source boolean including false > modalities precedence, then remove all temporary and wrong-layer plugin fields without promoting wrong-Source or foreign data.",
+    "On Source upsert failure, restore all pre-call model-card state in memory and use host save_config for a compensating persistent rollback. Preserve the original host exception; if rollback persistence also fails, attach that failure as a note and do not claim disk restoration."
   ],
   "current_strategy": {
     "development_branch": "main",
@@ -37,8 +44,41 @@
     "runtime_secret_scan": "high_confidence_patterns_plus_forbidden_sensitive_filenames",
     "runtime_install_validation": "actual_generated_package_on_astrbot_4_26_1_and_4_27_2",
     "runtime_branch_validation": "real_branch_archive_plus_version_native_updater_repo_and_download_url_paths",
-    "provider_runtime_changes_in_0_1_17": false,
+    "0_1_17_provider_runtime_changes": false,
+    "0_1_18_media_transport_changes": false,
+    "0_1_18_source_configuration_changes": true,
     "video_control": "per_model_card_request_transport_switch",
+    "release_0_1_18_source_video_ui": {
+      "status": "implemented_and_validated_release_candidate_awaiting_runtime_regeneration",
+      "configuration_surface": "owned_provider_source_page",
+      "persistent_presentation_field": "volcengine_video_controls_visible",
+      "presentation_field_runtime_authority": false,
+      "temporary_selector_identity": "exact_current_source_model_card_ids",
+      "selector_save_target": "per_card_volcengine_video_input_enabled",
+      "hidden_selector_behavior": "preserve_saved_choices_and_runtime_state",
+      "host_upsert_failure_behavior": {
+        "in_memory": "restore_complete_pre_call_source_and_model_card_lists_and_manager_mirrors",
+        "persistent_compensation": "call_available_host_save_config_after_restoring_snapshot",
+        "runtime_compensation": "best_effort_reload_each_old_model_card_from_the_original_source_snapshot",
+        "primary_exception": "reraise_original_host_upsert_or_reload_error",
+        "secondary_failure": "preserve_original_host_error_add_persistence_or_reload_failure_note_and_do_not_claim_unobserved_restoration"
+      },
+      "generic_model_card_video_ui": false,
+      "foreign_source_video_ui": false
+    },
+    "release_0_1_18_video_upgrade_migration": {
+      "precedence": [
+        "canonical_per_card_boolean",
+        "exact_provider_source_id_retired_0_1_17_ui_boolean",
+        "older_per_card_boolean",
+        "legacy_source_boolean_including_false",
+        "historical_modalities_video_clue"
+      ],
+      "wrong_source_retired_ui_promotion": false,
+      "foreign_plugin_video_state_promotion": false,
+      "post_resolution_cleanup": "all_retired_temporary_and_wrong_layer_plugin_video_fields",
+      "modalities_mutation": false
+    },
     "astrbot_modalities_mutation": false,
     "routing_fallback_ownership": "astrbot",
     "interaction_judgment_rule": "interaction_does_not_grant_judgment_authority",
@@ -81,23 +121,58 @@
     "0_1_17_artifact_inventory_and_secret_boundary": "passed",
     "0_1_17_astrbot_4_27_2_minimal_package_load": "passed",
     "0_1_17_astrbot_4_26_1_minimal_package_load": "passed",
-    "runtime_branch_published": "passed_commit_144aa0a31807736f510aa94b760f15a896b6d576",
-    "real_runtime_branch_archive_validation": "passed_by_publish_runtime_workflow",
-    "native_updater_4_26_1_repo_branch": "passed",
-    "native_updater_4_26_1_download_url": "passed",
-    "native_updater_4_27_2_repo_branch": "passed",
-    "native_updater_4_27_2_download_url": "passed",
-    "marketplace_sync": "external_state_not_claimed_until_store_refresh_or_republish_is_observed"
+    "0_1_17_runtime_branch_published": "passed_commit_144aa0a31807736f510aa94b760f15a896b6d576",
+    "0_1_17_real_runtime_branch_archive_validation": "passed_by_publish_runtime_workflow",
+    "0_1_17_native_updater_4_26_1_repo_branch": "passed",
+    "0_1_17_native_updater_4_26_1_download_url": "passed",
+    "0_1_17_native_updater_4_27_2_repo_branch": "passed",
+    "0_1_17_native_updater_4_27_2_download_url": "passed",
+    "0_1_18_main_version": "release_candidate_branch_metadata_0_1_18_pending_main_merge",
+    "0_1_18_source_video_ui_service_4_26_1": "L3_pass",
+    "0_1_18_source_video_ui_service_4_27_2": "L3_pass",
+    "0_1_18_upgrade_from_0_1_17_live_schema_residue_migration": "contract_regression_passed_exact_source_bool_only_wrong_source_and_foreign_never_promoted_all_debris_removed",
+    "0_1_18_post_save_reload_failure_rollback": "4_26_1_and_4_27_2_focused_regressions_passed_host_saved_then_reload_failed_including_source_rename_source_cards_persisted_snapshots_manager_mirrors_and_old_card_reload_calls_restored_original_error_reraised",
+    "0_1_18_rollback_secondary_failure_contract": "original_host_error_remains_primary_and_receives_persistence_or_old_instance_reload_failure_notes_unobserved_restoration_not_claimed",
+    "0_1_18_source_video_ui_dashboard_4_27_2": {
+      "status": "L4_pass",
+      "observed_date": "2026-08-12",
+      "ark": {
+        "master_count": 1,
+        "selector_count": 1,
+        "current_source_card_count": 2
+      },
+      "agent_plan": {
+        "master_count": 1,
+        "selector_count": 1,
+        "current_source_card_count": 1
+      },
+      "foreign": {
+        "master_count": 0,
+        "selector_count": 0
+      },
+      "close_hides_selector": true,
+      "reopen_preserves_selection": true,
+      "interaction_api_request_count": 0,
+      "generic_model_dialog_plugin_video_field_counts": {
+        "ark": 0,
+        "agent_plan": 0,
+        "foreign": 0
+      },
+      "page_errors": []
+    },
+    "0_1_17_marketplace_sync": "external_state_not_claimed_until_store_refresh_or_republish_is_observed",
+    "0_1_18_runtime_branch_regeneration": "pending_main_merge_and_publish_runtime_workflow",
+    "0_1_18_actual_runtime_archive_and_native_updater_validation": "pending_runtime_branch_regeneration"
   },
   "active_validation_frontier": {
-    "name": "0.1.17_real_user_store_refresh",
-    "current_stage": "repository_and_runtime_distribution_complete_waiting_for_external_marketplace_record_refresh_or_manual_republish_if_required",
-    "reason": "GitHub development state, runtime branch, real branch archive, and both version-native AstrBot installer paths are validated. AstrBot Cloud/Store registry refresh is an external publication state and is not inferred from repository success.",
+    "name": "0.1.18_runtime_regeneration_and_distribution_validation",
+    "current_stage": "release_candidate_validated_waiting_for_main_merge_and_runtime_branch_regeneration",
+    "reason": "The 0.1.18 Source UI, migration, rollback, and supported-host service/presentation contracts are validated. The stable runtime branch still represents the historical 0.1.17 distribution until the post-merge allow-list publisher regenerates it; repository metadata or a merge alone must not be reported as a completed user release.",
     "dimensions": [
-      "store_visible_version_0.1.17",
-      "store_download_source_resolves_to_runtime_distribution",
-      "real_windows_store_install_without_development_files",
-      "user_runtime_validation"
+      "0.1.18_allow_list_artifact_loads_on_astrbot_4.26.1_and_4.27.2",
+      "runtime_branch_and_archive_report_version_0.1.18",
+      "0.1.18_native_updater_repo_branch_and_download_url_paths",
+      "external_store_visibility_not_inferred_from_repository_success"
     ]
   },
   "authoritative_docs": [

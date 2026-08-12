@@ -108,6 +108,12 @@ Therefore:
 
 See `docs/TEST_HISTORY.md` and `docs/REGRESSION_SCOPE.md`.
 
+### 9. The generic model-card component is not a reliable Provider identity boundary
+
+AstrBot 4.26/4.27 uses a shared model-card schema/rendering path. A Volcengine field added without a usable current-Source identity can therefore appear on every provider card; a condition evaluated against data that the card does not own can instead hide it everywhere.
+
+The Provider Source form owns the current Source `id` and `type`, so it is the narrower configuration boundary for provider-owned controls. This does not move runtime truth to the Source: it only moves the editing surface to an object with reliable identity.
+
 ## Expected outcomes
 
 The project should:
@@ -143,15 +149,26 @@ Explicit current values such as `false`, an empty list, or integer `0` remain in
 
 Unknown/future modality tokens are preserved rather than filtered through today's vocabulary.
 
-### Dashboard model-card UI
+### Dashboard Source UI
 
-The canonical Volcengine video transport field is not installed as an unconditional shared model-card schema field. The Dashboard bridge exposes a Source-scoped temporary UI field only for an owned Volcengine Source, then translates/removes that temporary field before persistence.
+The canonical Volcengine video transport field is not installed as an unconditional shared model-card schema field and is removed from generic model-card projections.
+
+For an owned Volcengine Source, the Dashboard bridge exposes:
+
+- persistent `volcengine_video_controls_visible`, which controls only whether the selection area is shown;
+- a temporary checkbox list containing the current Source's model-card IDs, visible only while that preference is `true`.
+
+Saving an open selector writes the chosen IDs back to each card's canonical `volcengine_video_input_enabled`, then strips the temporary selector. Saving with the display preference off preserves the prior per-card values. Thus hiding the UI neither clears the user's choices nor stops video transport, and the Source never becomes a second runtime truth store.
+
+Because selector translation updates per-card truth before the host Source upsert completes, the bridge snapshots the complete Source/model-card state first. If the host upsert raises, it restores that state and the manager mirrors in memory. AstrBot may already have persisted the translated config before a later Provider reload fails, so the bridge calls an available host `save_config()` to persist the old snapshot as a compensating rollback, then best-effort reloads the old Source's model cards to repair a potentially partial runtime reload. The original host exception continues outward; persistence or old-instance reload failures remain notes on that primary error. This avoids falsely promising restoration of a layer whose compensation also failed.
+
+Foreign Sources receive neither the persistent display field nor the temporary selector. A stale already-open 0.1.17 model dialog may still be translated at its save boundary for compatibility, but the generic model card is no longer a visible configuration entry point.
 
 Fine-grained browser automation is presentation evidence, not capability or product-path authority. Coarse real Dashboard reachability remains a hard integration signal.
 
 ### Migration
 
-Migration preserves configuration intent. It does not convert legacy fields into model facts. Current precedence is documented in ADR-0004.
+Migration preserves configuration intent. It does not convert legacy fields into model facts. Current precedence is canonical per-card bool > exact-current-Source boolean retired 0.1.17 UI key > older per-card bool > legacy Source bool including `false` > historical `modalities: video`. Wrong-Source and foreign values are never promoted; all temporary/wrong-layer fields are removed after resolution, while `modalities` stays host-owned and unchanged. The full rule is documented in ADR-0004.
 
 ### Failure provenance
 
@@ -174,6 +191,8 @@ Rejected because legitimate counterexamples include third-party/open models, ali
 ### Provider-wide video capability flag
 
 Rejected because one Source can host multiple models with different behavior, and because a Source-wide flag polluted unrelated model cards and interfered with host fallback semantics.
+
+The current Source-level `volcengine_video_controls_visible` field is not this rejected strategy: it has no runtime authority and only reveals or hides a per-model selector whose saved truth remains on each model card.
 
 ### Writing plugin dynamic feedback into global `LLM_METADATAS[model_id]`
 
@@ -202,4 +221,4 @@ A correct implementation must survive both directions of review:
 - **positive path:** legitimate supported behavior remains reachable;
 - **counterexample path:** a local rule must not destroy another legitimate path.
 
-The 0.1.16 release candidate therefore uses the layered evidence model in `docs/E2E_MATRIX.md`, the historical evidence index in `docs/TEST_HISTORY.md`, and the impact rules in `docs/REGRESSION_SCOPE.md`. The goal is not to maximize test count; it is to make every conclusion traceable to an interface that can actually support that conclusion.
+The project therefore uses the layered evidence model in `docs/E2E_MATRIX.md`, the historical evidence index in `docs/TEST_HISTORY.md`, and the impact rules in `docs/REGRESSION_SCOPE.md`. The Source-page save contract has passed the AstrBot `4.26.1` and `4.27.2` service matrix at L3. A separate 2026-08-12 real AstrBot `4.27.2` Dashboard DOM run passed L4: owned Ark/Plan Sources each exposed exactly one master and one conditional selector scoped to their own 2/1 cards; close/reopen preserved selection without an API request; foreign exposed 0/0; all generic model dialogs exposed none of the canonical/retired/new video fields; `pageErrors=[]`. The goal is not to maximize test count; it is to make every conclusion traceable to an interface that can actually support that conclusion.

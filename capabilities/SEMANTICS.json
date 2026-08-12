@@ -36,25 +36,95 @@
       "false_means": "do_not_forward_video_payload_for_this_card",
       "false_does_not_mean": "model_unsupported",
       "migration_semantics": "preserve_previous_user_transport_intent_only"
+    },
+    "volcengine_video_controls_visible": {
+      "kind": "source_page_presentation_preference",
+      "scope": "one_owned_provider_source",
+      "authoritative_for": [
+        "whether_the_source_page_per_model_video_selector_is_visible"
+      ],
+      "not_authoritative_for": [
+        "whether_any_model_card_forwards_video",
+        "model_supports_video",
+        "model_does_not_support_video",
+        "provider_supports_video_for_all_models",
+        "routing_or_fallback_selection"
+      ],
+      "false_means": "hide_selector_and_preserve_all_per_card_transport_values",
+      "persistent": true,
+      "runtime_transport_authority": false
     }
   },
   "dashboard_transport_ui": {
+    "surface": "owned_provider_source_page",
     "canonical_field_in_shared_schema": false,
-    "visibility_selector": "provider_source_id",
+    "canonical_field_in_generic_model_card_projection": false,
     "owned_sources_only": true,
-    "temporary_key_prefix": "_volcengine_video_transport_ui_",
-    "temporary_key_encoding": "utf8_hex_reversible_injective",
-    "persistent": false,
-    "save_boundary_action": "translate_current_owned_source_ui_value_to_volcengine_video_input_enabled_then_strip_all_temporary_ui_keys",
+    "persistent_visibility_field": "volcengine_video_controls_visible",
+    "visibility_field_authority": "presentation_only",
+    "temporary_selector_key_prefix": "_volcengine_video_models_ui_",
+    "temporary_selector_key_encoding": "source_id_utf8_hex_reversible_injective",
+    "temporary_selector_identity": "exact_model_card_ids_belonging_to_current_source",
+    "temporary_selector_condition": {
+      "volcengine_video_controls_visible": true
+    },
+    "temporary_selector_persistent": false,
+    "save_boundary_action": "when_visible_and_selector_submitted_write_exact_source_card_choices_to_per_card_volcengine_video_input_enabled_then_strip_selector",
+    "hidden_or_omitted_selector_action": "preserve_all_existing_per_card_transport_values",
+    "runtime_truth": "per_card_volcengine_video_input_enabled_only",
     "foreign_provider_visibility": false,
     "foreign_ui_key_can_create_plugin_state": false,
     "requires_host_apis": [
       "get_provider_schema",
-      "create_provider",
-      "update_provider"
+      "upsert_provider_source"
     ],
     "missing_required_host_api": "disable_transport_ui_only",
-    "note": "AstrBot 4.26/4.27 uses one shared model-card schema. An unconditional plugin field would leak into unrelated Provider cards, so the UI shim is Source-conditioned and short-lived."
+    "legacy_open_model_dialog_compatibility": {
+      "temporary_key_prefix": "_volcengine_video_transport_ui_",
+      "promotion_eligibility": "boolean_value_on_owned_card_whose_key_encodes_that_cards_exact_provider_source_id",
+      "wrong_source_or_foreign_key_can_create_plugin_state": false,
+      "save_boundaries": [
+        "create_provider",
+        "update_provider"
+      ],
+      "visible_entry_point": false,
+      "purpose": "translate_and_strip_a_stale_already_open_0_1_17_model_dialog"
+    },
+    "source_save_failure_action": "restore_entire_pre_call_model_card_list_then_reraise_host_error",
+    "service_validation": {
+      "astrbot_4_26_1": "L3_pass",
+      "astrbot_4_27_2": "L3_pass",
+      "current_dashboard_presentation": {
+        "status": "L4_pass",
+        "astrbot_version": "4.27.2",
+        "observed_date": "2026-08-12",
+        "owned_source_masters": {
+          "ark": 1,
+          "agent_plan": 1
+        },
+        "owned_source_selectors": {
+          "ark": 1,
+          "agent_plan": 1
+        },
+        "selector_card_counts": {
+          "ark": 2,
+          "agent_plan": 1
+        },
+        "selector_scope": "current_source_only",
+        "close_hides_selector": true,
+        "reopen_preserves_selection": true,
+        "interaction_api_request_count": 0,
+        "foreign_source_master_count": 0,
+        "foreign_source_selector_count": 0,
+        "generic_model_dialog_plugin_video_fields": {
+          "ark": 0,
+          "agent_plan": 0,
+          "foreign": 0
+        },
+        "page_errors": []
+      }
+    },
+    "note": "AstrBot 4.26/4.27 uses one shared generic model-card schema. The Source form owns reliable provider identity, so the selector is projected there while runtime truth remains per card."
   },
   "live_model_feedback": {
     "ordinary_ark_models_receipt": {
@@ -97,10 +167,24 @@
   },
   "migration_precedence": [
     "current_per_card_volcengine_video_input_enabled",
+    "exact_source_retired_0_1_17_model_ui_boolean",
     "legacy_per_card_volcengine_model_video_input",
     "legacy_explicit_source_boolean_including_false",
     "historical_modalities_video_clue"
   ],
+  "migration_cleanup_contract": {
+    "retired_0_1_17_ui_key_prefix": "_volcengine_video_transport_ui_",
+    "retired_ui_key_must_match_card_provider_source_id": true,
+    "retired_ui_value_must_be_boolean": true,
+    "wrong_source_retired_ui_may_be_promoted": false,
+    "foreign_card_plugin_video_state_may_be_promoted": false,
+    "remove_all_retired_and_temporary_ui_keys_after_resolution": true,
+    "remove_source_only_video_fields_from_model_cards": true,
+    "remove_model_only_and_temporary_video_fields_from_sources": true,
+    "owned_source_visibility_field_may_persist": "volcengine_video_controls_visible",
+    "foreign_source_visibility_field_may_persist": false,
+    "modalities_mutation": false
+  },
   "display_contract": {
     "unknown": "no_plugin_claim",
     "not_reported": "no_plugin_claim",

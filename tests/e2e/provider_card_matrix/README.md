@@ -16,7 +16,9 @@ Read `docs/E2E_MATRIX.md` before extending this suite.
 
 - A skipped path must include a reason; it is never counted as pass.
 - Foreign providers are first-class test cases, not incidental negatives.
-- UI correctness includes field ownership, visibility, group/order, create/edit parity, and save/reload behavior.
+- UI correctness includes Source ownership, immediate conditional visibility,
+  per-model selection by card ID, and hide/save/reopen preservation. The generic
+  model-card form must not expose Volcengine video fields.
 - Runtime failures are classified by provenance; the suite must not convert every failure into a model-capability verdict.
 - Browser screenshots are review evidence, while structural snapshots carry the stable assertions.
 - Secrets must never be written into snapshots, logs, or artifacts.

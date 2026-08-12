@@ -1,6 +1,6 @@
 {
-  "schema_version": 2,
-  "release": "0.1.16",
+  "schema_version": 6,
+  "release": "0.1.18",
   "entries": [
     {
       "id": "ADR-0001",
@@ -23,17 +23,17 @@
     {
       "id": "ADR-0003",
       "topic": "dashboard schema isolation",
-      "question": "How can Volcengine model-card UI be shown without polluting foreign providers?",
-      "decision": "Use owned-Source conditional temporary UI keys and translate/remove them at the save boundary; do not install an unconditional canonical shared-schema field.",
+      "question": "How can users edit per-model Volcengine video transport when the shared generic model-card component lacks a reliable current-Provider identity boundary?",
+      "decision": "Do not show plugin video fields in generic model cards. On each owned Provider Source, persist volcengine_video_controls_visible as presentation-only state and project a temporary exact-current-Source model-card selector. When visible and saved, write choices to each card's canonical volcengine_video_input_enabled and strip the selector; hiding it preserves selections and runtime state. Snapshot the complete model-card list before translation. If host upsert raises, restore the in-memory snapshot and use available host save_config for a compensating persistent rollback because AstrBot may already have saved before Provider reload fails. Re-raise the original host error; if rollback persistence also fails, add that failure as a note and do not claim disk restoration. Foreign Sources receive neither field, and AstrBot modalities remain unchanged.",
       "doc": "docs/ADR/ADR-0003-dashboard-schema-isolation.md",
       "code": ["registry.py", "capabilities/model_scope.py"],
-      "tests": ["tests/test_model_card_ui_scope.py", "tests/test_dashboard_save_boundary.py", "tests/test_dashboard_bridge_compat.py"]
+      "tests": ["tests/test_model_card_ui_scope.py", "tests/test_dashboard_save_boundary.py", "tests/test_dashboard_bridge_compat.py", "tests/e2e/provider_card_matrix/service_matrix.py", "tests/e2e/provider_card_matrix/browser_matrix.py"]
     },
     {
       "id": "ADR-0004",
       "topic": "legacy migration precedence",
       "question": "What does migration preserve?",
-      "decision": "Preserve user configuration intent, not a model capability fact. Explicit false remains explicit information and outranks historical modalities clues.",
+      "decision": "Preserve user configuration intent, not a model capability fact. Precedence is canonical per-card bool > exact-provider_source_id retired 0.1.17 UI bool > older per-card bool > legacy Source bool including false > modalities clue. Wrong-Source and foreign fields never promote; remove all temporary/wrong-layer debris and leave modalities unchanged.",
       "doc": "docs/ADR/ADR-0004-migration-preserves-intent.md",
       "code": ["capabilities/model_scope.py", "capabilities/source_migration.py"],
       "tests": ["tests/test_0_1_15_feedback_boundary.py"]
@@ -59,8 +59,21 @@
   ],
   "active_evidence": {
     "doc": "docs/E2E_MATRIX.md",
-    "goal": "0.1.16 release evidence across plugin contracts, AstrBot integration, downstream Ark attribution, and historical QQ product regressions",
-    "reason": "Each layer may judge only the interface it actually exercises; raw provider fixtures and brittle UI automation must not silently redefine QQ product compatibility."
+    "goal": "Prepare the 0.1.18 Source-video UI release while preserving the historical 0.1.17 runtime-distribution evidence and tracking plugin contracts, AstrBot 4.26.1/4.27.2 service integration, real 4.27.2 Dashboard presentation, downstream Ark attribution, and historical QQ product regressions",
+    "reason": "Each layer may judge only the interface it actually exercises. The Source save contract passed L3 on 4.26.1/4.27.2 and the dated 2026-08-12 real 4.27.2 Dashboard DOM run passed L4; neither UI evidence nor raw provider fixtures silently redefine model capability or QQ product compatibility.",
+    "release_0_1_18_source_video_ui": {
+      "l3_service_matrix": ["4.26.1_pass", "4.27.2_pass"],
+      "l4_dashboard_4_27_2": "2026-08-12_pass",
+      "l4_observations": "Ark/Plan masters 1/1, selectors 1/1 scoped to their own 2/1 cards; close/reopen preserved selection with zero API requests; foreign 0/0; generic Ark/Plan/foreign dialogs exposed zero canonical/retired/new plugin video fields; pageErrors empty",
+      "upgrade_migration": "exact-Source boolean retired 0.1.17 UI residue is second only to canonical; wrong-Source and foreign state never promotes; all temporary and wrong-layer fields are cleaned; modalities unchanged",
+      "failed_source_upsert": {
+        "in_memory": "complete pre-call Source/model-card lists and manager mirrors restored",
+        "post_save_reload_regression": "4.26.1/4.27.2 same-id and rename cases restored persisted snapshots through host save_config and invoked reload for old Source cards",
+        "error_precedence": "original host error re-raised",
+        "secondary_failure": "persistence or old-instance reload failure attached as note; unobserved restoration not claimed"
+      }
+    },
+    "distribution_status": "0.1.18 release candidate awaits post-merge runtime branch regeneration and actual artifact/native-updater validation; the recorded runtime commit is historical 0.1.17 evidence"
   },
   "ai_entry_points": [
     "AGENTS.md",

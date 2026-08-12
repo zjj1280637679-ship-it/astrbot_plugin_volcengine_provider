@@ -20,8 +20,8 @@ This document lets an AI or new maintainer reconstruct the project quickly witho
 | Input failure provenance | Distinguish local transport failure from upstream/model response | `adapters/errors.py` |
 | Dynamic model feedback | Translate current Ark `/models` response for the current Source response only | `metadata/ark.py`, `capabilities/source_hints.py` |
 | Agent Plan model listing | Agent Plan model-name discovery without model-ID capability priors | `metadata/agent_plan.py` |
-| Model-card transport config | Per-card video request transport switch and migration | `capabilities/model_scope.py`, `capabilities/source_migration.py` |
-| Dashboard bridge | Source-scoped model-card UI and save-boundary translation | `registry.py` |
+| Model-card transport config | Per-card canonical video request switch, Source display preference, and migration | `capabilities/model_scope.py`, `capabilities/source_migration.py` |
+| Dashboard bridge | Owned-Source video selector projection and Source-save translation | `registry.py` |
 | Machine semantics | Stable meanings for capability/feedback/config fields | `capabilities/SEMANTICS.json` |
 | Persistent regressions | Current contract tests | `tests/test_*` |
 | Product-path evidence | Host integration, UI evidence, real API attribution | `docs/E2E_MATRIX.md` |
@@ -43,9 +43,12 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - AstrBot already owns provider lifecycle, fallback/retry behavior, provider-source/model-card management, metadata display, and Dashboard rendering.
 - AstrBot capability icons are incomplete feedback surfaces, not a complete model-capability truth table.
 - Different AstrBot provider types can use different Dashboard layouts and UI paths; UI automation must prove the interface it is driving instead of guessing structure.
+- The shared generic model-card renderer does not provide a reliable owned-Provider identity boundary for an extra Volcengine field: previous attempts could render the field for every provider or for none. The Provider Source form owns the real Source identity and is therefore the current configuration surface.
+- AstrBot 4.26.1's schema service can expose live provider dictionaries. A retired 0.1.17 Dashboard projection key may therefore be real upgrade residue, but only the boolean key encoding the card's exact `provider_source_id` carries user intent; same-prefix wrong-Source and foreign fields are cleanup-only debris.
 - Both plugin-owned Ark and Agent Plan providers currently register as AstrBot `chat_completion`; Agent Plan is not an `agent_runner` UI card.
 - A model may support a modality while the complete QQ/NapCat/AstrBot/provider transport path is broken, and the inverse test mismatch is also possible: a synthetic raw fixture may fail while an unchanged QQ-oriented path remains valid under its original conditions.
 - The real AstrBot v4.27.2 Dashboard has been built, started, logged into, and opened at the Provider page with this plugin loaded. That is UI/host evidence, not model-capability evidence.
+- The new Source-page selector save semantics pass the real AstrBot 4.26.1 and 4.27.2 service matrix (L3). A dated 2026-08-12 AstrBot 4.27.2 Dashboard DOM run also passed L4: Ark/Plan each had one master and one conditional selector containing only their own 2/1 cards; close hid the selector, reopen preserved the choice with zero API requests; foreign had 0/0; all Ark/Plan/foreign generic model dialogs contained none of the canonical, retired temporary, or new temporary video fields; `pageErrors=[]`. This is presentation evidence, not model-capability or media-path evidence.
 - Fine Playwright provider-card automation encoded unstable harness assumptions and was retired as a release gate; coarse reachability plus evidence collection remains useful.
 - Historical QQ-oriented media validation is tracked explicitly and must be re-run based on dependency impact, not because every release must reproduce every old E2E.
 
@@ -56,16 +59,20 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 - Current upstream feedback may be displayed for the current response, but stale plugin feedback must not survive to defeat a newer response.
 - Errors identify where a request failed without taking ownership of AstrBot's routing decision.
 - Provider-specific configuration remains isolated from foreign providers.
+- Upgrade migration preserves the strongest exact owned-card intent, removes temporary/wrong-layer debris, and leaves AstrBot `modalities` unchanged.
+- A failed host Source upsert restores Source/model-card state and manager mirrors to their pre-call snapshot. Because AstrBot may have saved before a later Provider reload fails, the plugin uses host `save_config()` for a compensating persistent rollback and best-effort reloads the old Source's cards; secondary failures do not replace the original host error and are attached as notes.
 - Raw upstream tests are used for downstream protocol attribution, while QQ compatibility is judged only by a QQ-equivalent media path.
 - Historical successful paths remain evidence until an impact edge invalidates their conditions.
 
 ## Current strategy
 
-- Keep video transport configuration per model card and out of AstrBot `modalities`.
-- Use Source-scoped temporary Dashboard keys only for UI rendering; translate/remove them at the save boundary.
+- Keep the runtime video transport truth per model card and out of AstrBot `modalities`.
+- Put the configuration surface on owned Provider Sources: persist `volcengine_video_controls_visible` only as a show/hide preference, project a temporary checkbox list from the current Source's model-card IDs, and translate/remove that selector at the Source save boundary.
+- Closing the Source display switch must preserve every per-card selection and runtime value; foreign Sources and generic model cards must receive no visible Volcengine video field.
 - Keep ordinary Ark `/models` feedback transient, Source-scoped, single-use, and async-context isolated.
 - Preserve explicit `false`, empty lists, integer `0`, and future unknown modality tokens when explicitly present in current feedback.
-- Preserve legacy user intent during migration with precedence documented in ADR-0004.
+- Preserve legacy user intent with ADR-0004's exact precedence: canonical > exact-Source boolean retired 0.1.17 UI key > older per-card > legacy Source boolean including `false` > `modalities: video`; then remove all temporary/wrong-layer fields without promoting wrong-Source or foreign state.
+- Treat Source selector write-back as a snapshot plus compensating rollback around the host upsert: restore Source/cards and manager mirrors, use host `save_config()` to persist that restored snapshot when available, best-effort reload the old Source's card instances, and re-raise the original host error. Annotate persistence/reload compensation failures and do not claim unobserved state was restored.
 - Treat contract/service tests as hard gates according to ownership.
 - Treat Playwright as coarse reachability plus presentation evidence, not as an authority on fine UI layout.
 - Prefer AstrBot-native precedent and minimal existence experiments before constructing new automation around an assumed interface.
@@ -74,7 +81,7 @@ Then classify the strongest evidence available using `docs/EVIDENCE_LEVELS.md`.
 
 ## Current release candidate
 
-`0.1.16` is a stabilization release for capability/feedback boundaries, failure provenance, migration, Dashboard isolation, runtime attribution, and AI/project explainability. The historical branch name still contains `0.1.15`; do not infer the release version from the branch name.
+`0.1.18` is the active release candidate. Its Source-page video selector, exact 0.1.17 live-schema residue migration, wrong-layer cleanup, and failed-upsert rollback have passed the recorded contract, AstrBot `4.26.1` / `4.27.2` service, and real `4.27.2` Dashboard presentation checks. They are 0.1.18 behavior, not part of the historical published 0.1.17 runtime branch. Do not call 0.1.18 fully published until the post-merge allow-list build has regenerated the stable `runtime` branch and the actual runtime artifact/install paths have passed the release gates.
 
 Current ordinary Ark `/models`, text, and image raw-vs-plugin checks provide downstream L5 attribution evidence. Current Agent Plan checks with an ordinary-Ark credential fail in both raw and plugin paths with the same authentication/account boundary and therefore do not justify a production-code change. Audio/video product compatibility is not redefined by those raw probes; see `TEST_HISTORY` and `REGRESSION_SCOPE`.
 
