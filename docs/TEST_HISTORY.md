@@ -10,6 +10,7 @@ This file records important validation evidence and prevents future agents from 
 | 0.1.14 | Compatibility | AstrBot 4.26.1 / 4.27.2 matrix passed, including real synthetic Tencent Silk, trusted video attachment bridge, provider registration and real ordinary Ark text | Host integration remained compatible across the tested host versions |
 | 0.1.15 | Capability boundary | Runtime-feedback isolation, migration precedence, foreign-provider isolation and transport-failure provenance regressions passed | Feedback/config transport is not capability authority |
 | 0.1.16 RC | Runtime evidence | Real ordinary Ark `/models`, text and image raw-vs-plugin attribution succeeded; current ordinary-Ark credential was rejected by both raw and plugin Agent Plan paths | Current failures can be attributed without automatically blaming plugin code or inventing capability facts |
+| 0.1.17 | Distribution boundary | Allow-list runtime build produced a ~195 KB ZIP with 21 runtime files; generated package loaded on AstrBot 4.26.1 and 4.27.2; `runtime` branch archive was published and revalidated; both versions' native plugin updaters successfully installed from the `/tree/runtime` repo source and from a direct runtime ZIP URL | Development repository state is no longer treated as the user package; the chosen runtime branch is actually consumable by the declared compatibility floor and current host |
 
 ## Revalidation rules
 
@@ -22,6 +23,14 @@ A full QQ-equivalent media rerun is required when one or more of these change ma
 - AstrBot `MediaResolver` / media request contract used by the plugin;
 - the Ark `input_audio` or `video_url` payload contract;
 - QQ/NapCat/OneBot event or attachment semantics relied upon by the path.
+
+A distribution-path rerun is required when one or more of these change materially:
+
+- `tools/release/build_runtime_package.py` or the runtime allow-list;
+- `metadata.yaml.repo`, `metadata.yaml.version`, plugin identity, or supported AstrBot version range;
+- the `runtime` branch publisher;
+- AstrBot plugin updater/archive extraction semantics;
+- marketplace packaging or download-source semantics.
 
 For changes limited to metadata feedback, Dashboard presentation, migration semantics, documentation, or evidence tooling, run the tests owned by those changed layers and retain the historical QQ media evidence unless impact analysis shows a dependency edge into the media path.
 
@@ -38,5 +47,7 @@ is useful for downstream protocol attribution, while product compatibility requi
 ```text
 QQ -> NapCat / OneBot -> AstrBot -> MediaResolver -> plugin adapter -> Ark/model
 ```
+
+Likewise, a development checkout loading successfully is not equivalent to a user distribution package installing successfully. The generated runtime artifact and its actual AstrBot updater path are separate evidence objects.
 
 Production code must not be broadened merely to make a non-equivalent raw media fixture pass. A green raw-provider test can coexist with a broken QQ path, and a red raw-provider test can coexist with an unchanged, historically validated QQ path if the test conditions differ.
