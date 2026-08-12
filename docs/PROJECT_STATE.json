@@ -6,8 +6,7 @@
     "version": "0.1.19",
     "branch": "release/0.1.19-model-card-fields",
     "status": "release_candidate",
-    "pull_request": 7,
-    "head_at_lifecycle_cleanup_start": "d0bc5ec83372cac92a06a61d574609c9dcdb3c64"
+    "pull_request": 7
   },
   "published_baseline": {
     "version": "0.1.18",
@@ -80,52 +79,55 @@
     }
   },
   "validation_progress": {
+    "knowledge_drift_guard": {
+      "status": "passed",
+      "workflow": "Runtime Distribution Gate / artifact-boundary / Reject stale HOT documentation authority",
+      "meaning": "metadata version, HOT frontier, WARM decision index, entry-point HOT pointers, cold archive, and strategy supersession markers are mechanically consistent"
+    },
     "runtime_distribution_gate": {
-      "run_id": 31621942320,
-      "head": "d0bc5ec83372cac92a06a61d574609c9dcdb3c64",
+      "run_id": 31624873790,
+      "head": "cfd25d1d0200d58eb5e50b715ded8b9f76aaf009",
       "status": "passed",
       "astrbot_versions": ["4.26.1", "4.27.2"],
       "compressed_video_positive_contract": "passed_real_ffmpeg_round_trip"
     },
     "real_dashboard_model_field_evidence": {
-      "run_id": 31621942332,
-      "head": "d0bc5ec83372cac92a06a61d574609c9dcdb3c64",
-      "product_steps": "passed",
+      "run_id": 31624873834,
+      "head": "cfd25d1d0200d58eb5e50b715ded8b9f76aaf009",
+      "status": "passed_complete_job",
       "matrix_all_passed": true,
       "page_errors": [],
       "ark": "passed_bilingual_fields_save_reopen_persistence_and_0.1.18_source_ui_preservation",
       "agent_plan": "passed_bilingual_fields_save_reopen_persistence_and_0.1.18_source_ui_preservation",
       "foreign_openai": "passed_no_volcengine_field_leak",
-      "artifact_upload": "passed",
-      "workflow_overall": "false_failure_in_post_cleanup"
+      "explicit_server_teardown": "passed",
+      "setup_uv_post_cleanup": "passed",
+      "artifact_upload": "passed"
     }
   },
-  "known_false_failures": [
+  "known_false_failures": [],
+  "resolved_harness_history": [
     {
       "id": "UI-EVIDENCE-UV-POST-CLEANUP-LOCK",
-      "status": "active_harness_cleanup_issue",
-      "scope": "GitHub Actions teardown only",
-      "run_id": 31621942332,
-      "product_verdict": "ui_evidence_passed",
-      "observed_failure": "astral-sh/setup-uv post step ran uv cache prune --ci while the background uv -> astrbot process still held the cache lock, waited 300 seconds, and timed out",
-      "does_not_falsify": [
-        "Dashboard build",
-        "Playwright/Chromium availability",
-        "AstrBot startup",
-        "0.1.19 model-field UI rendering",
-        "model-field persistence",
-        "foreign-provider isolation"
+      "lifecycle": "historical_resolved",
+      "failed_run": 31621942332,
+      "failed_layer": "workflow_teardown_only",
+      "root_cause": "background uv -> astrbot process held setup-uv cache lock while post-step uv cache prune --ci waited 300 seconds",
+      "product_evidence_on_failed_run": "passed_before_teardown",
+      "fix": [
+        "disable setup-uv cache in real Dashboard evidence workflow",
+        "start evidence server in its own process group with setsid",
+        "explicitly stop the uv/AstrBot process group before action post-steps"
       ],
-      "cleanup_needed": "explicitly stop the background AstrBot/uv process before action post-cleanup or disable unnecessary setup-uv cache for this evidence workflow"
+      "verification_run": 31624873834,
+      "verification": "complete job green including explicit Stop AstrBot evidence server and Post Run astral-sh/setup-uv"
     }
   ],
   "active_validation_frontier": {
     "release": "0.1.19",
-    "name": "candidate_hygiene_then_explicit_publication_approval",
-    "current_stage": "product_candidate_validated_workflow_teardown_cleanup_pending",
+    "name": "explicit_publication_approval",
+    "current_stage": "candidate_clean_and_validated_waiting_user_approval",
     "next_actions": [
-      "Clean the real-Dashboard evidence workflow teardown so successful UI evidence no longer ends as a false red job.",
-      "Re-run the UI evidence workflow and confirm a true green job.",
       "Keep PR #7 draft/unmerged until explicit user approval to publish.",
       "After approval, merge to main and require the exact-main 0.1.19 gate plus pre-promotion, runtime promotion, and post-promotion native-install validation before calling 0.1.19 published."
     ]
