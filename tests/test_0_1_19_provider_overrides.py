@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,10 +94,79 @@ async def test_compression_missing_ffmpeg_fails_closed() -> None:
         video_adapter.shutil.which = original_which
 
 
+async def test_compression_emits_decodable_mp4_when_ffmpeg_exists() -> None:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        print("COMPRESSED_VIDEO_POSITIVE=SKIP_NO_FFMPEG")
+        return
+
+    with tempfile.TemporaryDirectory(prefix="volcengine-video-test-") as tmp:
+        tmpdir = Path(tmp)
+        source = tmpdir / "source.mp4"
+        subprocess.run(
+            [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=640x360:rate=30",
+                "-t",
+                "1",
+                "-c:v",
+                "mpeg4",
+                "-q:v",
+                "4",
+                str(source),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        result = await video_adapter.resolve_video_reference(
+            str(source),
+            mode=video_adapter.VIDEO_MODE_COMPRESSED,
+        )
+        prefix = "data:video/mp4;base64,"
+        assert result.startswith(prefix)
+        compressed = base64.b64decode(result[len(prefix) :])
+        assert len(compressed) > 100
+        assert b"ftyp" in compressed[:64]
+
+        output = tmpdir / "compressed.mp4"
+        output.write_bytes(compressed)
+        # Decode the generated file with ffmpeg itself. This is stronger than
+        # checking only an MP4 magic/header and still requires no network/API.
+        subprocess.run(
+            [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(output),
+                "-f",
+                "null",
+                "-",
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        print(
+            "COMPRESSED_VIDEO_POSITIVE=OK "
+            f"source_bytes={source.stat().st_size} compressed_bytes={len(compressed)}"
+        )
+
+
 def main() -> None:
     test_old_hook()
     test_new_hook()
     asyncio.run(test_compression_missing_ffmpeg_fails_closed())
+    asyncio.run(test_compression_emits_decodable_mp4_when_ffmpeg_exists())
     print("PROVIDER_OVERRIDES_0_1_19=OK")
 
 
