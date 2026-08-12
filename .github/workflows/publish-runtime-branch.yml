@@ -299,14 +299,61 @@ jobs:
       - postpublish-native-install
     if: >-
       always() &&
-      needs.prepare-candidate.outputs.publish_needed == 'true' &&
-      needs.prepare-candidate.outputs.candidate_branch != ''
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
     steps:
+      - name: Delete stale candidate refs that already equal runtime
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/promoted-candidate-cleanup"
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          git init "$work"
+          cd "$work"
+
+          runtime_sha=$(git ls-remote "$remote" refs/heads/runtime | awk '{print $1}')
+          test -n "$runtime_sha"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          refs_file="$RUNNER_TEMP/runtime-candidate-refs"
+          git ls-remote --heads "$remote" 'refs/heads/runtime-candidate-*' \
+            > "$refs_file"
+          while read -r candidate_sha candidate_ref; do
+            test -n "$candidate_sha" || continue
+            test "$candidate_sha" = "$runtime_sha" || continue
+            case "$candidate_ref" in
+              refs/heads/runtime-candidate-*) ;;
+              *) continue ;;
+            esac
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+              push "$remote" \
+              ":${candidate_ref}" \
+              "--force-with-lease=${candidate_ref}:${candidate_sha}"
+            echo "RUNTIME_PROMOTED_CANDIDATE_DELETED ref=${candidate_ref} sha=${candidate_sha}"
+          done < "$refs_file"
+
+          remaining_file="$RUNNER_TEMP/runtime-candidate-refs-after-cleanup"
+          git ls-remote --heads "$remote" 'refs/heads/runtime-candidate-*' \
+            > "$remaining_file"
+          if awk -v runtime_sha="$runtime_sha" \
+            '$1 == runtime_sha { found=1 } END { exit found ? 0 : 1 }' \
+            "$remaining_file"
+          then
+            echo 'promoted candidate cleanup left an exact runtime duplicate' >&2
+            exit 1
+          fi
+          echo 'RUNTIME_PROMOTED_CANDIDATE_CLEANUP=OK'
       - name: Delete only the unchanged candidate ref created by this run
+        if: >-
+          needs.prepare-candidate.outputs.publish_needed == 'true' &&
+          needs.prepare-candidate.outputs.candidate_branch != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -314,8 +361,14 @@ jobs:
           CANDIDATE_SHA: ${{ needs.prepare-candidate.outputs.candidate_sha }}
         run: |
           set -euo pipefail
+          work="$RUNNER_TEMP/current-candidate-cleanup"
           remote="https://github.com/${GITHUB_REPOSITORY}.git"
-          actual=$(git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" | awk '{print $1}')
+          git init "$work"
+          cd "$work"
+          candidate_file="$RUNNER_TEMP/current-candidate-ref"
+          git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" \
+            > "$candidate_file"
+          actual=$(awk '{print $1}' "$candidate_file")
           if [ -z "$actual" ]; then
             echo 'RUNTIME_CANDIDATE_CLEANUP=ALREADY_ABSENT'
             exit 0
@@ -326,5 +379,8 @@ jobs:
             push "$remote" \
             ":refs/heads/${CANDIDATE_BRANCH}" \
             "--force-with-lease=refs/heads/${CANDIDATE_BRANCH}:${CANDIDATE_SHA}"
-          test -z "$(git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}")"
+          verification_file="$RUNNER_TEMP/current-candidate-ref-after-cleanup"
+          git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" \
+            > "$verification_file"
+          test ! -s "$verification_file"
           echo 'RUNTIME_CANDIDATE_CLEANUP=OK'
