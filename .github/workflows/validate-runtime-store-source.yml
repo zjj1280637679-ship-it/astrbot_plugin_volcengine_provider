@@ -1,0 +1,97 @@
+name: Validate Runtime Store Source
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/validate-runtime-store-source.yml
+
+permissions:
+  contents: read
+
+jobs:
+  native-updater-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        astrbot_ref: [v4.26.1, v4.27.2]
+        source_mode: [repo_branch, download_url]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      - name: Clone exact AstrBot compatibility target
+        run: git clone --depth 1 --branch '${{ matrix.astrbot_ref }}' https://github.com/AstrBotDevs/AstrBot.git AstrBot
+      - name: Install exact AstrBot runtime
+        run: uv sync --directory AstrBot
+      - name: Install through the version-native AstrBot updater
+        shell: bash
+        env:
+          SOURCE_MODE: ${{ matrix.source_mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p AstrBot/data/plugins AstrBot/data/config AstrBot/data/temp
+          uv run --directory AstrBot python - <<'PY'
+          import asyncio
+          import os
+          from pathlib import Path
+
+          repo_url = 'https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/tree/runtime'
+          archive_url = 'https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip'
+
+          try:
+              from astrbot.core.star.updater import _PluginUpdater as RuntimeUpdater
+          except ModuleNotFoundError:
+              from astrbot.core.star.updator import PluginUpdator as RuntimeUpdater
+
+          async def main():
+              updater = RuntimeUpdater()
+              mode = os.environ['SOURCE_MODE']
+              if mode == 'repo_branch':
+                  path = await updater.install(repo_url)
+              elif mode == 'download_url':
+                  path = await updater.install(repo_url, download_url=archive_url)
+              else:
+                  raise RuntimeError(mode)
+              print(f'NATIVE_INSTALL_PATH={path}')
+
+          asyncio.run(main())
+          PY
+      - name: Verify the installed user tree is the minimal runtime closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='AstrBot/data/plugins/astrbot_plugin_volcengine_provider'
+          test -f "$root/metadata.yaml"
+          test -f "$root/main.py"
+          test -f "$root/providers.py"
+          test -f "$root/registry.py"
+          test -f "$root/logo.png"
+          test ! -e "$root/.github"
+          test ! -e "$root/tests"
+          test ! -e "$root/docs"
+          test ! -e "$root/evidence"
+          test ! -e "$root/assets"
+          test ! -e "$root/AGENTS.md"
+          test ! -e "$root/README.md"
+          test ! -e "$root/CHANGELOG.md"
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path('AstrBot/data/plugins/astrbot_plugin_volcengine_provider')
+          text = (root / 'metadata.yaml').read_text('utf-8')
+          version = re.search(r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', text).group(1).strip()
+          repo = re.search(r'(?m)^repo:\s*["\x27]?([^"\x27\r\n#]+)', text).group(1).strip()
+          assert version == '0.1.17', version
+          assert repo.endswith('/tree/runtime'), repo
+          files = [p for p in root.rglob('*') if p.is_file()]
+          total = sum(p.stat().st_size for p in files)
+          assert total < 2 * 1024 * 1024, total
+          print(f'NATIVE_STORE_SOURCE_INSTALL=OK version={version} files={len(files)} bytes={total}')
+          PY
