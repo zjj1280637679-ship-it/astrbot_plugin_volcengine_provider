@@ -92,12 +92,16 @@ jobs:
         run: |
           uv run --directory AstrBot python - <<'PY'
           from pathlib import Path
+          import json
           import yaml
 
           root = Path.cwd().parent / 'dist' / 'runtime' / 'astrbot_plugin_volcengine_provider'
+          manifest = json.loads(
+              (Path.cwd().parent / 'dist' / 'runtime-manifest.json').read_text('utf-8')
+          )
           metadata = yaml.safe_load((root / 'metadata.yaml').read_text('utf-8'))
           assert metadata['name'] == 'astrbot_plugin_volcengine_provider'
-          assert metadata['version'] == '0.1.19'
+          assert metadata['version'] == manifest['version']
           assert str(metadata['repo']).endswith('/tree/runtime')
 
           try:

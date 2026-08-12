@@ -12,6 +12,10 @@
 - 新增独立、可撤销的 0.1.19 model-fields Dashboard bridge，并叠在 0.1.18 Source bridge 外层；安装顺序为 Source bridge → model-fields bridge，卸载顺序反向。`registry.py` 与 0.1.18 Source UI 逻辑保持不变，AstrBot `modalities` 仍不改写。
 - AstrBot 的首次“新增模型”弹窗由前端本地构造，插件无法在不修改共享 Dashboard 的前提下把服务端投影字段塞进该未保存对象；因此新横向字段在模型**保存后重新打开编辑弹窗**时出现。这是宿主 UI 生命周期边界，不是保存失败。
 - 候选实现已经通过 AstrBot `4.26.1` / `4.27.2` 双版本最小运行包合同与真实启动；真实 `4.27.2` Dashboard 浏览器矩阵确认 Ark / Agent Plan 模型显示并持久化双语横向字段，foreign 模型保持干净，0.1.18 Source master/selector 不受影响且 `pageErrors=[]`。压缩正向合同会现场生成测试视频、走 `Compressed` 转码、再由 ffmpeg 完整解码生成结果，不依赖付费火山 API。
+- 修复首次合并后的发行阻断：活动发布链不再分别硬编码插件版本，而是由 `metadata.yaml` 生成 runtime manifest，再验证候选包和原生安装后的 metadata 与该 manifest 完全一致；知识状态门禁会拒绝重新引入固定发行版本比较，避免下次迭代再次因遗漏旧版本字面量而失败。
+- 原生安装矩阵只对 GitHub archive 的 HTTP `408` / `429` / `5xx` 与传输中断做最多三次的有限重试，并在重试前清理半下载 ZIP/目录；清单、字节或插件启动等确定性失败仍立即阻断发布。
+- `Temperature`、`Top P`、`Frequency Penalty` 与 `Presence Penalty` 保存边界现在显式拒绝 `NaN`、正无穷和负无穷，避免非有限浮点绕过上下界比较后进入 Ark 请求；空值、合法零值与原有范围保持不变。
+- 仓库内所有第三方 GitHub Actions 均固定到完整 40 位提交 SHA（注释保留可读版本），包括真实 Dashboard、真实火山矩阵与六个 Seedance 手动工作流，避免浮动标签在未审查时改变 CI 或接触密钥的执行代码。
 
 ## 0.1.18
 

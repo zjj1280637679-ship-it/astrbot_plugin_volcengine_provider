@@ -37,13 +37,73 @@ def metadata_version() -> str:
     match = re.search(r'(?m)^\s*version\s*:\s*["\']?([^"\'\r\n#]+)', text)
     if not match:
         fail("metadata.yaml has no readable version")
-    return match.group(1).strip()
+    version = match.group(1).strip()
+    if re.fullmatch(
+        r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)",
+        version,
+    ) is None:
+        fail(f"metadata version must be an unsigned three-part release: {version!r}")
+    return version
 
 
 def require_hot_pointer(relative: str) -> None:
     text = (ROOT / relative).read_text("utf-8")
     if "docs/PROJECT_STATE.json" not in text:
         fail(f"{relative} must point readers to docs/PROJECT_STATE.json as HOT state")
+
+
+def reject_active_release_version_literals() -> None:
+    """Keep metadata.yaml as the single release-version source for active CI."""
+
+    active_release_files = (
+        "tools/release/build_runtime_package.py",
+        ".github/workflows/runtime-distribution-gate.yml",
+        ".github/workflows/publish-runtime-branch.yml",
+        ".github/workflows/validate-runtime-store-source.yml",
+    )
+    forbidden_patterns = {
+        "EXPECTED_VERSION assignment": re.compile(
+            r"(?m)^\s*EXPECTED_VERSION\s*="
+        ),
+        "literal manifest version comparison": re.compile(
+            r"manifest\[['\"]version['\"]\]\s*(?:==|!=)\s*['\"]\d+\.\d+\.\d+"
+        ),
+        "literal metadata version comparison": re.compile(
+            r"metadata\[['\"]version['\"]\]\s*(?:==|!=)\s*['\"]\d+\.\d+\.\d+"
+        ),
+        "literal runtime candidate version": re.compile(
+            r"runtime candidate:\s*\d+\.\d+\.\d+"
+        ),
+    }
+
+    for relative in active_release_files:
+        text = (ROOT / relative).read_text("utf-8")
+        for label, pattern in forbidden_patterns.items():
+            if pattern.search(text):
+                fail(f"{relative} contains {label}; derive it from metadata.yaml")
+
+
+def require_pinned_external_actions() -> None:
+    """Prevent floating action tags from changing trusted CI code."""
+
+    uses_pattern = re.compile(r"(?m)^\s*(?:-\s*)?uses\s*:\s*([^\s#]+)")
+    commit_pattern = re.compile(r"[0-9a-f]{40}")
+    workflow_root = ROOT / ".github/workflows"
+    workflows = sorted(
+        path
+        for pattern in ("*.yml", "*.yaml")
+        for path in workflow_root.glob(pattern)
+    )
+    for workflow in workflows:
+        for action in uses_pattern.findall(workflow.read_text("utf-8")):
+            if action.startswith("./"):
+                continue
+            _, separator, ref = action.rpartition("@")
+            if not separator or commit_pattern.fullmatch(ref) is None:
+                fail(
+                    f"{workflow.relative_to(ROOT)} uses an unpinned external "
+                    f"action: {action}"
+                )
 
 
 def main() -> int:
@@ -108,6 +168,9 @@ def main() -> int:
         "docs/E2E_MATRIX.md",
     ):
         require_hot_pointer(relative)
+
+    reject_active_release_version_literals()
+    require_pinned_external_actions()
 
     if not (ROOT / "docs/archive/README.md").is_file():
         fail("docs/archive/README.md is required for explicit cold-zone semantics")

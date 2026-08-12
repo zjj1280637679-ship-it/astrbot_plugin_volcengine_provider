@@ -1,12 +1,14 @@
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "development": {
     "version": "0.1.19",
-    "branch": "release/0.1.19-model-card-fields",
-    "status": "release_candidate",
-    "pull_request": 7
+    "branch": "fix/0.1.19-release",
+    "status": "release_repair",
+    "pull_request": null,
+    "merged_feature_pull_request": 7,
+    "merged_main_commit": "a43b678e664c7884e5e18b58487fa73b7a4cd359"
   },
   "published_baseline": {
     "version": "0.1.18",
@@ -21,22 +23,21 @@
     ]
   },
   "current_goal": {
-    "id": "0.1.19-bilingual-per-model-horizontal-fields",
-    "goal": "Keep the released 0.1.18 Provider Source panel unchanged while adding bilingual, per-model horizontal request settings to saved Volcengine Ark and Agent Plan model edit dialogs.",
+    "id": "0.1.19-release-repair",
+    "goal": "Preserve the validated 0.1.19 model-card behavior while repairing runtime publication, removing duplicated release-version literals, and rejecting non-finite numeric request settings.",
     "non_goals": [
       "Do not redesign or extend the 0.1.18 Provider Source panel.",
       "Do not modify AstrBot modalities or claim model capability from request settings.",
       "Do not leak Volcengine fields into foreign provider model cards.",
       "Do not invent a generic Thinking Budget field without a verified Ark mapping.",
-      "Do not merge or publish 0.1.19 without explicit user approval and the post-merge publication gates."
+      "Do not bypass candidate or post-promotion native-install validation to force a release."
     ],
     "success_conditions": [
-      "Saved Ark and Agent Plan model edit dialogs expose the approved bilingual rows.",
-      "Foreign provider model dialogs expose none of the Volcengine 0.1.19 fields.",
-      "Explicit horizontal values override the same custom_extra_body request keys; empty values inject nothing.",
-      "Video mode supports Off, Compressed, and Original while preserving 0.1.18 Boolean compatibility.",
-      "AstrBot 4.26.1 and 4.27.2 packaged runtime contracts pass.",
-      "Real AstrBot Dashboard presentation evidence passes without changing the 0.1.18 Source UI contract."
+      "Active release packaging and publication derive the release version from metadata.yaml instead of duplicated literals.",
+      "The native updater matrix tolerates bounded transient GitHub archive failures without retrying deterministic validation errors.",
+      "Every string-backed float field rejects NaN and positive or negative infinity before persistence or request injection.",
+      "AstrBot 4.26.1 and 4.27.2 packaged runtime contracts pass without changing the 0.1.18 Source UI contract.",
+      "The repaired publisher promotes 0.1.19 to runtime and the post-promotion four-cell matrix passes."
     ]
   },
   "frozen_constraints": [
@@ -68,6 +69,10 @@
       "AstrBot_or_Ark_or_model_default"
     ],
     "optional_numeric_empty_semantics": "empty_means_do_not_inject_not_zero",
+    "optional_numeric_finite_semantics": "all_persisted_float_overrides_must_be_finite",
+    "release_version_authority": "metadata_yaml_unsigned_three_part_version_to_runtime_manifest_to_candidate_and_installed_metadata_identity_checks_with_strictly_newer_version_for_changed_runtime_tree",
+    "native_archive_retry": "maximum_three_attempts_only_for_http_408_429_5xx_or_httpx_transport_errors_with_partial_install_cleanup",
+    "github_actions_supply_chain": "all_external_actions_are_pinned_to_full_commit_sha",
     "reasoning": {
       "thinking_mode": "maps_to_thinking.type_when_explicit",
       "reasoning_effort": "maps_to_reasoning_effort_when_explicit",
@@ -103,9 +108,36 @@
       "explicit_server_teardown": "passed",
       "setup_uv_post_cleanup": "passed",
       "artifact_upload": "passed"
+    },
+    "merged_main_runtime_distribution_gate": {
+      "run_id": 31625904337,
+      "head": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
+      "status": "passed",
+      "meaning": "the merged 0.1.19 runtime artifact and packaged behavior passed before publication"
+    },
+    "failed_runtime_publisher": {
+      "run_id": 31626139699,
+      "head": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
+      "status": "failed_before_promotion",
+      "deterministic_root_cause": "validate-runtime-store-source.yml compared the 0.1.19 manifest with a stale literal 0.1.18",
+      "runtime_unchanged": "4586aa2eb573eb97a72baaaa152c727e3b35530e",
+      "candidate_cleanup": "passed_no_residual_candidate_branch"
     }
   },
-  "known_false_failures": [],
+  "known_false_failures": [
+    {
+      "id": "PUBLISH-0.1.19-GITHUB-ARCHIVE-TRANSIENTS",
+      "lifecycle": "active_harness_repair",
+      "run_id": 31626139699,
+      "jobs": [94212920906, 94212921033],
+      "observations": [
+        "GitHub archive returned HTTP 503",
+        "GitHub archive disconnected before sending a response"
+      ],
+      "product_meaning": "none; the same candidate was downloaded by the other matrix cells",
+      "repair": "bounded retry only for retryable HTTP status or transport failures"
+    }
+  ],
   "resolved_harness_history": [
     {
       "id": "UI-EVIDENCE-UV-POST-CLEANUP-LOCK",
@@ -125,11 +157,12 @@
   ],
   "active_validation_frontier": {
     "release": "0.1.19",
-    "name": "explicit_publication_approval",
-    "current_stage": "candidate_clean_and_validated_waiting_user_approval",
+    "name": "release_repair_and_republication",
+    "current_stage": "main_feature_merged_runtime_still_0_1_18_repair_in_progress",
     "next_actions": [
-      "Keep PR #7 draft/unmerged until explicit user approval to publish.",
-      "After approval, merge to main and require the exact-main 0.1.19 gate plus pre-promotion, runtime promotion, and post-promotion native-install validation before calling 0.1.19 published."
+      "Validate and merge the focused release repair without changing the released 0.1.18 Source UI contract.",
+      "Require the exact-main 0.1.19 gate plus pre-promotion, runtime promotion, and post-promotion native-install validation before calling 0.1.19 published.",
+      "After successful runtime publication, demote this repair frontier into release history and make the published runtime SHA explicit."
     ]
   },
   "knowledge_lifecycle": {

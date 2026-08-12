@@ -42,8 +42,10 @@ RUNTIME_PACKAGES = (
 # maximum is higher; this tighter project budget catches accidental repository
 # packaging before it reaches users.
 MAX_RUNTIME_BYTES = 2 * 1024 * 1024
-EXPECTED_VERSION = "0.1.19"
 EXPECTED_REPO_SUFFIX = "/tree/runtime"
+RELEASE_VERSION_PATTERN = re.compile(
+    r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\Z"
+)
 
 FORBIDDEN_TOP_LEVEL = {
     ".git",
@@ -106,7 +108,7 @@ def copy_runtime() -> None:
             shutil.copy2(source, target_dir / source.name)
 
 
-def verify_inventory() -> list[Path]:
+def verify_inventory() -> tuple[list[Path], str]:
     files = sorted(path for path in PACKAGE_DIR.rglob("*") if path.is_file())
     if not files:
         raise RuntimeError("runtime package is empty")
@@ -129,12 +131,15 @@ def verify_inventory() -> list[Path]:
     metadata_text = (PACKAGE_DIR / "metadata.yaml").read_text(encoding="utf-8")
     version = metadata_scalar(metadata_text, "version")
     repo = metadata_scalar(metadata_text, "repo")
-    if version != EXPECTED_VERSION:
-        raise RuntimeError(f"metadata version must be {EXPECTED_VERSION}, got {version!r}")
+    if not RELEASE_VERSION_PATTERN.fullmatch(version):
+        raise RuntimeError(
+            "metadata version must use an unsigned three-part numeric release "
+            f"version, got {version!r}"
+        )
     if not repo.endswith(EXPECTED_REPO_SUFFIX):
         raise RuntimeError(f"metadata repo must point at runtime branch, got {repo!r}")
 
-    return files
+    return files, version
 
 
 def scan_secrets(files: list[Path]) -> None:
@@ -159,7 +164,7 @@ def build_zip(files: list[Path]) -> None:
             archive.write(path, Path(PACKAGE_NAME) / relative)
 
 
-def write_manifest(files: list[Path]) -> None:
+def write_manifest(files: list[Path], version: str) -> None:
     entries = []
     for path in files:
         relative = path.relative_to(PACKAGE_DIR).as_posix()
@@ -174,7 +179,7 @@ def write_manifest(files: list[Path]) -> None:
     payload = {
         "schema_version": 1,
         "package": PACKAGE_NAME,
-        "version": EXPECTED_VERSION,
+        "version": version,
         "file_count": len(entries),
         "uncompressed_bytes": sum(item["bytes"] for item in entries),
         "zip_bytes": ZIP_PATH.stat().st_size,
@@ -188,11 +193,14 @@ def write_manifest(files: list[Path]) -> None:
 
 def main() -> int:
     copy_runtime()
-    files = verify_inventory()
+    files, version = verify_inventory()
     scan_secrets(files)
     build_zip(files)
-    write_manifest(files)
-    print(f"RUNTIME_PACKAGE_OK version={EXPECTED_VERSION} files={len(files)} zip={ZIP_PATH.stat().st_size}")
+    write_manifest(files, version)
+    print(
+        f"RUNTIME_PACKAGE_OK version={version} "
+        f"files={len(files)} zip={ZIP_PATH.stat().st_size}"
+    )
     return 0
 
 
