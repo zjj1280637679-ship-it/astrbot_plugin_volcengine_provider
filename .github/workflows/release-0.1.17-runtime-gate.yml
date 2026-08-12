@@ -135,11 +135,11 @@ jobs:
       - name: Install only runtime package into a clean AstrBot data directory
         shell: bash
         run: |
-          # AstrBot 4.26.1 has no `astrbot init -y`. Creating its installation
-          # marker avoids the interactive confirmation while keeping the real
-          # version-native init code responsible for the data layout.
+          # AstrBot 4.26.1 has no `astrbot init -y` and its init can prompt for
+          # Dashboard installation. Keep the version-native initializer, but
+          # provide the default affirmative response non-interactively.
           touch AstrBot/.astrbot
-          uv run --directory AstrBot astrbot init
+          printf '\n' | uv run --directory AstrBot astrbot init
           target='AstrBot/data/plugins/astrbot_plugin_volcengine_provider'
           rm -rf "$target"
           mkdir -p "$target"
