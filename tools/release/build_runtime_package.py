@@ -42,7 +42,7 @@ RUNTIME_PACKAGES = (
 # maximum is higher; this tighter project budget catches accidental repository
 # packaging before it reaches users.
 MAX_RUNTIME_BYTES = 2 * 1024 * 1024
-EXPECTED_VERSION = "0.1.18"
+EXPECTED_VERSION = "0.1.19"
 EXPECTED_REPO_SUFFIX = "/tree/runtime"
 
 FORBIDDEN_TOP_LEVEL = {
