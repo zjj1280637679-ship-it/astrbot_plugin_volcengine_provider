@@ -1,24 +1,18 @@
-name: 0.1.16 Real AstrBot Dashboard Reachability Evidence
+name: 0.1.19 Real AstrBot Dashboard Model-Field Evidence
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - refactor/0.1.15-feedback-boundary
+  pull_request:
+    branches: [main]
     paths:
       - .github/workflows/probe-real-dashboard-ui.yml
-      - tests/e2e/provider_card_matrix/browser_probe.py
-      - tests/test_model_card_ui_scope.py
-      - tests/test_dashboard_save_boundary.py
-      - tests/test_dashboard_bridge_compat.py
+      - tests/e2e/provider_card_matrix/browser_matrix.py
+      - tests/e2e/provider_card_matrix/browser_matrix_0_1_19.py
       - registry.py
+      - main.py
       - providers.py
+      - adapters/video.py
       - capabilities/**
-      - docs/ENGINEERING_METHODOLOGY.md
-      - docs/EVIDENCE_LEVELS.md
-      - docs/TEST_BOUNDARIES.md
-      - docs/KNOWLEDGE_BOUNDARY.md
-      - docs/REGRESSION_SCOPE.md
 
 permissions:
   contents: read
@@ -109,13 +103,13 @@ jobs:
           fi
           grep -E 'Loading plugin astrbot_plugin_volcengine_provider|Plugin astrbot_plugin_volcengine_provider|Volcengine providers registered' /tmp/astrbot-e2e.log > e2e-artifacts/plugin-runtime.log
           grep -q 'Volcengine providers registered' /tmp/astrbot-e2e.log
-      - name: Collect real Dashboard presentation evidence
+      - name: Collect real 0.1.19 model-field presentation evidence
         env:
           ASTRBOT_E2E_URL: http://127.0.0.1:6185
           ASTRBOT_E2E_USERNAME: e2e-admin
           ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
-        run: python tests/e2e/provider_card_matrix/browser_probe.py
+        run: python tests/e2e/provider_card_matrix/browser_matrix_0_1_19.py
       - name: Capture final AstrBot log
         if: always()
         run: cp /tmp/astrbot-e2e.log e2e-artifacts/startup.log || true
@@ -125,6 +119,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: real-dashboard-ui-evidence
+          name: real-dashboard-model-fields-0.1.19
           path: e2e-artifacts
           if-no-files-found: error
