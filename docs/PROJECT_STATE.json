@@ -2,8 +2,8 @@
   "schema_version": 4,
   "project": "astrbot_plugin_volcengine_provider",
   "active_release": "0.1.17",
-  "active_branch": "release/0.1.17-runtime-package",
-  "status": "runtime_distribution_release_candidate",
+  "active_branch": "main",
+  "status": "released_with_runtime_distribution_branch",
   "objective_conditions": [
     "Volcengine Ark is both a first-party platform for Doubao/Seed models and a serving platform for third-party/open models.",
     "AstrBot owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and Dashboard rendering.",
@@ -11,8 +11,10 @@
     "QQ audio/video product compatibility depends on the complete QQ/NapCat/AstrBot/media-adapter/provider/model path; raw Ark fixtures are downstream protocol evidence only.",
     "Historical QQ-oriented audio/video validation remains evidence until a relevant media dependency edge changes.",
     "A real AstrBot Store installation of the repository archive exposed development files such as .github/workflows to the user package. On Windows, extraction failed partway through on long development paths, leaving a partial plugin directory and causing subsequent installation conflicts.",
-    "AstrBot's plugin-market documentation permits repo URLs of the form https://github.com/{owner}/{repo}/tree/{branch}; AstrBot resolves that branch as the installation archive.",
-    "AstrBot's published market ZIP limit is 16 MB and its own publishing guidance recommends a release branch or equivalent packaging separation.",
+    "AstrBot 4.27.2 publishing guidance explicitly recommends .gitattributes or a release branch for reducing plugin ZIP contents and documents a 16 MB market ZIP ceiling.",
+    "AstrBot 4.27.2 marketplace schema permits repo URLs of the form https://github.com/{owner}/{repo}/tree/{branch}.",
+    "AstrBot 4.26.1 RepoZipUpdator already parses /tree/{branch} and downloads the matching branch archive, so the runtime-branch source is compatible with the declared >=4.26.1 floor.",
+    "AstrBot 4.27.2's documented support_platforms keys do not include webchat; 0.1.17 therefore declares aiocqhttp only instead of publishing an unsupported metadata token.",
     "Development explainability and runtime distribution have different audiences: AI/ADR/tests/evidence belong in the development state unless a concrete runtime consumer requires them."
   ],
   "expected_outcomes": [
@@ -22,7 +24,8 @@
     "Prevent CI, tests, internal docs, evidence, experimental assets, secrets, private test data, and other non-runtime information from entering the AstrBot Store package.",
     "Validate the artifact users receive, not merely a development checkout.",
     "Keep the runtime package small enough that abnormal growth is detected before publication.",
-    "Publish a stable runtime branch whose metadata version and marketplace repository binding match the validated release."
+    "Publish a stable runtime branch whose metadata version and marketplace repository binding match the validated release.",
+    "Prove both the branch-repo path and direct ZIP download path through AstrBot's native installers on 4.26.1 and 4.27.2."
   ],
   "current_strategy": {
     "development_branch": "main",
@@ -33,7 +36,7 @@
     "astrbot_market_hard_limit_bytes": 16777216,
     "runtime_secret_scan": "high_confidence_patterns_plus_forbidden_sensitive_filenames",
     "runtime_install_validation": "actual_generated_package_on_astrbot_4_26_1_and_4_27_2",
-    "runtime_branch_validation": "download_real_branch_archive_and_recheck_inventory_and_metadata",
+    "runtime_branch_validation": "real_branch_archive_plus_version_native_updater_repo_and_download_url_paths",
     "provider_runtime_changes_in_0_1_17": false,
     "video_control": "per_model_card_request_transport_switch",
     "astrbot_modalities_mutation": false,
@@ -73,27 +76,28 @@
   ],
   "validation_progress": {
     "0_1_16_core_release": "merged_to_main_and_passed",
-    "0_1_17_allow_list_artifact_build": "passed_runtime_package_21_files_about_195KB_zip_on_first_observed_gate",
-    "0_1_17_artifact_inventory_and_secret_boundary": "passed_on_current_release_branch",
-    "0_1_17_astrbot_4_27_2_minimal_package_load": "passed_on_initial_runtime_gate",
-    "0_1_17_astrbot_4_26_1_minimal_package_load": "in_retest_after_harness_compatibility_correction",
-    "runtime_branch_published": "pending_release_gate",
-    "real_runtime_branch_archive_validation": "pending_runtime_branch_publication",
-    "marketplace_sync": "not_claimed_until_external_market_updates"
+    "0_1_17_main_version": "0.1.17_on_main",
+    "0_1_17_allow_list_artifact_build": "passed_runtime_package_21_files_about_195KB_zip_on_observed_gate",
+    "0_1_17_artifact_inventory_and_secret_boundary": "passed",
+    "0_1_17_astrbot_4_27_2_minimal_package_load": "passed",
+    "0_1_17_astrbot_4_26_1_minimal_package_load": "passed",
+    "runtime_branch_published": "passed_commit_144aa0a31807736f510aa94b760f15a896b6d576",
+    "real_runtime_branch_archive_validation": "passed_by_publish_runtime_workflow",
+    "native_updater_4_26_1_repo_branch": "passed",
+    "native_updater_4_26_1_download_url": "passed",
+    "native_updater_4_27_2_repo_branch": "passed",
+    "native_updater_4_27_2_download_url": "passed",
+    "marketplace_sync": "external_state_not_claimed_until_store_refresh_or_republish_is_observed"
   },
   "active_validation_frontier": {
-    "name": "0.1.17_runtime_distribution_release",
-    "current_stage": "finish_cross_version_artifact_gate_then_publish_runtime_branch_then_merge_main",
+    "name": "0.1.17_real_user_store_refresh",
+    "current_stage": "repository_and_runtime_distribution_complete_waiting_for_external_marketplace_record_refresh_or_manual_republish_if_required",
+    "reason": "GitHub development state, runtime branch, real branch archive, and both version-native AstrBot installer paths are validated. AstrBot Cloud/Store registry refresh is an external publication state and is not inferred from repository success.",
     "dimensions": [
-      "minimal_artifact_inventory",
-      "secret_and_private_data_boundary",
-      "package_size",
-      "AstrBot_4.26.1_load",
-      "AstrBot_4.27.2_load",
-      "real_runtime_branch_archive",
-      "main_runtime_version_consistency",
-      "pull_request_review",
-      "post_merge_runtime_publication"
+      "store_visible_version_0.1.17",
+      "store_download_source_resolves_to_runtime_distribution",
+      "real_windows_store_install_without_development_files",
+      "user_runtime_validation"
     ]
   },
   "authoritative_docs": [
