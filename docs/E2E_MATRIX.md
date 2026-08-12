@@ -1,89 +1,76 @@
 # Provider × Host × Product Evidence Matrix
 
+Lifecycle role: **WARM/HISTORICAL evidence ledger**. This document defines claim scope and records observed evidence. It does **not** define the current release goal/frontier; read `docs/PROJECT_STATE.json` for HOT state.
+
 ## Purpose
 
-This document defines which validation layer is allowed to prove which claim. The project deliberately separates code correctness, AstrBot integration, Dashboard reachability, downstream Ark protocol behavior, and QQ product compatibility.
-
-A green lower-layer test must not be promoted into a stronger claim than its interface supports.
+Separate code correctness, AstrBot integration, Dashboard presentation, downstream Ark protocol behavior, and QQ product compatibility. A green lower-layer test must not be promoted into a stronger claim than its interface supports, and a harness/teardown failure must not overwrite a product step that already passed.
 
 ## Evidence layers
 
 ### L2 — local contract/regression
 
-Validates plugin-owned invariants such as:
+Validates plugin-owned invariants such as migration precedence, foreign-provider isolation, model-field normalization, transient feedback semantics, failure provenance, and trusted media behavior.
 
-- migration precedence;
-- foreign-provider isolation;
-- Source selector projection, per-card write-back, hidden-state preservation, and temporary UI-key removal;
-- transient `/models` feedback semantics;
-- failure provenance;
-- trusted video-marker behavior.
+Cannot prove AstrBot runtime integration or QQ compatibility.
 
-This layer cannot prove AstrBot runtime integration or QQ compatibility.
+### L3 — real AstrBot service/runtime integration
 
-### L3 — real AstrBot service integration
+Validates supported host APIs and packaged runtime behavior, including Provider registration, ProviderConfigService create/update/save boundaries, Source save translation, request override hooks, and host-version compatibility.
 
-Validates the actual supported host API path, including the declared minimum AstrBot version where relevant:
-
-- Provider registration;
-- `ProviderConfigService` create/update/save boundaries;
-- `ProviderConfigService.upsert_provider_source` selector save boundaries;
-- optional Dashboard API capability detection;
-- host/provider compatibility.
-
-This layer proves host integration, not model capability.
+Proves host integration, not model capability.
 
 ### L4 — real Dashboard reachability and presentation evidence
 
-Hard gate:
+Validates that a real AstrBot Dashboard builds/starts, login succeeds, Provider UI is reachable, and the observed DOM/controls match the presentation claim being tested.
 
-- real AstrBot Dashboard can build/start;
-- login succeeds;
-- Provider page is reachable with the plugin loaded.
+Presentation evidence includes screenshots, semantic DOM/visible text, save/reopen persistence, and page errors. It does not become model-capability truth.
 
-Non-blocking presentation evidence:
+#### 0.1.18 historical Source-video UI evidence
 
-- screenshots;
-- semantic DOM/visible text;
-- layout snapshots.
+On 2026-08-12, real AstrBot 4.27.2 Dashboard observation showed:
 
-For the current video design, L4 must directly observe that an owned Volcengine Source shows “显示逐模型视频选项”, that opening it reveals only that Source's model-card checkbox list, and that foreign Sources and generic model cards show no Volcengine video field. The 4.26.1/4.27.2 service matrix does not prove this presentation.
+- Ark and Agent Plan each had exactly one Source video master;
+- opened selectors contained only that Source's 2 / 1 model cards;
+- close hid the selector and reopen preserved selection with zero API requests;
+- foreign Source had 0 masters / 0 selectors;
+- generic Ark/Plan/foreign model dialogs contained none of the canonical/retired/new Source-video transport fields;
+- `pageErrors=[]`.
 
-The dated 2026-08-12 real AstrBot `4.27.2` Dashboard DOM run supplies this L4 evidence: Ark and Agent Plan each showed exactly one master; opening produced exactly one selector containing only that Source's 2 and 1 cards respectively; closing hid the selector, reopening preserved the choice, and the interaction issued zero API requests; foreign Source showed 0 masters and 0 selectors; Ark, Plan, and foreign generic model dialogs contained none of `volcengine_video_input_enabled`, the retired model-card temporary key, or the new Source-selector temporary key; `pageErrors=[]`.
+This remains historical evidence for the released 0.1.18 Source UI contract.
 
-Fine Playwright selector choreography is **not** a release authority. Previous failures from welcome overlays, labels, fixed Source IDs, or Vuetify selector assumptions were test-harness evidence, not plugin-runtime evidence.
+#### 0.1.19 candidate model-field evidence
+
+Run `31621942332` executed a real AstrBot 4.27.2 Dashboard against the 0.1.19 candidate. The browser matrix itself returned `all_passed=true` with `page_errors=[]`:
+
+- saved Ark and Agent Plan model dialogs exposed the bilingual Volcengine horizontal fields;
+- Video=Compressed, Thinking=Auto, Effort=High, Temperature, Top P, Max Output Tokens, Frequency Penalty, and Presence Penalty survived save/reopen;
+- the released 0.1.18 Source master/selector remained intact after model-field save;
+- foreign OpenAI model dialogs exposed no Volcengine fields;
+- the evidence artifact uploaded successfully.
+
+The overall GitHub job later ended red **only in `Post Run astral-sh/setup-uv@v6`**: a background `uv -> astrbot` process still held the setup-uv cache lock, `uv cache prune --ci` waited 300 seconds and timed out. This is workflow teardown evidence, not a UI-rendering failure. The HOT state tracks the cleanup action.
 
 ### L5 — downstream Volcengine protocol attribution
 
 Where a real credential and meaningful fixture exist, compare a minimal raw upstream request with the same logical path through the plugin.
 
-Useful cases:
-
-- ordinary Ark `/models`;
-- text;
-- image;
-- endpoint/authentication attribution;
-- a media request only when the fixture actually tests the adapter contract being investigated.
-
-Interpretation:
-
 ```text
 raw success + plugin success
-  -> downstream protocol and plugin path both worked under current conditions
+  -> downstream protocol and plugin path both worked under observed conditions
 
 raw success + plugin failure
-  -> plugin path is suspect and production code may need investigation
+  -> plugin path is suspect
 
 raw failure + plugin failure
-  -> upstream/account/model/test-condition boundary remains plausible;
-     do not blame plugin code without further attribution
+  -> upstream/account/model/test-condition boundary remains plausible
 ```
 
-L5 is still not automatically QQ product compatibility.
+L5 is not automatically QQ product compatibility.
 
 ### L6 — QQ-equivalent product path
 
-For QQ media features the product interface is approximately:
+For QQ media features:
 
 ```text
 QQ event
@@ -95,90 +82,81 @@ QQ event
   -> provider/model response
 ```
 
-This is the layer that can validate QQ-oriented audio/video compatibility.
+This is the layer that can validate QQ-oriented audio/video compatibility. A generated WAV/MP4 sent directly to a Provider is not equivalent.
 
-A generated WAV or MP4 sent directly to a Provider is not equivalent to this path. Production code must not be broadened merely to make a non-equivalent raw fixture pass.
+## Stable provider identities
 
-## Provider identities
-
-Both plugin-owned providers currently register as AstrBot `chat_completion` providers:
+The plugin-owned providers register as AstrBot `chat_completion` providers:
 
 - `volcengine_ark_chat_completion`;
 - `volcengine_agent_plan_chat_completion`.
 
-Agent Plan is **not** an `agent_runner` card. Tests and UI evidence must follow the actual registered host type rather than an early conceptual model.
+Agent Plan is not an `agent_runner` card.
 
-## Required invariants
+## Stable required invariants
 
-### Capability/feedback
+### Capability / feedback
 
 - no static model-ID capability oracle;
 - missing feedback remains unknown;
-- explicit current `false`, empty list, and `0` remain current observations when upstream returned them;
-- future/unknown modality tokens are not deleted merely because the current plugin cannot interpret them;
-- current dynamic Ark feedback does not persist into global `LLM_METADATAS[model_id]`.
+- explicit current `false`, empty list, and `0` remain observations when upstream returned them;
+- future/unknown modality tokens are not deleted solely because today's plugin cannot interpret them;
+- transient Ark feedback does not become permanent global `LLM_METADATAS[model_id]` truth.
 
-### Dashboard/config isolation
+### Dashboard / config isolation
 
-- generic model-card projections do not expose the canonical or retired temporary Volcengine video transport field;
-- only owned Volcengine Sources receive persistent `volcengine_video_controls_visible` and a Source-specific temporary model selector;
-- the visibility preference controls display only: hiding the selector preserves per-card canonical choices and runtime behavior;
-- an open selector saves by exact model-card ID back to `volcengine_video_input_enabled` on cards belonging to that exact Source;
-- temporary selector keys never survive Source persistence;
-- foreign Sources do not receive these fields, and forged foreign temporary keys cannot create Volcengine state;
-- if the host Source upsert fails after selector translation, the complete pre-call model-card list is restored and the original error propagates;
-- optional host Dashboard APIs degrade only the enhancement they own.
+For the released 0.1.18 Source UI:
 
-These Source-save invariants have passed the real AstrBot `4.26.1` and `4.27.2` service matrix (L3). Current Source-page presentation separately passed the dated 2026-08-12 real AstrBot `4.27.2` Dashboard DOM run (L4) with the exact isolation, conditional visibility, preserved client selection, zero-request interaction, and no-page-error observations recorded above. Neither result is model-capability or QQ media-path evidence.
+- the shared top capability row is not extended globally for Volcengine video;
+- owned Sources receive the Source-specific presentation workflow;
+- hiding the Source selector preserves per-card video state;
+- foreign Sources do not receive Volcengine Source-video fields.
+
+For 0.1.19 ordinary saved-model body fields:
+
+- only owned Ark/Agent Plan model copies receive the Volcengine horizontal keys;
+- foreign model copies are stripped of Volcengine 0.1.19 keys;
+- request settings remain distinct from AstrBot `modalities`;
+- empty optional values mean no injection rather than zero;
+- explicit horizontal settings outrank the same `custom_extra_body` request keys.
 
 ### Migration
 
-Precedence:
-
-1. current per-card `volcengine_video_input_enabled`;
-2. retired 0.1.17 `_volcengine_video_transport_ui_<source-hex>` only when it is boolean and the encoded Source exactly matches the card's `provider_source_id`;
-3. legacy per-card `volcengine_model_video_input`;
-4. legacy explicit Source boolean, including `false`;
-5. historical `modalities: video` only as the last migration clue.
-
-Wrong-Source retired keys and every plugin video field on a foreign card are cleanup-only and never become canonical state. After resolution, all retired, temporary, and wrong-layer plugin fields are removed; AstrBot `modalities` itself remains unchanged.
+Historical 0.1.18 video migration precedence remains an owned compatibility constraint: canonical per-card state outranks exact matching retired UI residue, older per-card state, legacy Source state, and finally historical `modalities: video` as a migration clue. Wrong-Source/foreign debris is never promoted and `modalities` remains host-owned.
 
 ### Failure provenance
 
-- local media/input transport failure records `reached_model=false` and no capability verdict;
-- upstream rejection stays on the upstream/AstrBot error path;
-- the plugin does not add model switching or fallback decisions.
+- local media/input transport failure means the model was not reached;
+- upstream rejection remains upstream evidence;
+- browser/test-harness failure remains harness evidence;
+- workflow post-cleanup/cache failure remains teardown evidence unless it prevented the product evidence from running;
+- the plugin does not add model switching/fallback decisions.
 
 ## Historical media regression assets
 
-QQ-oriented audio/video validations are indexed in `docs/TEST_HISTORY.md`. Whether they require a full rerun is decided by `docs/REGRESSION_SCOPE.md`, not by a rule that every release must repeat every historical E2E.
-
-A full QQ-equivalent rerun is required when the relevant media adapter, AstrBot media contract, Ark media payload contract, or QQ/NapCat input semantics change materially.
+QQ-oriented audio/video validations are indexed in `docs/TEST_HISTORY.md`. Rerun requirements are decided by `docs/REGRESSION_SCOPE.md`, not by release number alone.
 
 ## Evidence summary format
 
 ```text
 Plugin contracts
-  feedback semantics                     PASS/FAIL
-  migration precedence                   PASS/FAIL
-  foreign-provider isolation             PASS/FAIL
-  failure provenance                     PASS/FAIL
+  owned invariants                         PASS/FAIL
+  foreign-provider isolation              PASS/FAIL
+  failure provenance                      PASS/FAIL
 
 AstrBot integration
-  4.26.1 declared-minimum integration    PASS/FAIL
-  4.27.2 integration                     PASS/FAIL
-  Dashboard coarse reachability          PASS/FAIL
-  Source video UI presentation (L4)      PASS/FAIL/PENDING(reason)
+  4.26.1 declared-minimum integration     PASS/FAIL
+  4.27.2 integration                      PASS/FAIL
+  Dashboard product/presentation steps    PASS/FAIL
+  workflow teardown                       PASS/FAIL (separate verdict)
 
-Current downstream attribution
-  ordinary Ark /models                   PASS/FAIL/SKIP(reason)
-  ordinary Ark text                      PASS/FAIL/SKIP(reason)
-  ordinary Ark image                     PASS/FAIL/SKIP(reason)
-  Agent Plan credential/path attribution PASS/FAIL/SKIP(reason)
+Downstream attribution
+  ordinary Ark /models                    PASS/FAIL/SKIP(reason)
+  ordinary Ark text/image/media           PASS/FAIL/SKIP(reason)
 
 QQ product regressions
-  audio                                  HISTORICAL_VALID / REVALIDATED / STALE(reason)
-  video                                  HISTORICAL_VALID / REVALIDATED / STALE(reason)
+  audio                                   HISTORICAL_VALID / REVALIDATED / STALE(reason)
+  video                                   HISTORICAL_VALID / REVALIDATED / STALE(reason)
 ```
 
-A `SKIP` must include a reason. Historical evidence must not be silently upgraded to a current result, but it also must not be silently erased.
+A `SKIP` must include a reason. Historical evidence must not be silently upgraded to current truth, but it also must not be silently erased.
