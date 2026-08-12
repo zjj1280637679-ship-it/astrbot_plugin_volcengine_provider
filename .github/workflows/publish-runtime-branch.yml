@@ -365,7 +365,10 @@ jobs:
           remote="https://github.com/${GITHUB_REPOSITORY}.git"
           git init "$work"
           cd "$work"
-          actual=$(git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" | awk '{print $1}')
+          candidate_file="$RUNNER_TEMP/current-candidate-ref"
+          git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" \
+            > "$candidate_file"
+          actual=$(awk '{print $1}' "$candidate_file")
           if [ -z "$actual" ]; then
             echo 'RUNTIME_CANDIDATE_CLEANUP=ALREADY_ABSENT'
             exit 0
@@ -376,5 +379,8 @@ jobs:
             push "$remote" \
             ":refs/heads/${CANDIDATE_BRANCH}" \
             "--force-with-lease=refs/heads/${CANDIDATE_BRANCH}:${CANDIDATE_SHA}"
-          test -z "$(git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}")"
+          verification_file="$RUNNER_TEMP/current-candidate-ref-after-cleanup"
+          git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" \
+            > "$verification_file"
+          test ! -s "$verification_file"
           echo 'RUNTIME_CANDIDATE_CLEANUP=OK'
