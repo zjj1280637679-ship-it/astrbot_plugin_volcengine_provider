@@ -1,0 +1,170 @@
+name: 0.1.17 Runtime Distribution Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release/0.1.17-runtime-package
+    paths:
+      - metadata.yaml
+      - __init__.py
+      - main.py
+      - providers.py
+      - registry.py
+      - adapters/**
+      - capabilities/**
+      - compatibility/**
+      - metadata/**
+      - logo.png
+      - LICENSE
+      - tools/release/**
+      - .github/workflows/release-0.1.17-runtime-gate.yml
+  pull_request:
+    paths:
+      - metadata.yaml
+      - __init__.py
+      - main.py
+      - providers.py
+      - registry.py
+      - adapters/**
+      - capabilities/**
+      - compatibility/**
+      - metadata/**
+      - logo.png
+      - LICENSE
+      - tools/release/**
+
+permissions:
+  contents: read
+
+jobs:
+  artifact-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build allow-list runtime artifact
+        run: python tools/release/build_runtime_package.py
+      - name: Audit package inventory and hard size ceiling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('dist/runtime-manifest.json').read_text('utf-8'))
+          forbidden = ('.github/', 'tests/', 'docs/', 'evidence/', 'governance/', 'strategy/', 'model_cards/', 'assets/', 'tools/')
+          paths = [item['path'] for item in manifest['files']]
+          bad = [p for p in paths if p.startswith(forbidden)]
+          if bad:
+              raise SystemExit(f'forbidden runtime paths: {bad}')
+          if manifest['zip_bytes'] >= 16 * 1024 * 1024:
+              raise SystemExit('AstrBot market ZIP hard limit exceeded')
+          print(json.dumps({
+              'version': manifest['version'],
+              'file_count': manifest['file_count'],
+              'uncompressed_bytes': manifest['uncompressed_bytes'],
+              'zip_bytes': manifest['zip_bytes'],
+          }, indent=2))
+          PY
+          unzip -l dist/astrbot_plugin_volcengine_provider-runtime.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: astrbot-plugin-runtime-0.1.17
+          path: |
+            dist/astrbot_plugin_volcengine_provider-runtime.zip
+            dist/runtime-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+
+  astrbot-runtime-load:
+    strategy:
+      fail-fast: false
+      matrix:
+        astrbot_ref: [v4.26.1, v4.27.2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      - name: Build minimal runtime package
+        run: python tools/release/build_runtime_package.py
+      - name: Clone tested AstrBot
+        run: git clone --depth 1 --branch '${{ matrix.astrbot_ref }}' https://github.com/AstrBotDevs/AstrBot.git AstrBot
+      - name: Install exact AstrBot runtime
+        run: uv sync --directory AstrBot
+      - name: Validate package metadata with the host API available in this AstrBot version
+        shell: bash
+        run: |
+          uv run --directory AstrBot python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          root = Path.cwd().parent / 'dist' / 'runtime' / 'astrbot_plugin_volcengine_provider'
+          metadata = yaml.safe_load((root / 'metadata.yaml').read_text('utf-8'))
+          assert metadata['name'] == 'astrbot_plugin_volcengine_provider'
+          assert metadata['version'] == '0.1.17'
+          assert str(metadata['repo']).endswith('/tree/runtime')
+
+          # Newer AstrBot versions expose an explicit package inspector. 4.26.1
+          # predates astrbot.core.star.updater, so requiring that newer helper
+          # would test the harness rather than the declared minimum host. The
+          # following real startup remains the cross-version integration proof.
+          try:
+              from astrbot.core.star.updater import _PluginUpdater
+          except ModuleNotFoundError:
+              print('ASTRBOT_PACKAGE_INSPECTOR=UNAVAILABLE_ON_THIS_HOST')
+          else:
+              inspected = _PluginUpdater.inspect_plugin_directory(root)['metadata']
+              assert inspected['name'] == metadata['name']
+              assert inspected['version'] == metadata['version']
+              print('ASTRBOT_PACKAGE_INSPECTOR=OK')
+          print('RUNTIME_METADATA_CONTRACT=OK')
+          PY
+      - name: Compile only files that users receive
+        shell: bash
+        run: |
+          find dist/runtime/astrbot_plugin_volcengine_provider -name '*.py' -print0 \
+            | xargs -0 python -m py_compile
+      - name: Install only runtime package into a clean AstrBot data directory
+        shell: bash
+        run: |
+          # AstrBot 4.26.1 has no `astrbot init -y` and its init can prompt for
+          # Dashboard installation. Keep the version-native initializer, but
+          # provide the default affirmative response non-interactively.
+          touch AstrBot/.astrbot
+          printf '\n' | uv run --directory AstrBot astrbot init
+          target='AstrBot/data/plugins/astrbot_plugin_volcengine_provider'
+          rm -rf "$target"
+          mkdir -p "$target"
+          rsync -a dist/runtime/astrbot_plugin_volcengine_provider/ "$target"/
+          test ! -e "$target/.github"
+          test ! -e "$target/tests"
+          test ! -e "$target/docs"
+      - name: Start AstrBot and prove packaged plugin loads
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup uv run --directory AstrBot astrbot run --port 6185 >runtime-load.log 2>&1 &
+          pid=$!
+          ready=0
+          for i in $(seq 1 75); do
+            if grep -q 'Volcengine providers registered' runtime-load.log; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat runtime-load.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat runtime-load.log
+          test "$ready" = '1'
+          kill "$pid" 2>/dev/null || true

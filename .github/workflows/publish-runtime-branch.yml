@@ -1,0 +1,106 @@
+name: Publish Minimal Runtime Branch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - metadata.yaml
+      - __init__.py
+      - main.py
+      - providers.py
+      - registry.py
+      - adapters/**
+      - capabilities/**
+      - compatibility/**
+      - metadata/**
+      - logo.png
+      - LICENSE
+      - tools/release/**
+      - .github/workflows/publish-runtime-branch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and audit runtime closure
+        run: python tools/release/build_runtime_package.py
+      - name: Publish generated runtime state to dedicated branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(python - <<'PY'
+          import re
+          from pathlib import Path
+          text=Path('metadata.yaml').read_text('utf-8')
+          m=re.search(r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', text)
+          if not m: raise SystemExit('missing version')
+          print(m.group(1).strip())
+          PY
+          )
+          work="$RUNNER_TEMP/runtime-branch"
+          rm -rf "$work"
+          mkdir -p "$work"
+          rsync -a dist/runtime/astrbot_plugin_volcengine_provider/ "$work"/
+          cd "$work"
+          git init -b runtime
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add --all
+          git commit -m "runtime: ${version} minimal AstrBot distribution"
+          git push --force origin runtime
+      - name: Validate the real branch archive AstrBot will consume
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/heads/runtime.zip"
+          for i in $(seq 1 12); do
+            if curl -fL --retry 2 --retry-delay 2 "$url" -o /tmp/runtime.zip; then
+              break
+            fi
+            sleep 5
+          done
+          test -s /tmp/runtime.zip
+          python - <<'PY'
+          import re, zipfile
+          from pathlib import PurePosixPath
+          z=zipfile.ZipFile('/tmp/runtime.zip')
+          names=[PurePosixPath(n) for n in z.namelist() if not n.endswith('/')]
+          if not names: raise SystemExit('runtime branch archive empty')
+          stripped=[]
+          for p in names:
+              if len(p.parts) < 2: continue
+              stripped.append(PurePosixPath(*p.parts[1:]))
+          forbidden={'.github','tests','docs','evidence','governance','strategy','model_cards','assets','tools','dist'}
+          bad=[str(p) for p in stripped if p.parts and p.parts[0] in forbidden]
+          if bad: raise SystemExit(f'forbidden paths in real runtime archive: {bad}')
+          metadata=next((p for p in names if p.name=='metadata.yaml' and len(p.parts)==2), None)
+          if metadata is None: raise SystemExit('metadata.yaml missing at runtime archive root')
+          text=z.read(str(metadata)).decode('utf-8')
+          version=re.search(r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', text).group(1).strip()
+          repo=re.search(r'(?m)^repo:\s*["\x27]?([^"\x27\r\n#]+)', text).group(1).strip()
+          if not repo.endswith('/tree/runtime'): raise SystemExit(f'wrong runtime repo binding: {repo}')
+          print(f'REAL_RUNTIME_BRANCH_ARCHIVE=OK version={version} files={len(stripped)}')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: published-runtime-package
+          path: |
+            dist/astrbot_plugin_volcengine_provider-runtime.zip
+            dist/runtime-manifest.json
+          if-no-files-found: error
+          retention-days: 7
