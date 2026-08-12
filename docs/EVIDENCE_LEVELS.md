@@ -22,8 +22,8 @@ Evidence levels describe what a result can support. They are not a scoring syste
 
 ## Examples
 
-- `ProviderConfigService.create_provider()` succeeds on AstrBot 4.27.2: **L3 host integration evidence**.
-- A screenshot shows the video transport toggle on a model card: **L4 presentation evidence**.
+- The Source selector save contract succeeds through the real AstrBot service matrix on 4.26.1 and 4.27.2: **L3 host integration evidence**.
+- The 2026-08-12 real AstrBot 4.27.2 Dashboard DOM run showed one master per Ark/Plan Source, selectors scoped to their own 2/1 cards, hide/reopen selection preservation with zero API requests, 0/0 controls on foreign Source, no canonical/retired/new video fields in any generic model dialog, and `pageErrors=[]`: **L4 presentation evidence**. The L3 matrix did not substitute for this observation.
 - Ark accepts a request containing `video_url`: **L5 upstream runtime evidence**.
 - A QQ video reaches Ark and returns a useful model response: **L6 full-path evidence**.
 

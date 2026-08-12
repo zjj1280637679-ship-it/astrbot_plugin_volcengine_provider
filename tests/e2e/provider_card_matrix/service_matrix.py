@@ -23,6 +23,7 @@ from astrbot_plugin_volcengine_provider import registry
 from astrbot_plugin_volcengine_provider.capabilities import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
+    VIDEO_CONTROLS_VISIBLE_KEY,
     VIDEO_INPUT_ENABLED_KEY,
 )
 
@@ -36,14 +37,20 @@ from assertions import (
 class FakeManager:
     def __init__(self, providers: list[dict]) -> None:
         self.providers = providers
+        self.providers_config = providers
+        self.provider_sources_config: list[dict] = []
         self.created: list[dict] = []
         self.updated: list[tuple[str, dict]] = []
+        self.reloaded: list[dict] = []
 
     async def create_provider(self, config: dict) -> None:
         self.created.append(copy.deepcopy(config))
 
     async def update_provider(self, provider_id: str, config: dict) -> None:
         self.updated.append((provider_id, copy.deepcopy(config)))
+
+    async def reload(self, config: dict) -> None:
+        self.reloaded.append(copy.deepcopy(config))
 
     def get_provider_config_by_id(self, provider_id: str, **_: object) -> dict | None:
         for provider in self.providers:
@@ -52,13 +59,40 @@ class FakeManager:
         return None
 
 
-class FakeService:
-    def __init__(self) -> None:
-        self.config = {
+class FakeConfig(dict):
+    def save_config(self, replace_config: dict | None = None, **_: object) -> None:
+        # ProviderConfigService already mutated this in-memory object. Validation
+        # still runs through the real host helper; disk persistence is the only
+        # side effect omitted by this service matrix.
+        return None
+
+
+def make_service() -> ProviderConfigService:
+    service = object.__new__(ProviderConfigService)
+    service.config = FakeConfig(
+        {
             "provider_sources": [
-                {"id": "ark-A", "type": ARK_PROVIDER_TYPE},
-                {"id": "plan-A", "type": AGENT_PLAN_PROVIDER_TYPE},
-                {"id": "foreign-A", "type": "openai_chat_completion"},
+                {
+                    "id": "ark-A",
+                    "provider": "volcengine",
+                    "type": ARK_PROVIDER_TYPE,
+                    "provider_type": "chat_completion",
+                    "enable": True,
+                },
+                {
+                    "id": "plan-A",
+                    "provider": "volcengine",
+                    "type": AGENT_PLAN_PROVIDER_TYPE,
+                    "provider_type": "chat_completion",
+                    "enable": True,
+                },
+                {
+                    "id": "foreign-A",
+                    "provider": "openai",
+                    "type": "openai_chat_completion",
+                    "provider_type": "chat_completion",
+                    "enable": True,
+                },
             ],
             "provider": [
                 {
@@ -80,11 +114,57 @@ class FakeService:
                 },
             ],
         }
-        self.provider_manager = FakeManager(self.config["provider"])
+    )
+    service.provider_manager = FakeManager(service.config["provider"])
+    service.provider_manager.provider_sources_config = service.config[
+        "provider_sources"
+    ]
+    return service
 
 
-async def _exercise_owned(service: FakeService, source_id: str) -> dict:
+async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dict:
     ui_key = registry._video_ui_key(source_id)
+    selector_key = registry._source_video_selector_ui_key(source_id)
+
+    # The real host Source upsert validates, saves and reloads. Open applies the
+    # current Source selection; closed ignores even a stale hidden selector.
+    existing_id = f"{source_id}/existing"
+    source_type = (
+        AGENT_PLAN_PROVIDER_TYPE if source_id == "plan-A" else ARK_PROVIDER_TYPE
+    )
+    await ProviderConfigService.upsert_provider_source(
+        service,
+        source_id,
+        {
+            "id": source_id,
+            "provider": "volcengine",
+            "type": source_type,
+            "provider_type": "chat_completion",
+            "enable": True,
+            VIDEO_CONTROLS_VISIBLE_KEY: True,
+            selector_key: [existing_id],
+        },
+    )
+    persisted = service.provider_manager.get_provider_config_by_id(existing_id)
+    assert persisted is not None
+    assert persisted[VIDEO_INPUT_ENABLED_KEY] is True
+
+    await ProviderConfigService.upsert_provider_source(
+        service,
+        source_id,
+        {
+            "id": source_id,
+            "provider": "volcengine",
+            "type": source_type,
+            "provider_type": "chat_completion",
+            "enable": True,
+            VIDEO_CONTROLS_VISIBLE_KEY: False,
+            selector_key: [],
+        },
+    )
+    persisted = service.provider_manager.get_provider_config_by_id(existing_id)
+    assert persisted is not None
+    assert persisted[VIDEO_INPUT_ENABLED_KEY] is True
 
     await ProviderConfigService.create_provider(
         service,
@@ -103,7 +183,6 @@ async def _exercise_owned(service: FakeService, source_id: str) -> dict:
     created_default = service.provider_manager.created[-1]
     assert_owned_model_card_saved(created_default, expected_video_enabled=False)
 
-    existing_id = f"{source_id}/existing"
     existing_model = "agentplan/existing" if source_id == "plan-A" else "existing"
     await ProviderConfigService.update_provider(
         service,
@@ -124,10 +203,11 @@ async def _exercise_owned(service: FakeService, source_id: str) -> dict:
         "create_enabled": True,
         "create_default": False,
         "update_enabled": True,
+        "source_hide_preserved": True,
     }
 
 
-async def _exercise_foreign(service: FakeService) -> dict:
+async def _exercise_foreign(service: ProviderConfigService) -> dict:
     forged = registry._video_ui_key("foreign-A")
     await ProviderConfigService.create_provider(
         service,
@@ -159,7 +239,7 @@ async def exercise() -> dict:
         raise AssertionError("expected Dashboard bridge to install in supported host")
 
     try:
-        service = FakeService()
+        service = make_service()
         return {
             "ark": await _exercise_owned(service, "ark-A"),
             "agent_plan": await _exercise_owned(service, "plan-A"),

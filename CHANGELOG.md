@@ -1,5 +1,14 @@
 # 更新记录
 
+## 未发布
+
+- 把火山视频传输的可见配置入口从通用模型卡移到对应 Provider Source 页面，避免共享模型卡组件因缺少可靠的当前 Provider 身份而出现“所有供应商都显示”或“所有供应商都不显示”。
+- 新增持久 `volcengine_video_controls_visible` 展示开关；它只控制当前火山 Source 的逐模型复选列表显示/隐藏。关闭不会清除已有选择，也不会停用已勾选模型的视频转发，运行时真值仍是每张模型卡的 `volcengine_video_input_enabled`。
+- Source 页面临时选择器按当前 Source 的准确模型卡 ID 投影；打开并保存时写回每卡 canonical 字段，随后删除临时键。外国 Source 没有展示字段或选择器，通用模型卡不再显示视频控件，AstrBot `modalities` 保持不变。
+- Source 保存合同已在 AstrBot `4.26.1` 与 `4.27.2` 真实服务矩阵完成 L3 验证；2026-08-12 的真实 AstrBot `4.27.2` Dashboard DOM 另行完成 L4：Ark / Plan master 各 1、选择器各 1 且仅列本 Source 的 2 / 1 张卡，关闭隐藏、再开选择保留且 0 API 请求，foreign 为 0 / 0，三类通用模型弹窗均无 canonical / 旧临时 / 新临时字段，`pageErrors=[]`。
+- 修复 AstrBot `4.26.1` 升级兼容：0.1.17 schema 投影曾可能把 `_volcengine_video_transport_ui_<source-hex>` 留在真实模型卡。迁移现在只接受与该卡 `provider_source_id` 精确匹配的布尔值，优先级为 canonical > 精确匹配的 0.1.17 旧 UI > 更早逐卡字段 > 旧 Source 显式布尔（含 `false`）> `modalities: video`；随后清除所有错层和临时字段，wrong-source / foreign 值绝不晋升为火山状态，宿主 `modalities` 仍不改写。
+- Source 选择器保存改为事务式内存更新：若 AstrBot 的 `upsert_provider_source` 拒绝或抛错，恢复调用前的完整模型卡列表并继续抛出原错误，失败的 Source 保存不会留下插件造成的半完成逐卡状态。
+
 ## 0.1.17
 
 - 修复商店发行边界：不再把整个开发仓库直接当作用户安装包。开发态 `main` 与运行态 `runtime` 分离，插件市场 `repo` 绑定稳定的 `runtime` 分支。

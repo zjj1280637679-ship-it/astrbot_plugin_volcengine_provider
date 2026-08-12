@@ -20,7 +20,12 @@ from astrbot.core.provider.register import (
 from .capabilities import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
+    LEGACY_MODEL_VIDEO_INPUT_KEY,
+    LEGACY_MODEL_VIDEO_UI_KEY_PREFIX,
+    LEGACY_SOURCE_VIDEO_KEYS,
     OWNED_SOURCE_TYPES,
+    SOURCE_VIDEO_SELECTOR_UI_KEY_PREFIX,
+    VIDEO_CONTROLS_VISIBLE_KEY,
     VIDEO_INPUT_ENABLED_KEY,
     cleanup_owned_settings_on_source_change,
     consume_source_model_hints,
@@ -31,15 +36,16 @@ from .capabilities import (
 
 PLUGIN_MODULE_MARKER = "astrbot_plugin_volcengine_provider"
 
-# AstrBot 4.26/4.27 exposes one shared model-card schema.  A canonical plugin
-# field added there without a condition would be rendered on foreign Provider
-# cards too.  These keys exist only in Dashboard payloads and are stripped at
-# the save boundary; one condition-scoped key is generated per owned Source.
-_VIDEO_UI_KEY_PREFIX = "_volcengine_video_transport_ui_"
+# AstrBot 4.26/4.27 exposes one shared Provider schema. Canonical per-card state
+# must not be rendered there. The first prefix remains accepted only for stale
+# 0.1.17 model dialogs; the second projects one Source-owned checkbox list. Both
+# are Dashboard-only and are stripped at their respective save boundaries.
+_VIDEO_UI_KEY_PREFIX = LEGACY_MODEL_VIDEO_UI_KEY_PREFIX
+_SOURCE_VIDEO_SELECTOR_UI_KEY_PREFIX = SOURCE_VIDEO_SELECTOR_UI_KEY_PREFIX
 _SOURCE_TRANSPORT_UI_HINT = (
-    "视频请求通道是逐模型卡的请求转发设置，不是模型能力结论。"
-    "如果当前 AstrBot Dashboard 在新建模型卡时未显示该开关，请先保存模型卡，"
-    "再点击该模型卡进入编辑设置；若未来 Dashboard 已在新建页直接显示，可直接在那里设置。"
+    "视频请求通道是当前火山 Source 内的逐模型请求转发设置，不是模型能力结论。"
+    "打开“显示逐模型视频选项”可集中勾选；关闭只隐藏选择区，"
+    "不会清除已保存选择，也不会停用已勾选模型的视频转发。"
 )
 
 _DASHBOARD_LEASE_COUNT = 0
@@ -67,6 +73,13 @@ def _video_ui_key(source_id: str) -> str:
     return f"{_VIDEO_UI_KEY_PREFIX}{encoded}"
 
 
+def _source_video_selector_ui_key(source_id: str) -> str:
+    """Return the non-persistent Source-page selector key for one Source."""
+
+    encoded = source_id.encode("utf-8").hex()
+    return f"{_SOURCE_VIDEO_SELECTOR_UI_KEY_PREFIX}{encoded}"
+
+
 def _strip_video_ui_keys(provider_config: dict[str, Any]) -> None:
     """Remove every Dashboard-only transport field before host persistence."""
 
@@ -76,6 +89,49 @@ def _strip_video_ui_keys(provider_config: dict[str, Any]) -> None:
         if isinstance(key, str) and key.startswith(_VIDEO_UI_KEY_PREFIX)
     ]:
         provider_config.pop(key, None)
+
+
+def _strip_source_video_selector_ui_keys(source_config: dict[str, Any]) -> None:
+    """Remove Source-page model selectors before host persistence."""
+
+    for key in [
+        key
+        for key in source_config
+        if isinstance(key, str) and key.startswith(_SOURCE_VIDEO_SELECTOR_UI_KEY_PREFIX)
+    ]:
+        source_config.pop(key, None)
+
+
+def _strip_source_only_video_keys_from_model_card(
+    provider_config: dict[str, Any],
+) -> None:
+    """Remove Source-page state that is invalid on every model card."""
+
+    provider_config.pop(VIDEO_CONTROLS_VISIBLE_KEY, None)
+    for legacy_source_key in LEGACY_SOURCE_VIDEO_KEYS.values():
+        provider_config.pop(legacy_source_key, None)
+    _strip_source_video_selector_ui_keys(provider_config)
+
+
+def _strip_all_plugin_video_fields_from_model_card(
+    provider_config: dict[str, Any],
+) -> None:
+    """Remove every plugin video field from a foreign/UI model projection."""
+
+    provider_config.pop(VIDEO_INPUT_ENABLED_KEY, None)
+    provider_config.pop(LEGACY_MODEL_VIDEO_INPUT_KEY, None)
+    _strip_video_ui_keys(provider_config)
+    _strip_source_only_video_keys_from_model_card(provider_config)
+
+
+def _strip_wrong_layer_video_fields_from_source(source_config: dict[str, Any]) -> None:
+    """Remove model-card and retired Source fields from a Source payload."""
+
+    source_config.pop(VIDEO_INPUT_ENABLED_KEY, None)
+    source_config.pop(LEGACY_MODEL_VIDEO_INPUT_KEY, None)
+    for legacy_source_key in LEGACY_SOURCE_VIDEO_KEYS.values():
+        source_config.pop(legacy_source_key, None)
+    _strip_video_ui_keys(source_config)
 
 
 def _inject_owned_source_transport_hint(payload: dict[str, Any]) -> dict[str, Any]:
@@ -88,8 +144,14 @@ def _inject_owned_source_transport_hint(payload: dict[str, Any]) -> dict[str, An
 
     # New Sources are built from config_schema.provider.config_template.
     config_schema = payload.get("config_schema")
-    provider_schema = config_schema.get("provider") if isinstance(config_schema, dict) else None
-    templates = provider_schema.get("config_template") if isinstance(provider_schema, dict) else None
+    provider_schema = (
+        config_schema.get("provider") if isinstance(config_schema, dict) else None
+    )
+    templates = (
+        provider_schema.get("config_template")
+        if isinstance(provider_schema, dict)
+        else None
+    )
     if isinstance(templates, dict):
         copied_templates = copy.deepcopy(templates)
         provider_schema["config_template"] = copied_templates
@@ -139,9 +201,11 @@ def _apply_video_ui_transport_setting(
     """
 
     source_id = str(provider_config.get("provider_source_id") or "").strip()
-    types = source_types({"provider_sources": provider_sources}) if isinstance(
-        provider_sources, list
-    ) else {}
+    types = (
+        source_types({"provider_sources": provider_sources})
+        if isinstance(provider_sources, list)
+        else {}
+    )
     if source_id and types.get(source_id) in OWNED_SOURCE_TYPES:
         ui_value = provider_config.get(_video_ui_key(source_id))
         if isinstance(ui_value, bool):
@@ -152,13 +216,15 @@ def _apply_video_ui_transport_setting(
 
 
 def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
-    """Expose Source-conditioned transport toggles only on owned model cards.
+    """Project per-model video choices into each owned Source page.
 
-    AstrBot's V4 renderer shows every schema item without a ``condition``.  A
-    single canonical field would therefore leak into unrelated Provider cards.
-    Instead, create one Dashboard-only field per currently configured owned
-    Source, conditioned on that card's ``provider_source_id``.  The save bridge
-    converts it back to ``volcengine_video_input_enabled`` and strips the UI key.
+    The historical function name is retained for import compatibility, but the
+    visible control now lives on the current Provider Source.  AstrBot's Source
+    form owns real ``type``/``provider`` identity and evaluates conditions on the
+    same object, so it does not suffer the generic model-card all-or-none leak.
+
+    The Source selector is only a Dashboard projection.  Each model card's
+    ``volcengine_video_input_enabled`` remains the sole persistent/runtime truth.
     """
 
     try:
@@ -168,44 +234,139 @@ def _inject_model_card_video_control(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(items, dict):
         return payload
 
+    # Remove schema remnants from an already wrapped/customized response. The
+    # model-card UI is intentionally retired; configuration now lives on Source.
+    forbidden_schema_keys = {
+        VIDEO_INPUT_ENABLED_KEY,
+        LEGACY_MODEL_VIDEO_INPUT_KEY,
+        VIDEO_CONTROLS_VISIBLE_KEY,
+        *LEGACY_SOURCE_VIDEO_KEYS.values(),
+    }
+    for key in list(items):
+        if key in forbidden_schema_keys or (
+            isinstance(key, str)
+            and (
+                key.startswith(_VIDEO_UI_KEY_PREFIX)
+                or key.startswith(_SOURCE_VIDEO_SELECTOR_UI_KEY_PREFIX)
+            )
+        ):
+            items.pop(key, None)
+
+    items[VIDEO_CONTROLS_VISIBLE_KEY] = {
+        "description": "显示逐模型视频选项",
+        "type": "bool",
+        "hint": (
+            "仅控制下方逐模型选择区的显示。关闭不会清除已经保存的选择，"
+            "也不会停用已勾选模型的视频请求转发。"
+        ),
+    }
+
     types = source_types(payload)
-    owned_source_ids = [
-        source_id
-        for source_id, source_type in types.items()
-        if source_type in OWNED_SOURCE_TYPES
-    ]
+    providers_input = payload.get("providers", [])
+    providers = (
+        copy.deepcopy(providers_input) if isinstance(providers_input, list) else []
+    )
+    payload["providers"] = providers
 
-    for source_id in owned_source_ids:
-        ui_key = _video_ui_key(source_id)
-        items.setdefault(
-            ui_key,
-            {
-                "description": "视频请求通道（当前模型卡）",
-                "type": "bool",
-                "hint": (
-                    "仅控制火山适配器是否按 Ark video_url 协议尝试发送本轮视频；"
-                    "不是模型能力结论。关闭时保留 [Video] 文本占位。"
-                ),
-                "condition": {"provider_source_id": source_id},
-            },
-        )
-
-    providers = payload.get("providers", [])
-    if not isinstance(providers, list):
-        return payload
+    providers_by_source: dict[str, list[dict[str, Any]]] = {}
+    selected_card_ids = {
+        str(provider.get("id") or "").strip()
+        for provider in providers_input
+        if isinstance(provider, dict) and video_input_enabled(provider)
+    }
     for provider in providers:
         if not isinstance(provider, dict):
             continue
         source_id = str(provider.get("provider_source_id") or "").strip()
+        # No plugin video field has a legitimate generic model-card UI
+        # representation. Strip stale, forged and wrong-layer fields alike.
+        _strip_all_plugin_video_fields_from_model_card(provider)
         if types.get(source_id) not in OWNED_SOURCE_TYPES:
             continue
-        # Dashboard is a projection, not persistence. AstrBotConfig fallback-renders
-        # unknown iterable keys, so the canonical key must not be returned here.
-        # Carry only its value through the short-lived Source-scoped UI switch;
-        # save wrappers translate that switch back to the canonical persistence key.
-        current_value = video_input_enabled(provider)
-        provider.pop(VIDEO_INPUT_ENABLED_KEY, None)
-        provider[_video_ui_key(source_id)] = current_value
+        providers_by_source.setdefault(source_id, []).append(provider)
+
+    provider_sources_input = payload.get("provider_sources", [])
+    provider_sources = (
+        copy.deepcopy(provider_sources_input)
+        if isinstance(provider_sources_input, list)
+        else []
+    )
+    payload["provider_sources"] = provider_sources
+
+    def project_source(source: dict[str, Any], source_type: str) -> None:
+        source_id = str(source.get("id") or "").strip()
+        _strip_wrong_layer_video_fields_from_source(source)
+        _strip_source_video_selector_ui_keys(source)
+        if not source_id or source_type not in OWNED_SOURCE_TYPES:
+            # Defensive projection cleanup: even a forged/stale foreign field
+            # must not become a fallback-rendered Volcengine control.
+            source.pop(VIDEO_CONTROLS_VISIBLE_KEY, None)
+            return
+
+        source.setdefault(VIDEO_CONTROLS_VISIBLE_KEY, False)
+        cards = sorted(
+            providers_by_source.get(source_id, []),
+            key=lambda card: str(card.get("id") or ""),
+        )
+        options: list[str] = []
+        labels: list[str] = []
+        selected: list[str] = []
+        for card in cards:
+            card_id = str(card.get("id") or "").strip()
+            if not card_id:
+                continue
+            model = str(card.get("model") or "").strip()
+            options.append(card_id)
+            labels.append(f"{model or card_id}（{card_id}）")
+            if card_id in selected_card_ids:
+                selected.append(card_id)
+
+        selector_key = _source_video_selector_ui_key(source_id)
+        items[selector_key] = {
+            "description": "启用视频请求通道的模型",
+            "type": "list",
+            "items": {"type": "string"},
+            "options": options,
+            "labels": labels,
+            "render_type": "checkbox",
+            "hint": (
+                "勾选表示允许该模型卡按 Ark video_url 协议尝试发送本轮视频；"
+                "它是用户请求转发设置，不是模型能力结论。"
+            ),
+            "condition": {VIDEO_CONTROLS_VISIBLE_KEY: True},
+        }
+        source[selector_key] = selected
+
+    for source in provider_sources:
+        if not isinstance(source, dict):
+            continue
+        source_id = str(source.get("id") or "").strip()
+        project_source(source, types.get(source_id, ""))
+
+    config_schema = payload.get("config_schema")
+    provider_schema = (
+        config_schema.get("provider") if isinstance(config_schema, dict) else None
+    )
+    templates_input = (
+        provider_schema.get("config_template")
+        if isinstance(provider_schema, dict)
+        else None
+    )
+    if isinstance(templates_input, dict):
+        templates = copy.deepcopy(templates_input)
+        provider_schema["config_template"] = templates
+        for template in templates.values():
+            if not isinstance(template, dict):
+                continue
+            _strip_wrong_layer_video_fields_from_source(template)
+            _strip_source_video_selector_ui_keys(template)
+            if str(template.get("type") or "").strip() in OWNED_SOURCE_TYPES:
+                # A new Source has no configured model cards yet. Its master
+                # switch is immediately visible; the selector is projected on
+                # the next schema load after model cards exist.
+                template.setdefault(VIDEO_CONTROLS_VISIBLE_KEY, False)
+            else:
+                template.pop(VIDEO_CONTROLS_VISIBLE_KEY, None)
     return payload
 
 
@@ -325,13 +486,137 @@ def _existing_provider_config(service: Any, provider_id: str) -> dict[str, Any]:
     return {}
 
 
+def _existing_source_config(service: Any, source_id: str) -> dict[str, Any]:
+    """Read one persisted Provider Source without requiring a host helper."""
+
+    for source in _provider_sources_for_service(service):
+        if not isinstance(source, dict):
+            continue
+        if str(source.get("id") or "").strip() == source_id:
+            return source
+    return {}
+
+
+def _apply_source_video_ui_settings(
+    service: Any,
+    source_id: str,
+    source_config: dict[str, Any],
+) -> list[str]:
+    """Apply one owned Source-page selection to its model-card truth values.
+
+    The master switch is presentation state only. When it is false, or when a
+    hidden selector is absent, model-card values are deliberately untouched.
+    When true, only cards belonging to this exact Source are updated; selected
+    values use card IDs rather than model names so equal names cannot cross
+    Source/card identity boundaries.
+
+    Returns the IDs whose canonical value changed. Dashboard-only selector keys
+    are always stripped before the host persistence boundary.
+    """
+
+    original_source_id = str(source_id or "").strip()
+    next_source_id = str(source_config.get("id") or original_source_id).strip()
+    existing = _existing_source_config(service, original_source_id)
+    old_source_type = str(existing.get("type") or "").strip()
+    source_type = str(source_config.get("type") or old_source_type or "").strip()
+    config = getattr(service, "config", {})
+    providers = config.get("provider", []) if hasattr(config, "get") else []
+
+    if source_type not in OWNED_SOURCE_TYPES:
+        if old_source_type in OWNED_SOURCE_TYPES:
+            if isinstance(providers, list):
+                for provider in providers:
+                    if not isinstance(provider, dict):
+                        continue
+                    if (
+                        str(provider.get("provider_source_id") or "").strip()
+                        != original_source_id
+                    ):
+                        continue
+                    cleanup_owned_settings_on_source_change(
+                        provider,
+                        old_source_type=old_source_type,
+                        new_source_type=source_type,
+                    )
+                    _strip_all_plugin_video_fields_from_model_card(provider)
+        _strip_wrong_layer_video_fields_from_source(source_config)
+        source_config.pop(VIDEO_CONTROLS_VISIBLE_KEY, None)
+        _strip_source_video_selector_ui_keys(source_config)
+        return []
+
+    # Heal any 0.1.17 AstrBot 4.26 live-schema projection debris before this
+    # Source save. This is a migration/cleanup step only and does not manufacture
+    # a default choice when the card has no prior video setting.
+    if isinstance(providers, list):
+        sources = _provider_sources_for_service(service)
+        for provider in providers:
+            if not isinstance(provider, dict):
+                continue
+            if (
+                str(provider.get("provider_source_id") or "").strip()
+                != original_source_id
+            ):
+                continue
+            normalize_owned_model_card_for_save(
+                provider,
+                sources,
+                default_enabled=None,
+            )
+
+    visible = source_config.get(VIDEO_CONTROLS_VISIBLE_KEY)
+    if not isinstance(visible, bool):
+        previous = existing.get(VIDEO_CONTROLS_VISIBLE_KEY)
+        source_config[VIDEO_CONTROLS_VISIBLE_KEY] = (
+            previous if isinstance(previous, bool) else False
+        )
+        visible = source_config[VIDEO_CONTROLS_VISIBLE_KEY]
+
+    selector_present = False
+    selector_value: object = None
+    for candidate_id in (original_source_id, next_source_id):
+        if not candidate_id:
+            continue
+        key = _source_video_selector_ui_key(candidate_id)
+        if key in source_config:
+            selector_present = True
+            selector_value = source_config.get(key)
+            break
+
+    changed: list[str] = []
+    if visible is True and selector_present and isinstance(selector_value, list):
+        selected_ids = {
+            str(value).strip() for value in selector_value if str(value).strip()
+        }
+        if isinstance(providers, list):
+            for provider in providers:
+                if not isinstance(provider, dict):
+                    continue
+                if (
+                    str(provider.get("provider_source_id") or "").strip()
+                    != original_source_id
+                ):
+                    continue
+                provider_id = str(provider.get("id") or "").strip()
+                if not provider_id:
+                    continue
+                next_enabled = provider_id in selected_ids
+                if provider.get(VIDEO_INPUT_ENABLED_KEY) is not next_enabled:
+                    provider[VIDEO_INPUT_ENABLED_KEY] = next_enabled
+                    changed.append(provider_id)
+
+    _strip_source_video_selector_ui_keys(source_config)
+    _strip_wrong_layer_video_fields_from_source(source_config)
+    return changed
+
+
 def acquire_owned_dashboard_bridge() -> bool:
     """Install only Dashboard wrappers supported by this AstrBot build.
 
     The Provider adapters are the required feature. Dashboard model feedback is
-    independent.  The per-model transport UI is installed only when schema,
-    create and update hooks are all available, so the plugin never exposes a UI
-    control whose save semantics it cannot complete.
+    independent. The Source-page video UI requires both schema projection and a
+    Source save boundary, so the plugin never exposes a control whose save
+    semantics it cannot complete. Legacy model-card save translation remains a
+    separate compatibility bridge for already-open/stale 0.1.17 clients.
     """
 
     global _DASHBOARD_LEASE_COUNT
@@ -375,20 +660,20 @@ def acquire_owned_dashboard_bridge() -> bool:
     )
 
     installed = False
-    can_install_transport_ui = (
+    can_install_legacy_model_save_bridge = (
         schema_current is not None
         and create_current is not None
         and update_current is not None
     )
-    can_install_source_hint = (
-        can_install_transport_ui and source_upsert_current is not None
+    can_install_source_video_ui = (
+        schema_current is not None and source_upsert_current is not None
     )
 
-    if can_install_transport_ui:
+    if can_install_source_video_ui:
+
         def schema_wrapper(self) -> dict[str, Any]:
-            result = _inject_model_card_video_control(schema_current(self))
-            if can_install_source_hint:
-                result = _inject_owned_source_transport_hint(result)
+            result = _inject_owned_source_transport_hint(schema_current(self))
+            result = _inject_model_card_video_control(result)
             return result
 
         schema_wrapper._volcengine_provider_schema_wrapper = True  # type: ignore[attr-defined]
@@ -398,6 +683,7 @@ def acquire_owned_dashboard_bridge() -> bool:
         installed = True
 
     if models_current is not None:
+
         async def models_wrapper(self, source_id: str) -> dict[str, Any]:
             result = await models_current(self, source_id)
             if not isinstance(result, dict):
@@ -413,7 +699,8 @@ def acquire_owned_dashboard_bridge() -> bool:
         _MODELS_ORIGINAL, _MODELS_WRAPPER = models_current, models_wrapper
         installed = True
 
-    if can_install_transport_ui:
+    if can_install_legacy_model_save_bridge:
+
         async def create_wrapper(
             self,
             config: dict[str, Any],
@@ -424,11 +711,20 @@ def acquire_owned_dashboard_bridge() -> bool:
                 normalized["provider_source_id"] = source_id
             sources = _provider_sources_for_service(self)
             _apply_video_ui_transport_setting(normalized, sources)
-            normalize_owned_model_card_for_save(
-                normalized,
-                sources,
-                default_enabled=False,
+            types = source_types({"provider_sources": sources})
+            source_type = types.get(
+                str(normalized.get("provider_source_id") or "").strip(),
+                "",
             )
+            if source_type in OWNED_SOURCE_TYPES:
+                _strip_source_only_video_keys_from_model_card(normalized)
+                normalize_owned_model_card_for_save(
+                    normalized,
+                    sources,
+                    default_enabled=False,
+                )
+            else:
+                _strip_all_plugin_video_fields_from_model_card(normalized)
             await create_current(self, normalized, source_id)
 
         create_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
@@ -444,9 +740,8 @@ def acquire_owned_dashboard_bridge() -> bool:
         ) -> None:
             normalized = dict(config)
             existing = _existing_provider_config(self, provider_id)
-            if (
-                not normalized.get("provider_source_id")
-                and existing.get("provider_source_id")
+            if not normalized.get("provider_source_id") and existing.get(
+                "provider_source_id"
             ):
                 normalized["provider_source_id"] = existing["provider_source_id"]
 
@@ -465,22 +760,33 @@ def acquire_owned_dashboard_bridge() -> bool:
 
             _apply_video_ui_transport_setting(normalized, sources)
 
+            existing_value: bool | None = None
+            for candidate in (
+                existing.get(VIDEO_INPUT_ENABLED_KEY),
+                existing.get(_video_ui_key(old_source_id)) if old_source_id else None,
+                existing.get(LEGACY_MODEL_VIDEO_INPUT_KEY),
+            ):
+                if isinstance(candidate, bool):
+                    existing_value = candidate
+                    break
             if (
                 new_type in OWNED_SOURCE_TYPES
                 and VIDEO_INPUT_ENABLED_KEY not in normalized
                 and old_type in OWNED_SOURCE_TYPES
-                and isinstance(existing.get(VIDEO_INPUT_ENABLED_KEY), bool)
+                and existing_value is not None
             ):
-                normalized[VIDEO_INPUT_ENABLED_KEY] = existing[
-                    VIDEO_INPUT_ENABLED_KEY
-                ]
+                normalized[VIDEO_INPUT_ENABLED_KEY] = existing_value
 
-            normalize_owned_model_card_for_save(
-                normalized,
-                sources,
-                default_enabled=False,
-            )
-            _strip_video_ui_keys(normalized)
+            if new_type in OWNED_SOURCE_TYPES:
+                _strip_source_only_video_keys_from_model_card(normalized)
+                normalize_owned_model_card_for_save(
+                    normalized,
+                    sources,
+                    default_enabled=False,
+                )
+                _strip_video_ui_keys(normalized)
+            else:
+                _strip_all_plugin_video_fields_from_model_card(normalized)
             await update_current(self, provider_id, normalized)
 
         update_wrapper._volcengine_model_save_wrapper = True  # type: ignore[attr-defined]
@@ -489,15 +795,52 @@ def acquire_owned_dashboard_bridge() -> bool:
         _UPDATE_ORIGINAL, _UPDATE_WRAPPER = update_current, update_wrapper
         installed = True
 
-    if can_install_source_hint:
+    if can_install_source_video_ui:
+
         async def source_upsert_wrapper(
             self,
             source_id: str,
             config: dict[str, Any],
         ) -> Any:
             normalized = dict(config)
+            next_source_id = str(normalized.get("id") or source_id).strip()
+            if not next_source_id:
+                raise ValueError("Provider source config must have an 'id' field")
+
+            # Mirror AstrBot's only Source identity preflight before touching
+            # per-card settings. A rejected rename must have no side effects.
+            for source in _provider_sources_for_service(self):
+                if not isinstance(source, dict):
+                    continue
+                if (
+                    str(source.get("id") or "").strip() == next_source_id
+                    and next_source_id != str(source_id).strip()
+                ):
+                    raise ValueError(
+                        f"Provider source ID '{next_source_id}' exists already, "
+                        "please try another ID."
+                    )
+
+            normalized["id"] = next_source_id
+            service_config = getattr(self, "config", {})
+            providers = (
+                service_config.get("provider", [])
+                if hasattr(service_config, "get")
+                else []
+            )
+            provider_snapshot = copy.deepcopy(providers)
+            _apply_source_video_ui_settings(self, source_id, normalized)
             _strip_source_transport_hint(normalized)
-            return await source_upsert_current(self, source_id, normalized)
+            try:
+                return await source_upsert_current(self, source_id, normalized)
+            except Exception:
+                # The Source selector is a projection over per-card persistent
+                # truth. If the host rejects/fails the Source save, restore the
+                # pre-call card list so a failed UI action has no plugin-created
+                # in-memory side effect.
+                if isinstance(providers, list):
+                    providers[:] = provider_snapshot
+                raise
 
         source_upsert_wrapper._volcengine_source_save_wrapper = True  # type: ignore[attr-defined]
         source_upsert_wrapper._volcengine_source_save_original = source_upsert_current  # type: ignore[attr-defined]

@@ -33,21 +33,25 @@ def main() -> None:
     registry.release_owned_dashboard_bridge()
 
     originals = {
-        name: getattr(ProviderConfigService, name, None)
-        for name in OPTIONAL_METHODS
+        name: getattr(ProviderConfigService, name, None) for name in OPTIONAL_METHODS
     }
 
     try:
-        # Source-hint persistence cleanup is optional. If this host lacks the
-        # Source upsert boundary, retain the model-card transport UI but do not
-        # project a Source hint that cannot be safely stripped on save.
+        # The Source UI needs both schema projection and the Source save
+        # boundary. Without upsert, do not expose it; live feedback and stale
+        # 0.1.17 model-save compatibility can still install independently.
         if hasattr(ProviderConfigService, "upsert_provider_source"):
             delattr(ProviderConfigService, "upsert_provider_source")
         acquired = registry.acquire_owned_dashboard_bridge()
         assert acquired is True
-        assert getattr(
+        assert not getattr(
             ProviderConfigService.get_provider_schema,
             "_volcengine_provider_schema_wrapper",
+            False,
+        )
+        assert getattr(
+            ProviderConfigService.create_provider,
+            "_volcengine_model_save_wrapper",
             False,
         )
         registry.release_owned_dashboard_bridge()
@@ -58,17 +62,16 @@ def main() -> None:
                 originals["upsert_provider_source"],
             )
 
-        # If create/update are unavailable, do NOT expose the transport UI:
-        # showing a setting whose save semantics cannot be completed is worse
-        # than a local UI degradation.  The independent live-feedback bridge
-        # may still operate if the model-list API exists.
+        # Source controls do not depend on model create/update wrappers. The
+        # canonical per-card values are written at Source upsert and the
+        # independent live-feedback bridge remains available.
         for name in ("create_provider", "update_provider"):
             if hasattr(ProviderConfigService, name):
                 delattr(ProviderConfigService, name)
 
         acquired = registry.acquire_owned_dashboard_bridge()
-        assert acquired is True  # list_provider_source_models remains useful.
-        assert not getattr(
+        assert acquired is True
+        assert getattr(
             ProviderConfigService.get_provider_schema,
             "_volcengine_provider_schema_wrapper",
             False,
@@ -80,18 +83,24 @@ def main() -> None:
         )
         registry.release_owned_dashboard_bridge()
 
-        # With only get_provider_schema left, there is no safe/useful bridge:
-        # the Provider itself must still load and plugin construction must not
-        # raise, but the Dashboard enhancement becomes a no-op.
+        # Schema + Source upsert remains a complete Source-video bridge even if
+        # the independent model-list feedback hook is unavailable.
         if hasattr(ProviderConfigService, "list_provider_source_models"):
             delattr(ProviderConfigService, "list_provider_source_models")
-        assert registry.acquire_owned_dashboard_bridge() is False
-        assert registry._DASHBOARD_LEASE_COUNT == 0
-        assert not getattr(
+        assert registry.acquire_owned_dashboard_bridge() is True
+        assert getattr(
             ProviderConfigService.get_provider_schema,
             "_volcengine_provider_schema_wrapper",
             False,
         )
+        registry.release_owned_dashboard_bridge()
+
+        # With only get_provider_schema left, there is no safe/useful bridge:
+        # displaying Source state without a save boundary would be deceptive.
+        if hasattr(ProviderConfigService, "upsert_provider_source"):
+            delattr(ProviderConfigService, "upsert_provider_source")
+        assert registry.acquire_owned_dashboard_bridge() is False
+        assert registry._DASHBOARD_LEASE_COUNT == 0
 
         # Even a build with no recognized Dashboard hook must also be a no-op.
         if hasattr(ProviderConfigService, "get_provider_schema"):

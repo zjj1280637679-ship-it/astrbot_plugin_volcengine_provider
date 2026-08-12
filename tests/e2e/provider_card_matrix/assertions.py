@@ -11,6 +11,8 @@ from typing import Any
 
 VIDEO_KEY = "volcengine_video_input_enabled"
 VIDEO_UI_PREFIX = "_volcengine_video_transport_ui_"
+VIDEO_CONTROLS_VISIBLE_KEY = "volcengine_video_controls_visible"
+SOURCE_VIDEO_SELECTOR_UI_PREFIX = "_volcengine_video_models_ui_"
 OWNED_SOURCE_TYPES = {
     "volcengine_ark_chat_completion",
     "volcengine_agent_plan_chat_completion",
@@ -56,7 +58,9 @@ def assert_foreign_config_is_clean(config: Mapping[str, Any]) -> None:
         if isinstance(key, str) and key.startswith(VIDEO_UI_PREFIX)
     ]
     if leaked:
-        raise AssertionError(f"foreign provider contains temporary Volcengine UI keys: {leaked}")
+        raise AssertionError(
+            f"foreign provider contains temporary Volcengine UI keys: {leaked}"
+        )
 
 
 def assert_no_temporary_ui_keys_persisted(config: Mapping[str, Any]) -> None:
@@ -66,7 +70,9 @@ def assert_no_temporary_ui_keys_persisted(config: Mapping[str, Any]) -> None:
         if isinstance(key, str) and key.startswith(VIDEO_UI_PREFIX)
     ]
     if leaked:
-        raise AssertionError(f"temporary Dashboard UI keys crossed persistence boundary: {leaked}")
+        raise AssertionError(
+            f"temporary Dashboard UI keys crossed persistence boundary: {leaked}"
+        )
 
 
 def assert_owned_model_card_saved(
@@ -82,7 +88,9 @@ def assert_owned_model_card_saved(
         )
 
 
-def assert_modalities_preserved(before: Mapping[str, Any], after: Mapping[str, Any]) -> None:
+def assert_modalities_preserved(
+    before: Mapping[str, Any], after: Mapping[str, Any]
+) -> None:
     if before.get("modalities") != after.get("modalities"):
         raise AssertionError(
             "plugin migration/save changed AstrBot-owned modalities: "
@@ -130,13 +138,23 @@ def assert_layout_snapshot(snapshot: Mapping[str, Any]) -> None:
 
     duplicates = [field for field in visible if visible.count(field) > 1]
     if duplicates:
-        raise AssertionError(f"duplicate visible fields in layout snapshot: {sorted(set(duplicates))}")
+        raise AssertionError(
+            f"duplicate visible fields in layout snapshot: {sorted(set(duplicates))}"
+        )
 
     source_type = str(snapshot["source_type"])
     if source_type not in OWNED_SOURCE_TYPES:
-        if VIDEO_KEY in visible or any(
-            isinstance(field, str) and field.startswith(VIDEO_UI_PREFIX)
-            for field in visible
+        if (
+            VIDEO_KEY in visible
+            or VIDEO_CONTROLS_VISIBLE_KEY in visible
+            or any(
+                isinstance(field, str)
+                and (
+                    field.startswith(VIDEO_UI_PREFIX)
+                    or field.startswith(SOURCE_VIDEO_SELECTOR_UI_PREFIX)
+                )
+                for field in visible
+            )
         ):
             raise AssertionError("foreign provider layout exposes Volcengine video UI")
 

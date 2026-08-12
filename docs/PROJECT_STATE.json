@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 6,
   "project": "astrbot_plugin_volcengine_provider",
   "active_release": "0.1.17",
   "active_branch": "main",
@@ -15,7 +15,11 @@
     "AstrBot 4.27.2 marketplace schema permits repo URLs of the form https://github.com/{owner}/{repo}/tree/{branch}.",
     "AstrBot 4.26.1 RepoZipUpdator already parses /tree/{branch} and downloads the matching branch archive, so the runtime-branch source is compatible with the declared >=4.26.1 floor.",
     "AstrBot 4.27.2's documented support_platforms keys do not include webchat; 0.1.17 therefore declares aiocqhttp only instead of publishing an unsupported metadata token.",
-    "Development explainability and runtime distribution have different audiences: AI/ADR/tests/evidence belong in the development state unless a concrete runtime consumer requires them."
+    "Development explainability and runtime distribution have different audiences: AI/ADR/tests/evidence belong in the development state unless a concrete runtime consumer requires them.",
+    "Unreleased Source-video UI work confirmed that AstrBot 4.26/4.27's shared generic model-card component is not a reliable provider-identity boundary for an extra Volcengine field; the Provider Source form owns the exact Source id/type needed for isolation.",
+    "The Source-level volcengine_video_controls_visible value is presentation state only. Per-card volcengine_video_input_enabled remains the sole persistent/runtime video-transport truth.",
+    "AstrBot 4.26.1 may return live provider dictionaries from schema projection, so a retired 0.1.17 _volcengine_video_transport_ui_<source-hex> key can become upgrade residue on a real card. Only an exact provider_source_id-matching boolean carries user intent; wrong-Source and foreign values are non-authoritative debris.",
+    "Source selector translation mutates per-card in-memory truth before the host Source upsert completes, so host rejection/failure requires restoring the complete pre-call model-card list."
   ],
   "expected_outcomes": [
     "Keep the 0.1.16 provider/runtime/capability semantics unchanged.",
@@ -25,7 +29,10 @@
     "Validate the artifact users receive, not merely a development checkout.",
     "Keep the runtime package small enough that abnormal growth is detected before publication.",
     "Publish a stable runtime branch whose metadata version and marketplace repository binding match the validated release.",
-    "Prove both the branch-repo path and direct ZIP download path through AstrBot's native installers on 4.26.1 and 4.27.2."
+    "Prove both the branch-repo path and direct ZIP download path through AstrBot's native installers on 4.26.1 and 4.27.2.",
+    "For the unreleased Source-video UI, expose one owned-Source master plus an exact current-Source model-card selector, preserve selections when hidden, keep foreign Sources and all generic model dialogs free of plugin video fields, and leave AstrBot modalities unchanged.",
+    "Upgrade safely from 0.1.17 on AstrBot 4.26.1 by preserving exact owned-card intent with canonical > exact retired UI > older per-card > legacy Source boolean including false > modalities precedence, then remove all temporary and wrong-layer plugin fields without promoting wrong-Source or foreign data.",
+    "Make Source selector saves atomic from the plugin's perspective by restoring all pre-call model-card state if the host Source upsert fails."
   ],
   "current_strategy": {
     "development_branch": "main",
@@ -39,6 +46,31 @@
     "runtime_branch_validation": "real_branch_archive_plus_version_native_updater_repo_and_download_url_paths",
     "provider_runtime_changes_in_0_1_17": false,
     "video_control": "per_model_card_request_transport_switch",
+    "unreleased_source_video_ui": {
+      "status": "implemented_and_validated_not_part_of_released_0_1_17",
+      "configuration_surface": "owned_provider_source_page",
+      "persistent_presentation_field": "volcengine_video_controls_visible",
+      "presentation_field_runtime_authority": false,
+      "temporary_selector_identity": "exact_current_source_model_card_ids",
+      "selector_save_target": "per_card_volcengine_video_input_enabled",
+      "hidden_selector_behavior": "preserve_saved_choices_and_runtime_state",
+      "host_upsert_failure_behavior": "restore_complete_pre_call_model_card_list_and_reraise",
+      "generic_model_card_video_ui": false,
+      "foreign_source_video_ui": false
+    },
+    "unreleased_video_upgrade_migration": {
+      "precedence": [
+        "canonical_per_card_boolean",
+        "exact_provider_source_id_retired_0_1_17_ui_boolean",
+        "older_per_card_boolean",
+        "legacy_source_boolean_including_false",
+        "historical_modalities_video_clue"
+      ],
+      "wrong_source_retired_ui_promotion": false,
+      "foreign_plugin_video_state_promotion": false,
+      "post_resolution_cleanup": "all_retired_temporary_and_wrong_layer_plugin_video_fields",
+      "modalities_mutation": false
+    },
     "astrbot_modalities_mutation": false,
     "routing_fallback_ownership": "astrbot",
     "interaction_judgment_rule": "interaction_does_not_grant_judgment_authority",
@@ -87,6 +119,37 @@
     "native_updater_4_26_1_download_url": "passed",
     "native_updater_4_27_2_repo_branch": "passed",
     "native_updater_4_27_2_download_url": "passed",
+    "unreleased_source_video_ui_service_4_26_1": "L3_pass",
+    "unreleased_source_video_ui_service_4_27_2": "L3_pass",
+    "unreleased_0_1_17_live_schema_residue_migration": "contract_regression_passed_exact_source_bool_only_wrong_source_and_foreign_never_promoted_all_debris_removed",
+    "unreleased_source_upsert_failure_rollback": "service_regression_passed_complete_model_card_list_restored_and_original_error_reraised",
+    "unreleased_source_video_ui_dashboard_4_27_2": {
+      "status": "L4_pass",
+      "observed_date": "2026-08-12",
+      "ark": {
+        "master_count": 1,
+        "selector_count": 1,
+        "current_source_card_count": 2
+      },
+      "agent_plan": {
+        "master_count": 1,
+        "selector_count": 1,
+        "current_source_card_count": 1
+      },
+      "foreign": {
+        "master_count": 0,
+        "selector_count": 0
+      },
+      "close_hides_selector": true,
+      "reopen_preserves_selection": true,
+      "interaction_api_request_count": 0,
+      "generic_model_dialog_plugin_video_field_counts": {
+        "ark": 0,
+        "agent_plan": 0,
+        "foreign": 0
+      },
+      "page_errors": []
+    },
     "marketplace_sync": "external_state_not_claimed_until_store_refresh_or_republish_is_observed"
   },
   "active_validation_frontier": {

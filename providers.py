@@ -20,6 +20,7 @@ from .adapters.audio import build_ark_input_audio
 from .adapters.video import inject_current_request_videos
 from .compatibility.astrbot import _ApiKeyLogView
 from .capabilities import (
+    VIDEO_CONTROLS_VISIBLE_KEY,
     clear_source_model_hints,
     remember_source_model_hint,
     source_scope_id,
@@ -67,6 +68,9 @@ ARK_DEFAULT_CONFIG = {
     "timeout": 120,
     "proxy": "",
     "custom_headers": {},
+    # Source-level presentation preference only. It reveals the existing
+    # per-model transport switches without changing their saved/runtime values.
+    VIDEO_CONTROLS_VISIBLE_KEY: False,
 }
 
 AGENT_PLAN_DEFAULT_CONFIG = {
@@ -80,6 +84,7 @@ AGENT_PLAN_DEFAULT_CONFIG = {
     "timeout": 120,
     "proxy": "",
     "custom_headers": {},
+    VIDEO_CONTROLS_VISIBLE_KEY: False,
 }
 
 
@@ -187,8 +192,10 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
             max_retries,
             image_fallback_used=image_fallback_used,
         )
-        if isinstance(result, tuple) and len(result) > 1 and isinstance(
-            result[1], _ApiKeyLogView
+        if (
+            isinstance(result, tuple)
+            and len(result) > 1
+            and isinstance(result[1], _ApiKeyLogView)
         ):
             result = list(result)
             result[1] = str(result[1])
