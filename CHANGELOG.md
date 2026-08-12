@@ -1,5 +1,15 @@
 # 更新记录
 
+## 0.1.17
+
+- 修复商店发行边界：不再把整个开发仓库直接当作用户安装包。开发态 `main` 与运行态 `runtime` 分离，插件市场 `repo` 绑定稳定的 `runtime` 分支。
+- 新增白名单式最小运行包构建器，只收集 `metadata.yaml`、插件入口/Provider/registry、必要 Python 包、`logo.png` 与 `LICENSE`；`.github`、tests、docs、证据、治理、模型研究、实验素材和发布工具默认全部不进入用户包。
+- 新增发行物秘密扫描、禁用路径检查、异常体积检查和 ZIP 清单；项目内部运行包预算设为 2 MiB，低于 AstrBot 市场公开的 16 MiB 上限，用于尽早发现误把开发仓库打包的回归。
+- 新增“实际发行物”双版本加载门：生成后的最小包分别在 AstrBot 4.26.1 与 4.27.2 中通过 AstrBot 自身插件检查器、Python 编译和干净数据目录加载，而不是继续拿开发 checkout 代替用户收到的包。
+- 新增 `runtime` 分支发布流水线：main 合并后由 CI 从白名单重新生成运行态分支，再下载真实 branch archive 做一次商店等价结构检查。开发文件新增到 main 不会自动扩大用户包。
+- 记录本次实际错误模式：仓库 ZIP 中 `.github/workflows/**` 进入商店包，Windows 解压中途失败并留下半安装目录，随后重装出现文件名/目录冲突；同时确认“开发可解释性”属于开发仓库，不应通过把 AI/测试/架构资料塞进运行包来实现。
+- 本版本不改变 0.1.16 的 Provider、音频、视频、能力反馈、migration 或 AstrBot fallback/retry 语义；变化集中在发行/安装边界。
+
 ## 0.1.16
 
 - 将 0.1.15 的能力/反馈边界收敛为可发布状态：继续把 `volcengine_video_input_enabled` 定义为逐模型卡**请求传输开关**，不写入 AstrBot `modalities`，也不把开关、图标、`/models` 回执或一次运行结果升级成模型永久能力事实。
