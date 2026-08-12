@@ -53,19 +53,21 @@ Then locate the corresponding regression test, `TEST_HISTORY`, `REGRESSION_SCOPE
 
 Do not infer model capability from a model ID prefix, brand, vendor, historical result, or absence of a metadata icon. Volcengine is both a first-party platform for Doubao/Seed models and a cloud serving platform for third-party/open models, and model/platform behavior can change independently of this plugin.
 
-## Current release work
+## Current release state
 
-The active release candidate is **0.1.18** on the current release PR branch. Its Source-video UI, migration, and transactional-save behavior are implemented and validated, but the stable `runtime` branch must still be regenerated and revalidated after merge before publication is complete.
+**0.1.18 is released at both the repository and runtime-distribution layers.** PR #4 was squash-merged to `main` at `22444f47154f4f88ff3157d6e6ffcce9ad2689f0`; main gate run `31589741300` passed. Publisher run `31589815606` passed prepare, all four pre-promotion native-installer cells, promotion, and all four blocking post-promotion cells. The stable `runtime` branch is `4586aa2eb573eb97a72baaaa152c727e3b35530e`, contains 21 runtime blobs byte-for-byte identical to the gated artifact, and reports metadata version 0.1.18.
 
 0.1.18 moves the visible per-model video configuration surface out of the shared generic model card and into each owned Ark / Agent Plan Provider Source. The persistent Source switch only shows or hides the exact-Source selector; the canonical per-card transport value remains `volcengine_video_input_enabled`, hidden selections remain active, foreign Sources receive no field, and a failed host Source upsert restores the complete pre-call model-card state. Migration deliberately preserves the historical 0.1.17 exact-Source UI residue only when its encoded Source identity matches the card.
 
-0.1.17 established the distribution boundary after a real AstrBot Store installation exposed development files such as `.github/workflows/**` in the user ZIP. That historical release separated development state from the minimal user package and remains the basis for 0.1.18 publication.
+0.1.17 established the distribution boundary after a real AstrBot Store installation exposed development files such as `.github/workflows/**` in the user ZIP. That historical release separated development state from the minimal user package and remains the basis for the 0.1.18 publication path.
 
 The publication topology is:
 
 `main -> all-PR/main-push gate -> exact allow-list artifact -> unique candidate -> 4-cell native installer gate -> leased runtime promotion -> blocking 4-cell runtime recheck`.
 
-`metadata.yaml.repo` is bound to the stable `runtime` branch, which AstrBot supports as a `/tree/{branch}` repository source. For 0.1.18, merge and metadata changes alone are not publication proof: the regenerated artifact must load on supported AstrBot versions, the actual runtime branch/archive must report 0.1.18, and the native installer paths must pass before the marketplace-visible version is considered complete.
+`metadata.yaml.repo` is bound to the stable `runtime` branch, which AstrBot supports as a `/tree/{branch}` repository source. For 0.1.18, the regenerated artifact, actual runtime branch/archive, and native installer paths supplied that repository/runtime publication proof. External AstrBot Store refresh and a real Windows Store installation remain unobserved external state and must not be inferred from repository success.
+
+The first 0.1.18 publisher run exposed an operational-only cleanup bug after the validated runtime had already been promoted: its final candidate deletion ran outside a Git worktree. PR #5 fixed the cleanup execution context at main commit `9feb0d5902f4bdc88ea69b08f6d3bee25fcf8f2e` and made every remote-ref query fail closed. Main gate run `31590820116` and no-op publisher run `31590908018` then passed; the latter skipped runtime promotion because the 21-file tree was unchanged and removed the residual candidate branch. No `runtime-candidate-*` ref remains.
 
 ## AI intervention principle
 
