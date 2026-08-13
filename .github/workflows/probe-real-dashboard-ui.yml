@@ -1,4 +1,4 @@
-name: 0.1.19 Real AstrBot Dashboard Model-Field Evidence
+name: 0.1.20 Real AstrBot Dashboard Source-Scoped Video Evidence
 
 on:
   workflow_dispatch:
@@ -110,7 +110,7 @@ jobs:
           fi
           grep -E 'Loading plugin astrbot_plugin_volcengine_provider|Plugin astrbot_plugin_volcengine_provider|Volcengine providers registered' /tmp/astrbot-e2e.log > e2e-artifacts/plugin-runtime.log
           grep -q 'Volcengine providers registered' /tmp/astrbot-e2e.log
-      - name: Collect real 0.1.19 model-field presentation evidence
+      - name: Collect real 0.1.20 source-scoped video evidence
         env:
           ASTRBOT_E2E_URL: http://127.0.0.1:6185
           ASTRBOT_E2E_USERNAME: e2e-admin
@@ -149,6 +149,6 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: real-dashboard-model-fields-0.1.19
+          name: real-dashboard-source-scoped-video-0.1.20
           path: e2e-artifacts
           if-no-files-found: error
