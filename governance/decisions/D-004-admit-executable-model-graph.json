@@ -1,6 +1,13 @@
 {
   "schema_version": "0.1",
   "decision_id": "D-004",
+  "lifecycle": {
+    "status": "completed_warm_reference",
+    "action_authority": "none",
+    "completed_at": "2026-08-12",
+    "result": "strategy/executable-model-graph-v0.2.json",
+    "note": "The graph remains bounded evidence, not the current provider-release goal or an automatic routing command."
+  },
   "decision": "Create an executable-model graph that admits only exact model/mode edges proven in the current account, without converting one-sample latency or visual impressions into quality rankings.",
   "trigger": "D-002 and D-003 established exact runtime outcomes for all four supplied model IDs, including one exact-route rejection and several model-specific default differences.",
   "rights": {
@@ -49,5 +56,5 @@
     "does_existing_evidence_make_retesting_unnecessary": true,
     "if_retesting_is_needed_why": "only when invalidators fire or an unknown edge becomes load-bearing"
   },
-  "decision_result": "approved"
+  "decision_result": "completed"
 }

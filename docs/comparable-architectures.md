@@ -1,5 +1,7 @@
 # Comparable Architecture Review
 
+> **Lifecycle: COLD historical research.** This document explains a completed Seedance investigation and has no authority to create workflows, call external APIs, spend quota, or define the current provider-release architecture. Read `docs/PROJECT_STATE.json` for current work and `strategy/executable-model-graph-v0.2.json` for bounded model evidence.
+
 Purpose: prevent closed-door invention. This review compares mature systems only on structural questions relevant to this project: tool invocation, asset/resource transport, long-running tasks, credentials, failure recovery, and what should or should not be copied.
 
 ## 1. Model Context Protocol (MCP)
@@ -86,7 +88,7 @@ n8n treats workflow execution history and retry as first-class operational conce
 
 Using n8n only to reproduce our already-working GitHub Actions + Artifact path would add another runtime and another credential boundary. Also, its documented external binary storage feature is not a free-community primitive, so it should not be assumed to remove our constraints for free.
 
-## 4. GitHub Actions (current physical implementation)
+## 4. GitHub Actions (historical physical implementation)
 
 Official references:
 
@@ -138,15 +140,15 @@ This permits later replacement of GitHub without rewriting the capability semant
 5. Failure recovery requires execution metadata, not merely a final success/failure boolean.
 6. Capability negotiation/evidence should precede using an edge as executable infrastructure.
 
-### Current architectural decision
+### Historical architectural decision
 
 Do **not** introduce MCP, Pipedream, n8n, R2, or a new Asset Gateway merely to make the already-proven single-video path look more conventional.
 
-Instead:
+At that time, the project chose to:
 
-- keep GitHub Actions + GitHub binary/blob transport + Artifacts as the current physical backend;
+- keep GitHub Actions + GitHub binary/blob transport + Artifacts as the physical backend for the completed probes;
 - adopt MCP-like conceptual separation of Tool / Resource / Task / Authorization;
 - add explicit task/evidence metadata and narrow adapters;
 - introduce a new subsystem only after a concrete requirement is shown to be impossible or materially inefficient through the existing verified backend.
 
-This decision is conditional, not permanent. Its invalidators include demonstrated scaling, privacy, file-size, latency, concurrency, retention, or capability requirements that the current backend cannot satisfy within the intended use case.
+That decision was conditional, not permanent, and its one-off executable workflows have since been retired. Its historical invalidators included demonstrated scaling, privacy, file-size, latency, concurrency, retention, or capability requirements that the backend could not satisfy within the intended use case.

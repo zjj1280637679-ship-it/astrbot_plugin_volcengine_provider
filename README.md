@@ -10,10 +10,10 @@
 
 | 对象 | 当前结论 |
 |---|---|
-| 你可以安装的稳定版 | **0.1.19**，只从 `runtime` 分支安装 |
+| 你可以安装的稳定版 | **0.1.19**；稳定包来源是 `runtime`，入口可以是 AstrBot 商店或 `runtime.zip` |
 | 活跃发布候选 | **无** |
 | 0.1.20 原生 Video 勾选实验 | 已停止、未合并、未发布；不要当成更新版 |
-| AstrBot 商场刷新与 Windows 商场安装 | 必须实机观察，不能由 GitHub CI 代替 |
+| AstrBot 商场与 Windows 安装 | 商场已显示并提供 **v0.1.19**；Windows 商场安装和运行效果仍须实机验收 |
 
 机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)；实验失败与稳定发布成功是两个不同对象，不能相互覆盖。
 
@@ -56,7 +56,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-`0.1.19` 已在仓库与经过门禁验证的 `runtime` 分支发布；AstrBot 插件市场刷新与真实 Windows 商店安装仍属于尚未观察到的外部状态。如果市场已经显示 `0.1.19`，可以直接安装或更新；尚未刷新时，请按下面的最小运行包手动安装：
+`0.1.19` 已在仓库、经过门禁验证的 `runtime` 分支和 AstrBot 商店版本列表发布。商店是安装入口，`runtime` 是稳定包来源；商店标签本身不能代替下载件和运行效果验收。如果商店安装不可用，请按下面的最小运行包手动安装：
 
 1. 下载 [runtime.zip](https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip)。
 2. 解压 ZIP，把其中唯一的插件目录放入 AstrBot 的 `data/plugins/`；不要把 ZIP 原样塞进插件目录，也不要额外套一层目录。确认 `metadata.yaml` 与 `main.py` 位于插件目录根部。

@@ -1,6 +1,13 @@
 {
   "schema_version": "0.1",
   "decision_id": "D-005",
+  "lifecycle": {
+    "status": "completed_warm_reference",
+    "action_authority": "none",
+    "completed_at": "2026-08-12",
+    "result": "strategy/prompt-handle-registry-v0.1.json",
+    "note": "This classification may inform future work but does not authorize new generation probes."
+  },
   "decision": "Create a prompt/control handle registry that distinguishes hard API controls, official-example semantic handles, lower-tier implementation leads, and probabilistic quality hypotheses; do not run new generations yet.",
   "trigger": "The executable model graph is now established for the current exact IDs, and the user requested prompt handles/modalities/strategy. Existing official examples and E2E requests contain useful handles, but their causal/quality strength differs.",
   "rights": {
@@ -46,5 +53,5 @@
     "does_existing_evidence_make_retesting_unnecessary": true,
     "if_retesting_is_needed_why": "only quality/reliability handles need repeated testing when they become load-bearing"
   },
-  "decision_result": "approved"
+  "decision_result": "completed"
 }

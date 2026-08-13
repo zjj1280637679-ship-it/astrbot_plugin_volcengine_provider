@@ -178,6 +178,85 @@ def require_stable_workflow_identity() -> None:
         fail("ambiguous legacy Dashboard workflow filename must stay retired")
 
 
+def require_no_active_paid_probes() -> None:
+    """Historical paid probes must not remain executable in active CI."""
+
+    workflow_root = ROOT / ".github/workflows"
+    forbidden = {
+        "HUOSHANYINQINGAPI": "real credential",
+        "contents/generations/tasks": "paid generation endpoint",
+        "seedance": "retired Seedance probe",
+        "refactor/0.1.15-feedback-boundary": "retired branch trigger",
+    }
+    for workflow in sorted(workflow_root.glob("*.y*ml")):
+        text = workflow.read_text("utf-8")
+        for marker, label in forbidden.items():
+            if marker.lower() in text.lower():
+                fail(
+                    f"{workflow.relative_to(ROOT)} contains active-looking "
+                    f"{label}: {marker}"
+                )
+
+    retired = ROOT / ".github/workflows/real-volcengine-runtime-matrix.yml"
+    if retired.exists():
+        fail("real Volcengine attribution probe must remain retired from active CI")
+
+
+def require_historical_decision_lifecycle() -> None:
+    """Completed decisions retain evidence but cannot look like live commands."""
+
+    decision_root = ROOT / "governance/decisions"
+    for path in sorted(decision_root.glob("D-*.json")):
+        try:
+            record = json.loads(path.read_text("utf-8"))
+        except Exception as exc:
+            fail(f"invalid governance decision JSON in {path.relative_to(ROOT)}: {exc}")
+        lifecycle = record.get("lifecycle")
+        if not isinstance(lifecycle, dict):
+            fail(f"{path.relative_to(ROOT)} must declare lifecycle")
+        status = str(lifecycle.get("status") or "")
+        if not status.startswith("completed_"):
+            fail(f"{path.relative_to(ROOT)} has active-looking lifecycle {status!r}")
+        if lifecycle.get("action_authority") != "none":
+            fail(f"{path.relative_to(ROOT)} must not authorize new actions")
+
+
+def require_cold_evidence_markers() -> None:
+    """A superseded pre-probe snapshot must announce that fact before details."""
+
+    relative = "evidence/model-objective-conditions.md"
+    text = (ROOT / relative).read_text("utf-8")
+    opening = "\n".join(text.splitlines()[:8])
+    for marker in (
+        "historical pre-probe snapshot",
+        "Lifecycle: COLD / non-action-driving",
+        "strategy/executable-model-graph-v0.2.json",
+        "docs/PROJECT_STATE.json",
+    ):
+        if marker not in opening:
+            fail(f"{relative} must expose cold lifecycle marker: {marker}")
+
+    architecture = "docs/comparable-architectures.md"
+    architecture_opening = "\n".join(
+        (ROOT / architecture).read_text("utf-8").splitlines()[:8]
+    )
+    for marker in (
+        "Lifecycle: COLD historical research",
+        "docs/PROJECT_STATE.json",
+        "no authority to create workflows",
+    ):
+        if marker not in architecture_opening:
+            fail(f"{architecture} must expose cold lifecycle marker: {marker}")
+
+    duplicate_assets = (
+        "assets/seedance_test/qqshow_smug_reference.jpg",
+        "assets/seedance_tests/qqshow_smug_frame_20260812.jpg",
+    )
+    present = [path for path in duplicate_assets if (ROOT / path).exists()]
+    if present:
+        fail(f"unreferenced duplicate Seedance assets returned: {present}")
+
+
 def main() -> int:
     version = metadata_version()
     state = read_json("docs/PROJECT_STATE.json")
@@ -246,6 +325,9 @@ def main() -> int:
     reject_active_release_version_literals()
     require_pinned_external_actions()
     require_stable_workflow_identity()
+    require_no_active_paid_probes()
+    require_historical_decision_lifecycle()
+    require_cold_evidence_markers()
 
     if not (ROOT / "docs/archive/README.md").is_file():
         fail("docs/archive/README.md is required for explicit cold-zone semantics")

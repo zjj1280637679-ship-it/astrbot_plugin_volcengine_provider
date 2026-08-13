@@ -8,7 +8,7 @@
     "active_release_candidate": null,
     "safe_development_branch": "main",
     "safe_install_branch": "runtime",
-    "marketplace_refresh": "unmeasured",
+    "marketplace_refresh": "observed_0.1.19_published",
     "windows_marketplace_install": "unmeasured"
   },
   "development": {
@@ -16,7 +16,7 @@
     "branch": "main",
     "track": "stable",
     "status": "released_repository_and_runtime",
-    "releaseable": true
+    "installable": true
   },
   "published_baseline": {
     "version": "0.1.19",
@@ -30,22 +30,26 @@
     "status": "passed"
   },
   "current_goal": {
-    "id": "0.1.19-external-distribution-observation",
-    "goal": "Keep 0.1.19 as the only stable release while treating marketplace refresh and a real Windows marketplace installation as unmeasured until directly observed.",
+    "id": "0.1.19-marketplace-install-and-runtime-acceptance",
+    "goal": "Keep the repository unambiguous, then install the published 0.1.19 package from the AstrBot marketplace into the approved Windows Launcher instance and verify that it loads and works through its real provider paths.",
     "non_goals": [
       "Do not resume or publish the stopped 0.1.20 Video-checkbox experiment.",
-      "Do not infer marketplace or Windows installation state from GitHub CI.",
+      "Do not infer marketplace package identity, Windows installation, or runtime behavior from GitHub CI alone.",
       "Do not modify AstrBot shared modalities to express a provider-specific option."
     ]
   },
   "active_validation_frontier": {
     "release": "0.1.19",
-    "name": "external_distribution_observation",
-    "current_stage": "repository_and_runtime_published_external_states_unmeasured",
+    "name": "marketplace_install_and_runtime_acceptance",
+    "current_stage": "marketplace_lists_0.1.19_windows_store_install_unmeasured",
     "next_actions": [
-      "Observe the AstrBot marketplace version directly before calling it refreshed.",
-      "Record a Windows marketplace installation only after a real install, full AstrBot restart, provider-card check, and log check.",
+      "Download 0.1.19 through the AstrBot marketplace rather than treating the listing label as package-identity proof.",
+      "Record a Windows marketplace installation only after a real install, full AstrBot restart, provider registration check, model-list check, log check, and one real request through the configured provider.",
       "Start any future feature as a separate experiment object and workflow; do not rewrite the stable 0.1.19 verdict."
+    ],
+    "observed": [
+      "AstrBot Cloud version tab showed v0.1.19 as Published on 2026-08-14.",
+      "The marketplace documentation snapshot still contained older 0.1.18 wording, so documentation freshness is not package-identity proof."
     ]
   },
   "closed_experiments": [

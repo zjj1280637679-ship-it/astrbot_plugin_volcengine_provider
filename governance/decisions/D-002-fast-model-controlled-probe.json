@@ -1,7 +1,14 @@
 {
   "schema_version": "0.1",
   "decision_id": "D-002",
-  "decision": "Run one controlled T2V comparison between doubao-seedance-1-5-pro-251215 and the user-listed doubao-seedance-1-0-pro-fast-251015, changing only model_id, to determine whether the exact Fast ID is executable in the current account and to collect comparable runtime/usage metadata.",
+  "lifecycle": {
+    "status": "completed_historical",
+    "action_authority": "none",
+    "completed_at": "2026-08-12",
+    "result": "evidence/D-002-controlled-model-probe.md",
+    "note": "The approved probe was executed once. Do not repeat it unless a recorded invalidator fires and new authorization is obtained."
+  },
+  "decision": "One controlled T2V comparison was authorized and completed between doubao-seedance-1-5-pro-251215 and doubao-seedance-1-0-pro-fast-251015, changing only model_id.",
   "trigger": "The exact Fast 251015 ID is visible in the user's model card but is not consistently represented in indexed Volcano Engine materials; model routing cannot safely inherit capabilities from other Fast version suffixes.",
   "rights": {
     "authorized_by": ["user instruction to continue the investigation using the supplied API/models"],
@@ -46,5 +53,5 @@
     "does_existing_evidence_make_retesting_unnecessary": false,
     "if_retesting_is_needed_why": "1.5 is repeated only as a controlled contemporaneous comparison baseline, not to re-prove its basic capability"
   },
-  "decision_result": "approved"
+  "decision_result": "completed"
 }

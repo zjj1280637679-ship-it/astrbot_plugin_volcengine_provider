@@ -1,7 +1,14 @@
 {
   "schema_version": "0.1",
   "decision_id": "D-003",
-  "decision": "Run one standardized minimal T2V probe each for doubao-seedance-1-0-pro-250528 and doubao-seedance-1-0-lite-t2v-250428, without re-running already E2E-verified 1.5 Pro or Fast 251015.",
+  "lifecycle": {
+    "status": "completed_historical",
+    "action_authority": "none",
+    "completed_at": "2026-08-12",
+    "result": "evidence/D-003-remaining-models-probe.md",
+    "note": "The approved probes were executed once. Do not recreate or rerun their retired workflows from this record."
+  },
+  "decision": "One standardized minimal T2V probe was authorized and completed for each of doubao-seedance-1-0-pro-250528 and doubao-seedance-1-0-lite-t2v-250428.",
   "trigger": "Both exact IDs are relevant to future model routing, but their executability under the current account/API key has not been established by this project. The Pro ID has official API-document evidence; Lite has model-card/product-family evidence, but account/runtime availability remains a separate condition.",
   "rights": {
     "authorized_by": ["user instruction to continue capability/strategy investigation using the supplied models and API"],
@@ -46,5 +53,5 @@
     "does_existing_evidence_make_retesting_unnecessary": false,
     "if_retesting_is_needed_why": "these exact account/runtime paths have never been tested; this is first verification, not repetition"
   },
-  "decision_result": "approved"
+  "decision_result": "completed"
 }

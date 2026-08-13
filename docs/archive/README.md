@@ -14,3 +14,5 @@ Rules:
 ## Retired executable probes
 
 Completed one-off Seedance workflows were removed from `.github/workflows` on 2026-08-14 so they no longer appear as active project operations or risk accidental paid execution. Their conclusions remain in `evidence/`, their decisions remain in `governance/`, and their exact executable definitions remain recoverable from Git history. Historical executability is not current workflow authority.
+
+The older `real-volcengine-runtime-matrix.yml` was retired for the same reason: it referenced a dead development branch and a real credential, so leaving it executable would turn historical attribution evidence into an accidental paid-action surface. Two byte-identical, now-unreferenced Seedance test images were also removed from the active tree; their bytes remain recoverable from Git history.
