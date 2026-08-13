@@ -4,7 +4,7 @@ desc: "别让你的 AI 在 QQ 里只会看字。QQ 语音会在可靠转换后�
 short_desc: "让你的 AI 直接听懂 QQ 语音、看懂本轮及引用的视频；无需另配 STT 或第二套对话模型，普通 API 与 Agent Plan 两条通道互不混线。"
 version: "0.1.19"
 astrbot_version: ">=4.26.1"
-author: zjj1280637679-ship-it
+author: "羊膜大人"
 repo: "https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/tree/runtime"
 category: 三方集成
 tags:
