@@ -2,7 +2,7 @@
 
 Lifecycle role: **WARM entry point**. This file provides stable ownership and navigation rules only.
 
-**HOT/current state authority: `docs/PROJECT_STATE.json`.** Do not reconstruct the current release goal, blocker, or validation frontier from this file, README, CHANGELOG, old PR text, or historical test output. Read `docs/KNOWLEDGE_LIFECYCLE.md` for HOT/WARM/COLD rules.
+**HOT/current state authority: `docs/PROJECT_STATE.json`.** Read its `verdict` first. If `active_release_candidate` is `null`, no branch, PR, local package, green sub-job, or historical workflow is a release candidate. Do not reconstruct the current release goal from README, CHANGELOG, PR text, branch names, or isolated test output.
 
 ## What this project is
 
@@ -10,19 +10,20 @@ This repository implements Volcengine Ark providers for AstrBot. It adapts Volce
 
 ## Read in this order
 
-1. `docs/PROJECT_STATE.json` — current version, goal, strategy, blockers/frontier.
-2. `docs/KNOWLEDGE_LIFECYCLE.md` — HOT/WARM/COLD demotion, invalidators, superseded/rejected rules.
-3. `docs/AI_RULES.md` — safe modification and ownership rules.
-4. `docs/KNOWLEDGE_BOUNDARY.md` — interaction/evidence/judgment boundary.
-5. `docs/RELEASE_BOUNDARY.md` — development repository versus user runtime package.
-6. `docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md` — minimal-runtime packaging/marketplace rules.
-7. `docs/AI_ONBOARDING.md` — project map and safe workflow.
-8. `docs/TEST_HISTORY.md` — historical validations that remain evidence within their premises.
-9. `docs/REGRESSION_SCOPE.md` — when historical evidence becomes stale and must be rerun.
-10. `docs/DESIGN_DECISIONS.md` and `docs/ADR/` — stable constraints and rejected strategies.
-11. `docs/CAPABILITY_BOUNDARY.md` — adapter/model/system capability boundaries.
-12. `docs/E2E_MATRIX.md` — validation layers and evidence ledger.
-13. `capabilities/SEMANTICS.json` — machine-readable capability/feedback semantics.
+1. `docs/PROJECT_STATE.json` — current verdict, stable release, active candidate, frontier, and stopped experiments.
+2. `docs/AI_ONBOARDING.md` — choose the one subsystem relevant to the task.
+3. `docs/AI_RULES.md` and `docs/KNOWLEDGE_LIFECYCLE.md` — modification and lifecycle rules.
+4. Only then read the specific ADR, test, release rule, or runtime module linked by the project map.
+
+Do not bulk-read every historical document before identifying the affected object. More context is not automatically more authority.
+
+## Status and evidence identity
+
+- **Stable release**, **active candidate**, **external observation**, and **experiment** are different objects. Never combine their pass/fail receipts into one verdict.
+- A feature branch remains an experiment until every blocking acceptance condition passes and `PROJECT_STATE.verdict.active_release_candidate` names it explicitly.
+- A workflow file has one evidence identity. A new experiment must add a clearly named `EXPERIMENT` workflow; it must not repurpose a stable workflow and inherit its historical name.
+- A green runtime-load job proves loading only. A green create-dialog check does not prove save/reopen persistence. A GitHub release result does not prove marketplace refresh.
+- Stopped experiments move to `docs/archive/` and remain non-action-driving unless their recorded resume condition is satisfied.
 
 ## Non-negotiable ownership boundaries
 
@@ -45,6 +46,7 @@ Do not overgeneralize the 0.1.18 Source-UI decision.
 
 - The shared **top capability/modalities** surface is not a reliable provider-specific extension boundary for the fifth video capability checkbox/icon.
 - Ordinary **saved-model edit-body rows** can be provider-specific when the owned Source/model identity is known and the fields are projected only onto owned model copies.
+- The closed 0.1.20 private-dialog-clone experiment achieved create-dialog isolation but failed save/reopen completeness. It is archived evidence, not a current solution.
 
 ADR-0003 governs the first problem; ADR-0005 records the scope correction and knowledge-lifecycle rule.
 

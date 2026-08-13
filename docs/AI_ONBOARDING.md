@@ -2,7 +2,7 @@
 
 Lifecycle role: **WARM entry point**. This document explains stable project structure and working method. It is **not** the current release/goal authority.
 
-**Read `docs/PROJECT_STATE.json` for the current version, branch, goal, strategy, blockers, and validation frontier.** Read `docs/KNOWLEDGE_LIFECYCLE.md` before treating older present-tense text as action-driving.
+**Read the `verdict` object in `docs/PROJECT_STATE.json` first.** It tells you separately which release is stable, whether a release candidate exists, which external states remain unmeasured, and which experiments are stopped. Read `docs/KNOWLEDGE_LIFECYCLE.md` before treating older present-tense text as action-driving.
 
 ## Purpose
 
@@ -24,6 +24,7 @@ This document lets an AI or new maintainer reconstruct the project quickly witho
 | Stable design decisions | Objective conditions, constraints, rejected strategies | `docs/DESIGN_DECISIONS.md`, `docs/ADR/` |
 | Decision navigation | WARM index only; never current-state authority | `docs/DECISION_INDEX.json` |
 | Cold state | Completed/superseded release-state summaries | `docs/archive/` |
+| Stopped 0.1.20 Video-checkbox experiment | Partial passes, blocking failure, stop condition | `docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md` |
 | Provider runtime | AstrBot provider integration and Ark/Agent Plan calls | `providers.py`, `main.py` |
 | Media adapters | Last-mile audio/video payload construction | `adapters/audio.py`, `adapters/video.py` |
 | Input failure provenance | Distinguish local transport failure from upstream/model response | `adapters/errors.py` |
@@ -34,6 +35,7 @@ This document lets an AI or new maintainer reconstruct the project quickly witho
 | Machine semantics | Stable meanings for capability/feedback/config fields | `capabilities/SEMANTICS.json` |
 | Persistent regressions | Current contract tests | `tests/test_*` |
 | Product-path evidence | Host integration, UI evidence, real API attribution | `docs/E2E_MATRIX.md` |
+| Historical model/video research | Preserved observations and decisions; no active workflow authority | `evidence/`, `governance/`, `strategy/` |
 
 ## Stable objective conditions
 
@@ -44,7 +46,8 @@ These conditions survive individual release goals unless a later ADR explicitly 
 - AstrBot owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and shared Dashboard rendering.
 - Capability icons/metadata are incomplete feedback surfaces, not a complete model-capability truth table.
 - A model may support a modality while the complete QQ/NapCat/AstrBot/provider transport path is broken; a raw synthetic fixture is not equivalent to the product path.
-- The shared **top capability/modalities** surface is not a safe provider-specific extension boundary for the fifth Volcengine video capability control. The 0.1.18 Source UI remains the solution for that specific problem.
+- The shared **top capability/modalities** surface is not a safe provider-specific extension boundary for the fifth Volcengine video capability control. The stable 0.1.18/0.1.19 Source UI remains the released solution for that specific problem.
+- The stopped 0.1.20 private-dialog-clone experiment made `Video` visible only on owned create dialogs, but the saved owned cards lost the matching video mode row after reopen. Do not cite its create-dialog pass as a complete feature or resume it without satisfying its archived reconsideration condition.
 - This does **not** imply that ordinary saved-model edit-body rows are impossible. 0.1.19 uses a narrower owned-model projection path for ordinary horizontal request settings; see ADR-0005 and `PROJECT_STATE`.
 - Historical QQ-oriented media validation is retained and re-run by dependency impact, not by release number alone.
 
@@ -74,7 +77,7 @@ These are not a replacement for the current strategy in `PROJECT_STATE`; they co
 
 ## Safe AI workflow
 
-1. Read `PROJECT_STATE` first, then `KNOWLEDGE_LIFECYCLE`, `AI_RULES`, `KNOWLEDGE_BOUNDARY`, this document, and the relevant ADR/regression history.
+1. Read `PROJECT_STATE.verdict` first, then this project map. Load only the relevant lifecycle/rule/ADR/test documents for the affected object.
 2. Inspect the current branch and changed-file impact before proposing abstractions.
 3. For every arrow in a proposed flow, identify the concrete host/plugin/upstream interface that carries it. If unknown, run a minimal existence experiment first.
 4. Search AstrBot-native precedent before inventing a plugin-side mechanism.

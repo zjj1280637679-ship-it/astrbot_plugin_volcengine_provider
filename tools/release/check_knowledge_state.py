@@ -106,6 +106,78 @@ def require_pinned_external_actions() -> None:
                 )
 
 
+def require_status_identity(state: dict, version: str) -> None:
+    """Keep stable, candidate and stopped-experiment receipts disjoint."""
+
+    verdict = state.get("verdict")
+    if not isinstance(verdict, dict):
+        fail("PROJECT_STATE.verdict must be an object")
+
+    candidate = verdict.get("active_release_candidate")
+    development = state.get("development")
+    if not isinstance(development, dict):
+        fail("PROJECT_STATE.development must be an object")
+
+    if candidate is None:
+        if verdict.get("stable_release") != version:
+            fail(
+                "no active candidate: metadata must match verdict.stable_release: "
+                f"metadata={version!r} stable={verdict.get('stable_release')!r}"
+            )
+        if development.get("track") != "stable":
+            fail("no active candidate: development.track must be stable")
+        readme = (ROOT / "README.md").read_text("utf-8")
+        if f"你可以安装的稳定版 | **{version}**" not in readme:
+            fail("README stable status must match metadata version")
+        if "活跃发布候选 | **无**" not in readme:
+            fail("README must state that no active release candidate exists")
+    elif not isinstance(candidate, dict):
+        fail("verdict.active_release_candidate must be null or an object")
+    else:
+        if str(candidate.get("version")) != version:
+            fail("active release candidate must match metadata version")
+        if candidate.get("releaseable") is not True:
+            fail("an active release candidate must explicitly be releaseable")
+
+    experiments = state.get("closed_experiments", [])
+    if not isinstance(experiments, list):
+        fail("PROJECT_STATE.closed_experiments must be a list")
+    for experiment in experiments:
+        if not isinstance(experiment, dict):
+            fail("every closed experiment must be an object")
+        experiment_id = str(experiment.get("id") or "<missing-id>")
+        if experiment.get("releaseable") is not False:
+            fail(f"closed experiment {experiment_id} must be releaseable=false")
+        if experiment.get("status") not in {
+            "stopped_after_failure_limit",
+            "historical",
+            "superseded",
+            "rejected",
+            "invalidated",
+        }:
+            fail(f"closed experiment {experiment_id} has an active-looking status")
+        archive = str(experiment.get("archive") or "")
+        if not archive.startswith("docs/archive/") or not (ROOT / archive).is_file():
+            fail(f"closed experiment {experiment_id} must point to a cold archive")
+
+
+def require_stable_workflow_identity() -> None:
+    """A stable regression workflow must not be repurposed by experiments."""
+
+    stable = ROOT / ".github/workflows/stable-0.1.19-dashboard-regression.yml"
+    if not stable.is_file():
+        fail("stable 0.1.19 Dashboard regression workflow is missing")
+    text = stable.read_text("utf-8")
+    if "name: Stable 0.1.19 Dashboard Regression" not in text:
+        fail("stable Dashboard workflow identity changed")
+    if "browser_matrix_0_1_19.py" not in text:
+        fail("stable Dashboard workflow no longer runs the 0.1.19 baseline")
+    if "0.1.20" in text or "EXPERIMENT" in text:
+        fail("stable Dashboard workflow contains experimental identity")
+    if (ROOT / ".github/workflows/probe-real-dashboard-ui.yml").exists():
+        fail("ambiguous legacy Dashboard workflow filename must stay retired")
+
+
 def main() -> int:
     version = metadata_version()
     state = read_json("docs/PROJECT_STATE.json")
@@ -122,6 +194,8 @@ def main() -> int:
             "metadata/PROJECT_STATE version drift: "
             f"metadata={version!r} development={development.get('version')!r}"
         )
+
+    require_status_identity(state, version)
 
     frontier = state.get("active_validation_frontier")
     if not isinstance(frontier, dict):
@@ -171,6 +245,7 @@ def main() -> int:
 
     reject_active_release_version_literals()
     require_pinned_external_actions()
+    require_stable_workflow_identity()
 
     if not (ROOT / "docs/archive/README.md").is_file():
         fail("docs/archive/README.md is required for explicit cold-zone semantics")

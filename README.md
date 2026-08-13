@@ -6,6 +6,17 @@
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+## 当前状态（先看这里）
+
+| 对象 | 当前结论 |
+|---|---|
+| 你可以安装的稳定版 | **0.1.19**，只从 `runtime` 分支安装 |
+| 活跃发布候选 | **无** |
+| 0.1.20 原生 Video 勾选实验 | 已停止、未合并、未发布；不要当成更新版 |
+| AstrBot 商场刷新与 Windows 商场安装 | 必须实机观察，不能由 GitHub CI 代替 |
+
+机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)；实验失败与稳定发布成功是两个不同对象，不能相互覆盖。
+
 装上这款插件，QQ 语音会在可靠转换后，连同完整聊天上下文交给你正在使用的火山方舟主模型；本轮发送或引用的视频，也能由同一个模型看懂并继续回应。你不需要另配 STT、转录模型，也不用再搭建一条互相失忆的旁路。
 
 插件同时为 AstrBot 补齐普通 API 与 Agent Plan 两张独立供应商卡：图片、音频与工具继续使用 AstrBot 原生模型能力；视频请求通道仍逐模型保存，但在对应火山供应商 Source 页面集中勾选；密钥、端点与计费互不混线。让你的 AstrBot 不只是“接入火山方舟”，而是真正在 QQ 对话中获得听、看、理解与回应的能力。

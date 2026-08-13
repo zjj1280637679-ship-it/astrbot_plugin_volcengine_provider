@@ -10,6 +10,8 @@ This document defines one lifecycle so requirements, goals, evidence, and strate
 
 `docs/PROJECT_STATE.json` is the **only HOT authority for current development state**.
 
+Its `verdict` keeps stable release, active release candidate, external observation, and experiment as separate identities. A pass or failure attached to one identity must never be promoted to another identity.
+
 It owns only information that can legitimately answer questions such as:
 
 - What version/branch is being developed now?
@@ -75,6 +77,7 @@ For machine-readable objects, prefer these states:
 - `superseded`
 - `rejected`
 - `invalidated`
+- `stopped_after_failure_limit`
 
 When useful, record:
 
@@ -109,6 +112,10 @@ A goal that was correct for an earlier release becomes cold when the active rele
 
 Rejected strategies stay recorded with the counterexample/reason that killed them. They are not silently deleted, but they are also not eligible for implementation unless a stated `reconsider_if` condition fires.
 
+### Half-closed experiment / 半闭环实验
+
+An experiment is not a release candidate merely because some layers passed. If a blocking transition remains open, record the passed and failed objects separately, set `releaseable: false`, and move the experiment to `docs/archive/` when its stop condition fires. A later green job in an unrelated layer does not reopen it.
+
 ## Document roles
 
 - `docs/PROJECT_STATE.json` — **HOT** current state only.
@@ -128,6 +135,7 @@ Rejected strategies stay recorded with the counterexample/reason that killed the
 4. New evidence -> record domain + premises + invalidators; do not promote it to HOT unless it changes the next action.
 5. Superseded strategy -> mark `superseded_by`; do not leave two versions looking equally current.
 6. Rejected strategy -> preserve reason/counterexample; do not erase it.
+7. Experimental workflow -> use a new `EXPERIMENT` workflow identity; never rewrite a stable workflow and inherit its historical name.
 
 ## CI guard
 
@@ -135,6 +143,8 @@ Rejected strategies stay recorded with the counterexample/reason that killed the
 
 - `metadata.yaml` candidate version matches `docs/PROJECT_STATE.json` development version;
 - the active validation frontier belongs to that same development version;
+- `PROJECT_STATE.verdict` names at most one active release candidate;
+- stopped experiments are explicitly non-releaseable and point to a cold archive record;
 - `docs/DECISION_INDEX.json` points to `PROJECT_STATE` and does not duplicate an active frontier;
 - warm entry documents acknowledge `PROJECT_STATE` as the hot-state authority.
 
