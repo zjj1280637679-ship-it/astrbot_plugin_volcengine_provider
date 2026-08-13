@@ -196,6 +196,23 @@ async def video_modality_control(dialog: Locator) -> Locator:
     )
 
 
+async def enable_video_modality(dialog: Locator) -> None:
+    """Activate Video through Vuetify's visible label, like a real user click."""
+
+    control = await video_modality_control(dialog)
+    control_id = await control.get_attribute("id")
+    if not control_id:
+        raise AssertionError("native Video checkbox has no label target id")
+    row = await row_for_key(dialog, "modalities")
+    label = row.locator(f'label[for="{control_id}"]')
+    if await label.count() != 1:
+        raise AssertionError(
+            f"native Video checkbox has no unique visible label for id={control_id!r}"
+        )
+    await label.click()
+    await expect(control).to_be_checked(timeout=5_000)
+
+
 async def assert_video_modality_scope(
     dialog: Locator, *, expected: bool, case_name: str
 ) -> list[dict[str, Any]]:
@@ -365,9 +382,7 @@ async def run_case(page: Page, case) -> dict[str, Any]:
         result["model_create_rows"] = create_rows
         result["model_create_modalities"] = create_options
         if case.owned:
-            video_control = await video_modality_control(create_dialog)
-            await video_control.set_checked(True, force=True)
-            await expect(video_control).to_be_checked(timeout=5_000)
+            await enable_video_modality(create_dialog)
             result["stages"]["model_video_selected"] = True
         await page.screenshot(
             path=str(case_dir / "01-model-create-host-native.png"), full_page=True
