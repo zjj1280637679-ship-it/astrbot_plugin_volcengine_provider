@@ -31,9 +31,9 @@ _DASHBOARD_ASSET_LEASE_COUNT = 0
 _RESOLVE_WRAPPER: Callable[..., Any] | None = None
 _RESOLVE_ORIGINAL: Callable[..., Any] | None = None
 _CACHE_ROOT: Path | None = None
-_COMPATIBLE_ASSET: Path | None = None
 _CACHE: dict[Path, Path] = {}
 _MISSES: set[Path] = set()
+_STATIC_FOLDER_ASSETS: dict[Path, Path | None] = {}
 _LOCK = threading.RLock()
 
 # Current AstrBot emits this logic from useProviderModelConfigDialog.ts.  The
@@ -106,10 +106,39 @@ def _cache_root() -> Path:
     return _CACHE_ROOT
 
 
-def _adapt_static_asset(path: Path) -> Path:
+def _select_compatible_asset(static_folder: str | Path | None) -> Path | None:
+    """Resolve the one compatible asset from the Dashboard actually being served."""
+
+    if not static_folder:
+        return None
+    try:
+        static_root = Path(static_folder).resolve()
+    except (OSError, TypeError, ValueError):
+        return None
+
+    with _LOCK:
+        if static_root in _STATIC_FOLDER_ASSETS:
+            return _STATIC_FOLDER_ASSETS[static_root]
+
+        compatible: list[Path] = []
+        for candidate in (static_root / "assets").glob("*.js"):
+            try:
+                source = candidate.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                continue
+            transformed, matches = transform_dashboard_javascript(source)
+            if matches == 1 and transformed != source:
+                compatible.append(candidate.resolve())
+
+        selected = compatible[0] if len(compatible) == 1 else None
+        _STATIC_FOLDER_ASSETS[static_root] = selected
+        return selected
+
+
+def _adapt_static_asset(path: Path, *, compatible_asset: Path) -> Path:
     resolved = path.resolve()
     with _LOCK:
-        if _COMPATIBLE_ASSET is None or resolved != _COMPATIBLE_ASSET:
+        if resolved != compatible_asset:
             return resolved
         cached = _CACHE.get(resolved)
         if cached is not None and cached.is_file():
@@ -139,8 +168,6 @@ def acquire_dashboard_asset_bridge() -> bool:
     """Install the reversible static-file resolver wrapper when AstrBot has it."""
 
     global _DASHBOARD_ASSET_LEASE_COUNT, _RESOLVE_WRAPPER, _RESOLVE_ORIGINAL
-    global _COMPATIBLE_ASSET
-
     if _DASHBOARD_ASSET_LEASE_COUNT:
         _DASHBOARD_ASSET_LEASE_COUNT += 1
         return True
@@ -151,25 +178,6 @@ def acquire_dashboard_asset_bridge() -> bool:
         StaticFileService = static_file_service.StaticFileService
     except (ImportError, ModuleNotFoundError):
         return False
-
-    module_file = Path(str(getattr(static_file_service, "__file__", "")))
-    try:
-        core_root = module_file.resolve().parents[3]
-    except (OSError, IndexError):
-        return False
-    assets_root = core_root / "data" / "dist" / "assets"
-    compatible: list[Path] = []
-    for candidate in assets_root.glob("*.js"):
-        try:
-            source = candidate.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            continue
-        transformed, matches = transform_dashboard_javascript(source)
-        if matches == 1 and transformed != source:
-            compatible.append(candidate.resolve())
-    if len(compatible) != 1:
-        return False
-    _COMPATIBLE_ASSET = compatible[0]
 
     current = getattr(StaticFileService, "resolve_static_file", None)
     if getattr(current, "_volcengine_dashboard_asset_wrapper", False):
@@ -185,7 +193,13 @@ def acquire_dashboard_asset_bridge() -> bool:
         original_path = current(self, static_folder, requested_path)
         if not isinstance(original_path, Path):
             return original_path
-        return _adapt_static_asset(original_path)
+        compatible_asset = _select_compatible_asset(static_folder)
+        if compatible_asset is None:
+            return original_path
+        return _adapt_static_asset(
+            original_path,
+            compatible_asset=compatible_asset,
+        )
 
     resolve_wrapper._volcengine_dashboard_asset_wrapper = True  # type: ignore[attr-defined]
     resolve_wrapper._volcengine_dashboard_asset_original = current  # type: ignore[attr-defined]
@@ -199,7 +213,7 @@ def release_dashboard_asset_bridge() -> None:
     """Restore AstrBot's resolver and delete only this bridge's temporary copy."""
 
     global _DASHBOARD_ASSET_LEASE_COUNT, _RESOLVE_WRAPPER, _RESOLVE_ORIGINAL
-    global _CACHE_ROOT, _COMPATIBLE_ASSET
+    global _CACHE_ROOT
 
     if _DASHBOARD_ASSET_LEASE_COUNT <= 0:
         _DASHBOARD_ASSET_LEASE_COUNT = 0
@@ -225,7 +239,7 @@ def release_dashboard_asset_bridge() -> None:
         if _CACHE_ROOT is not None:
             shutil.rmtree(_CACHE_ROOT, ignore_errors=True)
         _CACHE_ROOT = None
-        _COMPATIBLE_ASSET = None
         _CACHE.clear()
         _MISSES.clear()
+        _STATIC_FOLDER_ASSETS.clear()
     _RESOLVE_ORIGINAL = _RESOLVE_WRAPPER = None

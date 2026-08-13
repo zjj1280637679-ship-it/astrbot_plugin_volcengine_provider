@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +11,7 @@ sys.path.insert(0, str(ROOT / "AstrBot" / "data" / "plugins"))
 
 from astrbot_plugin_volcengine_provider.capabilities.dashboard_asset_bridge import (
     _PATCH_MARKER,
+    _select_compatible_asset,
     transform_dashboard_javascript,
 )
 
@@ -72,6 +74,24 @@ console.log(JSON.stringify({ark:card("volcengine_ark_chat_completion"),plan:card
     ambiguous, duplicate_matches = transform_dashboard_javascript(original + original)
     assert duplicate_matches == 2
     assert ambiguous == original + original
+
+    # Asset discovery follows the runtime ``static_folder`` rather than assuming
+    # whether AstrBot selected data/dist, its bundled dist, or a custom WebUI.
+    with tempfile.TemporaryDirectory(prefix="volcengine-dashboard-scope-") as tmp:
+        dist = Path(tmp) / "served-dist"
+        assets = dist / "assets"
+        assets.mkdir(parents=True)
+        target = assets / "provider-dialog.js"
+        target.write_text(original, encoding="utf-8")
+        (assets / "unrelated.js").write_text("console.log('plain')", encoding="utf-8")
+        assert _select_compatible_asset(dist) == target.resolve()
+
+        ambiguous_dist = Path(tmp) / "ambiguous-dist"
+        ambiguous_assets = ambiguous_dist / "assets"
+        ambiguous_assets.mkdir(parents=True)
+        (ambiguous_assets / "a.js").write_text(original, encoding="utf-8")
+        (ambiguous_assets / "b.js").write_text(original, encoding="utf-8")
+        assert _select_compatible_asset(ambiguous_dist) is None
     print("DASHBOARD_ASSET_SCOPE_0_1_20=OK")
 
 
