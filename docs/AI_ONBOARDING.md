@@ -32,7 +32,7 @@ This document lets an AI or new maintainer reconstruct the project quickly witho
 | Agent Plan model listing | Agent Plan model-name discovery without model-ID capability priors | `metadata/agent_plan.py` |
 | Model-card request config | Volcengine-owned per-model request fields and migration | `capabilities/model_fields.py`, `capabilities/model_fields_bridge.py`, `capabilities/model_scope.py` |
 | 0.1.18 Source UI bridge | Owned-Source video presentation and Source-save translation | `registry.py` |
-| Machine semantics | Stable meanings for capability/feedback/config fields | `capabilities/SEMANTICS.json` |
+| Machine semantics | Development/audit meanings for capability/feedback/config fields; never runtime truth | `docs/contracts/SEMANTICS.json` |
 | Persistent regressions | Current contract tests | `tests/test_*` |
 | Product-path evidence | Host integration, UI evidence, real API attribution | `docs/E2E_MATRIX.md` |
 | Historical model/video research | Preserved observations and decisions; no active workflow authority | `evidence/`, `governance/`, `strategy/` |

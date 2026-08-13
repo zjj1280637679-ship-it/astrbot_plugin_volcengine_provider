@@ -11,13 +11,15 @@ The GitHub development repository is not the AstrBot installation package.
 
 The release system must transform the former into the latter; it must never simply rename the repository archive as a product package.
 
-## 2. AstrBot-compatible distribution source
+## 2. AstrBot-compatible distribution sources
 
 AstrBot plugin-market records support a GitHub `repo` pointing to a branch using:
 
 `https://github.com/{owner}/{repo}/tree/{branch}`
 
-AstrBot resolves that branch to a ZIP archive for installation. This project uses the stable branch `runtime` as the marketplace installation source.
+AstrBot resolves that branch to a ZIP archive for direct installation. This project uses the stable generated branch `runtime` for that path.
+
+AstrBot Cloud publication is a second surface. The 2026-08-14 `0.1.19` release snapshot was observed to freeze the default-branch commit rather than the branch named in `metadata.repo`. The project therefore does not infer Cloud package identity from the metadata URL: before publication, the default-branch export must be exactly equivalent to the allow-list runtime package; after publication, the real frozen Cloud ZIP must be downloaded and compared again.
 
 The installed archive must contain a valid `metadata.yaml` at the plugin archive root (or its single top-level repository directory), with non-empty `name`, `desc`, `version`, and `author` fields.
 
@@ -101,6 +103,7 @@ The runtime distribution gate runs for every pull request and every push to
 - no forbidden development paths;
 - no high-confidence secret patterns;
 - package size within policy;
+- exported default-branch inventory and bytes equal the allow-list runtime artifact;
 - all packaged Python files compile;
 - the package loads against supported AstrBot versions;
 - packaged Provider/Dashboard behavior contracts pass.
@@ -141,9 +144,9 @@ source is still current and runtime advances with an exact lease
         +
 promoted runtime passes the same four-cell matrix
         +
-marketplace source points to runtime
+default-branch export equals generated runtime bytes
         +
 version metadata matches
 ```
 
-Adding development files to `main` must not change the contents or size of `runtime` unless those files become explicitly necessary for execution.
+Adding development files to `main` must not change the exported package or the contents/size of `runtime` unless those files become explicitly necessary for execution.

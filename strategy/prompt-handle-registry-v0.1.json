@@ -1,5 +1,11 @@
 {
   "version": "0.1",
+  "lifecycle": {
+    "status": "warm",
+    "action_authority": "none",
+    "current_state_source": "docs/PROJECT_STATE.json",
+    "scope": "Bounded evidence vocabulary for prompt handles; not a current task list or permission to run probes."
+  },
   "principle": "A handle's presence in official examples proves accepted/recommended expression, not a quality success rate. Hard controls and probabilistic semantic handles are separated.",
   "hard_controls": {
     "model_id": {

@@ -18,7 +18,7 @@
     "invalidators": ["user revokes API/model testing authorization"],
     "verdict": "pass"
   },
-  "capability": {
+  "pre_probe_capability_snapshot": {
     "required_claim_ids": ["C-001"],
     "relation_classes": ["conditional_deterministic"],
     "strongest_evidence": "D/control-plane evidence before probe; runtime unknown",
@@ -45,13 +45,24 @@
     "useful_output": "exact executability plus observed default output/task metadata for the two remaining model IDs",
     "verdict": "pass"
   },
-  "epistemic_review": {
+  "pre_probe_epistemic_review": {
     "is_this_a_possibility_graph_edge_or_executable_graph_edge": "possibility edges until successful probe",
     "what_exact_claim_is_being_tested_or_used": "each exact model accepts and completes the standardized minimal 5-second 16:9 T2V request in the current account",
     "what_failure_would_falsify": "only that exact model/request/account path",
     "what_failure_would_not_falsify": "the product family, other versions, other modalities, or future entitlement changes",
     "does_existing_evidence_make_retesting_unnecessary": false,
     "if_retesting_is_needed_why": "these exact account/runtime paths have never been tested; this is first verification, not repetition"
+  },
+  "post_probe_result": {
+    "outcome": "Pro 250528 minimal T2V succeeded. Lite 250428 was rejected before task creation on the exact current account and Bearer route with InvalidEndpointOrModel.NotFound.",
+    "evidence": "evidence/D-003-remaining-models-probe.md",
+    "verified_domain": "exact model IDs, current tested account, standardized minimal T2V request",
+    "retest_required": false,
+    "remaining_unknowns": [
+      "whether Lite rejection means model absence or account entitlement absence",
+      "other Lite versions, routes, modalities, or future entitlements"
+    ],
+    "causal_limit": "Do not generalize the Lite result beyond this exact account/model/path or choose between the provider's two reported causes."
   },
   "decision_result": "completed"
 }

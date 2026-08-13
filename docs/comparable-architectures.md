@@ -98,7 +98,7 @@ Official references:
 
 ### Structural observations
 
-GitHub already supplies three useful physical primitives for the current project:
+At investigation time, GitHub supplied three useful physical primitives for that Seedance study:
 
 - Actions: remote execution of code and network calls.
 - Secrets: credential injection into selected workflows without placing the secret in repository source.
@@ -113,7 +113,7 @@ Our own E2E tests additionally established that the connected GitHub tool can:
 
 ### What GitHub is and is not
 
-GitHub is currently a successful **physical transport/execution backend**. It should not become the semantic model of the whole system.
+In that completed investigation, GitHub was a successful **physical transport/execution backend**. That historical fact does not make it the semantic model of the current provider project.
 
 Use conceptual layers above it:
 

@@ -471,7 +471,7 @@ def main() -> None:
         audio_adapter.normalize_ark_chat_audio = original_audio_normalize
 
     semantics = json.loads(
-        (ROOT / "capabilities" / "SEMANTICS.json").read_text("utf-8")
+        (ROOT / "docs" / "contracts" / "SEMANTICS.json").read_text("utf-8")
     )
     assert semantics["epistemic_contract"]["feedback_is_truth"] is False
     assert (

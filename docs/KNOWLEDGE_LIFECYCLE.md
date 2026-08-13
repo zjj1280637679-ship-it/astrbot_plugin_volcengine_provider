@@ -144,8 +144,11 @@ An experiment is not a release candidate merely because some layers passed. If a
 - `metadata.yaml` candidate version matches `docs/PROJECT_STATE.json` development version;
 - the active validation frontier belongs to that same development version;
 - `PROJECT_STATE.verdict` names at most one active release candidate;
+- an active experiment and an active release candidate cannot coexist;
+- an experiment is always `releaseable=false`; a release candidate is first `validating/releaseable=false` and becomes `ready/releaseable=true` only after every pre-publication blocker passes;
+- publication, unlike ordinary PR validation, requires a `ready` release candidate explicitly;
 - stopped experiments are explicitly non-releaseable and point to a cold archive record;
 - `docs/DECISION_INDEX.json` points to `PROJECT_STATE` and does not duplicate an active frontier;
 - warm entry documents acknowledge `PROJECT_STATE` as the hot-state authority.
 
-The guard is intentionally narrow. It should catch stale *authority*, not reject legitimate historical references to older versions.
+The guard is intentionally narrow. It catches stale *authority*, not legitimate historical references or the vocabulary needed by a future explicitly authorised workflow. Completed decisions are pinned inert; a future live decision is permitted only when the HOT current goal names its exact decision ID.

@@ -62,7 +62,7 @@ Runtime Python packages:
 - `compatibility/*.py`
 - `metadata/*.py`
 
-Files such as `capabilities/README.md` and `capabilities/SEMANTICS.json` are development/explanatory assets unless production code begins to load them explicitly.
+Files such as `capabilities/README.md` and `docs/contracts/SEMANTICS.json` are development/explanatory assets unless production code begins to load them explicitly.
 
 ## Never distribute by default
 
@@ -107,6 +107,11 @@ installable.
 
 ## Repository/source binding
 
-AstrBot officially accepts GitHub repository URLs with `/tree/{branch}` for plugin-market `repo` values. This project therefore binds marketplace/runtime installation to the stable `runtime` branch while keeping `main` as the development branch.
+AstrBot accepts GitHub repository URLs with `/tree/{branch}` for direct plugin installation, so this project keeps `runtime` as its generated stable installation branch. However, the AstrBot Cloud release observed on 2026-08-14 froze the repository's default-branch archive even though `metadata.repo` named `/tree/runtime`. A branch-shaped metadata URL is therefore not proof of which bytes Cloud froze.
 
-The `runtime` branch is generated. It must not become the place where development decisions, tests, or documentation are authored.
+The project treats two distribution surfaces separately:
+
+1. direct AstrBot/GitHub installation from generated `runtime`;
+2. AstrBot Cloud's frozen default-branch archive.
+
+Before publication, the exported default-branch archive must be path-and-byte equivalent to the allow-list runtime artifact. After publication, the downloaded Cloud ZIP must be compared again with promoted `runtime`. The `runtime` branch remains generated and must not become the place where development decisions, tests, or documentation are authored.

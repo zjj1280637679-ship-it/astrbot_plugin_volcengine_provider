@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import argparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -50,6 +51,31 @@ def require_hot_pointer(relative: str) -> None:
     text = (ROOT / relative).read_text("utf-8")
     if "docs/PROJECT_STATE.json" not in text:
         fail(f"{relative} must point readers to docs/PROJECT_STATE.json as HOT state")
+
+
+def require_readme_status_projection(state: dict, version: str) -> None:
+    """Prevent the human status table from drifting away from HOT state."""
+
+    readme = (ROOT / "README.md").read_text("utf-8")
+    stable = str(state["verdict"].get("stable_release") or "")
+    candidate = state["verdict"].get("active_release_candidate")
+    if f"version-{version}" not in readme:
+        fail("README version badge must match metadata version")
+    if f"| 你可以安装的稳定版 | **{stable}**" not in readme:
+        fail("README stable version must match PROJECT_STATE")
+    if candidate is None:
+        if "| 活跃发布候选 | **无**" not in readme:
+            fail("README must state that no release candidate exists")
+    elif f"| 活跃发布候选 | **{candidate.get('version')}**" not in readme:
+        fail("README candidate version must match PROJECT_STATE")
+    marketplace = state["verdict"].get("marketplace")
+    if isinstance(marketplace, dict) and marketplace.get("status") == "package_identity_mismatch":
+        listed = marketplace.get("listed_version")
+        expected = (
+            f"版本页显示 **v{listed} Published**，但冻结下载包与稳定 `runtime` 不一致"
+        )
+        if expected not in readme:
+            fail("README must expose the observed marketplace package mismatch")
 
 
 def reject_active_release_version_literals() -> None:
@@ -107,18 +133,23 @@ def require_pinned_external_actions() -> None:
 
 
 def require_status_identity(state: dict, version: str) -> None:
-    """Keep stable, candidate and stopped-experiment receipts disjoint."""
+    """Keep stable, development, candidate and experiment identities disjoint."""
 
     verdict = state.get("verdict")
     if not isinstance(verdict, dict):
         fail("PROJECT_STATE.verdict must be an object")
 
     candidate = verdict.get("active_release_candidate")
+    experiment = state.get("active_experiment")
     development = state.get("development")
     if not isinstance(development, dict):
         fail("PROJECT_STATE.development must be an object")
 
-    if candidate is None:
+    if candidate is not None and experiment is not None:
+        fail("active release candidate and active experiment cannot coexist")
+
+    readme = (ROOT / "README.md").read_text("utf-8")
+    if candidate is None and experiment is None:
         if verdict.get("stable_release") != version:
             fail(
                 "no active candidate: metadata must match verdict.stable_release: "
@@ -126,18 +157,36 @@ def require_status_identity(state: dict, version: str) -> None:
             )
         if development.get("track") != "stable":
             fail("no active candidate: development.track must be stable")
-        readme = (ROOT / "README.md").read_text("utf-8")
         if f"你可以安装的稳定版 | **{version}**" not in readme:
             fail("README stable status must match metadata version")
         if "活跃发布候选 | **无**" not in readme:
             fail("README must state that no active release candidate exists")
+    elif experiment is not None:
+        if not isinstance(experiment, dict):
+            fail("active_experiment must be null or an object")
+        if str(experiment.get("version")) != version:
+            fail("active experiment must match metadata version")
+        if experiment.get("releaseable") is not False:
+            fail("an active experiment must explicitly be releaseable=false")
+        if development.get("track") != "experiment":
+            fail("active experiment requires development.track=experiment")
+        if str(experiment.get("status")) not in {"active", "validating"}:
+            fail("active experiment must have active or validating status")
     elif not isinstance(candidate, dict):
         fail("verdict.active_release_candidate must be null or an object")
     else:
         if str(candidate.get("version")) != version:
             fail("active release candidate must match metadata version")
-        if candidate.get("releaseable") is not True:
-            fail("an active release candidate must explicitly be releaseable")
+        if development.get("track") != "release_candidate":
+            fail("active release candidate requires development.track=release_candidate")
+        status = str(candidate.get("status") or "")
+        releaseable = candidate.get("releaseable")
+        if status == "validating" and releaseable is not False:
+            fail("a validating release candidate must be releaseable=false")
+        if status == "ready" and releaseable is not True:
+            fail("a ready release candidate must be releaseable=true")
+        if status not in {"validating", "ready"}:
+            fail("active release candidate status must be validating or ready")
 
     experiments = state.get("closed_experiments", [])
     if not isinstance(experiments, list):
@@ -162,14 +211,14 @@ def require_status_identity(state: dict, version: str) -> None:
 
 
 def require_stable_workflow_identity() -> None:
-    """A stable regression workflow must not be repurposed by experiments."""
+    """The 0.1.19 compatibility baseline must not be repurposed by experiments."""
 
-    stable = ROOT / ".github/workflows/stable-0.1.19-dashboard-regression.yml"
+    stable = ROOT / ".github/workflows/compatibility-baseline-0.1.19-dashboard.yml"
     if not stable.is_file():
         fail("stable 0.1.19 Dashboard regression workflow is missing")
     text = stable.read_text("utf-8")
-    if "name: Stable 0.1.19 Dashboard Regression" not in text:
-        fail("stable Dashboard workflow identity changed")
+    if "name: 0.1.19 Compatibility Baseline Dashboard Regression" not in text:
+        fail("0.1.19 compatibility baseline workflow identity changed")
     if "browser_matrix_0_1_19.py" not in text:
         fail("stable Dashboard workflow no longer runs the 0.1.19 baseline")
     if "0.1.20" in text or "EXPERIMENT" in text:
@@ -179,33 +228,37 @@ def require_stable_workflow_identity() -> None:
 
 
 def require_no_active_paid_probes() -> None:
-    """Historical paid probes must not remain executable in active CI."""
+    """Exact retired side-effect workflows must not return as live controls.
 
-    workflow_root = ROOT / ".github/workflows"
-    forbidden = {
-        "HUOSHANYINQINGAPI": "real credential",
-        "contents/generations/tasks": "paid generation endpoint",
-        "seedance": "retired Seedance probe",
-        "refactor/0.1.15-feedback-boundary": "retired branch trigger",
+    Do not turn provider names, endpoints, or secret-variable names into global
+    forbidden words: an explicitly authorised future test may legitimately use
+    them.  Lifecycle is attached to a concrete workflow identity instead.
+    """
+
+    retired_workflows = {
+        "real-volcengine-runtime-matrix.yml",
+        "seedance-chat-transfer-test.yml",
+        "seedance-image-to-video-test.yml",
+        "seedance-model-controlled-probe.yml",
+        "seedance-pro-250528-i2v-probe.yml",
+        "seedance-qqshow-smug-sticker.yml",
+        "seedance-remaining-models-probe.yml",
     }
-    for workflow in sorted(workflow_root.glob("*.y*ml")):
-        text = workflow.read_text("utf-8")
-        for marker, label in forbidden.items():
-            if marker.lower() in text.lower():
-                fail(
-                    f"{workflow.relative_to(ROOT)} contains active-looking "
-                    f"{label}: {marker}"
-                )
-
-    retired = ROOT / ".github/workflows/real-volcengine-runtime-matrix.yml"
-    if retired.exists():
-        fail("real Volcengine attribution probe must remain retired from active CI")
+    present = sorted(
+        name for name in retired_workflows
+        if (ROOT / ".github/workflows" / name).exists()
+    )
+    if present:
+        fail(f"retired external-effect workflows returned: {present}")
 
 
-def require_historical_decision_lifecycle() -> None:
-    """Completed decisions retain evidence but cannot look like live commands."""
+def require_decision_lifecycle(state: dict) -> None:
+    """Completed decisions stay inert; live decisions must be named by HOT state."""
 
     decision_root = ROOT / "governance/decisions"
+    completed_ids = {f"D-{number:03d}" for number in range(1, 7)}
+    goal = state.get("current_goal")
+    active_ids = set(goal.get("active_decision_ids", [])) if isinstance(goal, dict) else set()
     for path in sorted(decision_root.glob("D-*.json")):
         try:
             record = json.loads(path.read_text("utf-8"))
@@ -215,10 +268,20 @@ def require_historical_decision_lifecycle() -> None:
         if not isinstance(lifecycle, dict):
             fail(f"{path.relative_to(ROOT)} must declare lifecycle")
         status = str(lifecycle.get("status") or "")
-        if not status.startswith("completed_"):
-            fail(f"{path.relative_to(ROOT)} has active-looking lifecycle {status!r}")
-        if lifecycle.get("action_authority") != "none":
-            fail(f"{path.relative_to(ROOT)} must not authorize new actions")
+        decision_id = str(record.get("decision_id") or "")
+        if decision_id in completed_ids:
+            if not status.startswith("completed_"):
+                fail(f"{path.relative_to(ROOT)} must remain completed")
+            if lifecycle.get("action_authority") != "none":
+                fail(f"{path.relative_to(ROOT)} must not authorize new actions")
+        elif status.startswith("completed_"):
+            if lifecycle.get("action_authority") != "none":
+                fail(f"{path.relative_to(ROOT)} completed decision must be inert")
+        elif decision_id not in active_ids:
+            fail(
+                f"{path.relative_to(ROOT)} is active-looking but is not named in "
+                "PROJECT_STATE.current_goal.active_decision_ids"
+            )
 
 
 def require_cold_evidence_markers() -> None:
@@ -258,6 +321,13 @@ def require_cold_evidence_markers() -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--require-releaseable",
+        action="store_true",
+        help="also require a ready release candidate for publication",
+    )
+    args = parser.parse_args()
     version = metadata_version()
     state = read_json("docs/PROJECT_STATE.json")
     decisions = read_json("docs/DECISION_INDEX.json")
@@ -275,6 +345,7 @@ def main() -> int:
         )
 
     require_status_identity(state, version)
+    require_readme_status_projection(state, version)
 
     frontier = state.get("active_validation_frontier")
     if not isinstance(frontier, dict):
@@ -326,7 +397,7 @@ def main() -> int:
     require_pinned_external_actions()
     require_stable_workflow_identity()
     require_no_active_paid_probes()
-    require_historical_decision_lifecycle()
+    require_decision_lifecycle(state)
     require_cold_evidence_markers()
 
     if not (ROOT / "docs/archive/README.md").is_file():
@@ -336,6 +407,7 @@ def main() -> int:
 
     old_graph = read_json("strategy/executable-model-graph-v0.1.json")
     new_graph = read_json("strategy/executable-model-graph-v0.2.json")
+    prompt_registry = read_json("strategy/prompt-handle-registry-v0.1.json")
     old_lifecycle = old_graph.get("lifecycle")
     new_lifecycle = new_graph.get("lifecycle")
     if not isinstance(old_lifecycle, dict) or old_lifecycle.get("status") != "superseded":
@@ -344,6 +416,22 @@ def main() -> int:
         fail("strategy v0.1 must identify v0.2 as its successor")
     if not isinstance(new_lifecycle, dict) or new_lifecycle.get("status") not in {"warm", "active"}:
         fail("strategy v0.2 must identify an explicit non-superseded lifecycle state")
+    prompt_lifecycle = prompt_registry.get("lifecycle")
+    if not isinstance(prompt_lifecycle, dict):
+        fail("prompt handle registry must declare its own lifecycle")
+    if prompt_lifecycle.get("status") != "warm":
+        fail("prompt handle registry must remain a warm evidence reference")
+    if prompt_lifecycle.get("action_authority") != "none":
+        fail("prompt handle registry must not authorize actions")
+    if prompt_lifecycle.get("current_state_source") != "docs/PROJECT_STATE.json":
+        fail("prompt handle registry must point to HOT project state")
+
+    if args.require_releaseable:
+        candidate = state["verdict"].get("active_release_candidate")
+        if not isinstance(candidate, dict):
+            fail("publication requires an active release candidate")
+        if candidate.get("status") != "ready" or candidate.get("releaseable") is not True:
+            fail("publication requires candidate status=ready and releaseable=true")
 
     print(
         "KNOWLEDGE_STATE_OK "
