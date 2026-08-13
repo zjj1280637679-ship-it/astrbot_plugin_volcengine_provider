@@ -1,15 +1,12 @@
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "development": {
-    "version": "0.1.19",
-    "branch": "main",
-    "status": "released_repository_and_runtime",
-    "pull_request": 8,
-    "merged_feature_pull_request": 7,
-    "feature_main_commit": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
-    "merged_main_commit": "9f406dda365213685f7c67d04b3d0cac583fb153"
+    "version": "0.1.20",
+    "branch": "fix/source-scoped-video-0.1.20",
+    "status": "release_candidate",
+    "pull_request": null
   },
   "published_baseline": {
     "version": "0.1.19",
@@ -25,55 +22,46 @@
     ]
   },
   "current_goal": {
-    "id": "0.1.19-external-distribution-observation",
-    "goal": "Preserve the published 0.1.19 repository/runtime baseline while keeping external AstrBot Store refresh and a real Windows Store installation explicitly unverified until directly observed.",
+    "id": "0.1.20-source-scoped-video-modality",
+    "goal": "Show Video in the existing model-card capabilities checklist for Volcengine Ark and Agent Plan only, without changing foreign provider cards.",
     "non_goals": [
-      "Do not redesign or extend the 0.1.18 Provider Source panel.",
-      "Do not modify AstrBot modalities or claim model capability from request settings.",
-      "Do not leak Volcengine fields into foreign provider model cards.",
-      "Do not invent a generic Thinking Budget field without a verified Ark mapping.",
-      "Do not infer marketplace refresh or Windows installation success from repository/runtime CI.",
-      "Do not spend paid Volcengine API quota merely to observe distribution state."
+      "Do not infer that every Volcengine-served model supports video.",
+      "Do not mutate AstrBot shared schema or static assets on disk.",
+      "Do not prevent Provider registration when the optional Dashboard asset boundary is unavailable.",
+      "Do not replace AstrBot routing, fallback, retry, provider lifecycle, or media ownership."
     ],
     "success_conditions": [
-      "Published repository and runtime identities remain explicit and reproducible from the recorded gate and publisher runs.",
-      "AstrBot Store is called refreshed only after it is directly observed serving 0.1.19.",
-      "Windows Store installation is called verified only after a real installation is directly observed."
+      "Ark and Agent Plan dialogs show video in the existing modalities checklist.",
+      "Foreign provider dialogs retain the original modalities options and no Volcengine-only rows.",
+      "Checking and unchecking video saves canonical modalities and matching runtime transport intent.",
+      "The exact minimal runtime package passes repository gates and the AstrBot native updater path.",
+      "A real marketplace update on the approved desktop AstrBot instance loads cleanly after a full Launcher restart."
     ]
   },
   "frozen_constraints": [
-    "AstrBot owns provider lifecycle, routing, fallback, retry, model-card management, metadata display, and shared Dashboard rendering.",
-    "The 0.1.18 Source-level volcengine_video_controls_visible value is presentation state only; per-card volcengine_video_input_enabled remains the Source shortcut/runtime Boolean authority.",
-    "The shared top capability/modalities area is not a safe provider-specific extension surface for the fifth video capability control.",
-    "Ordinary model-edit body rows can be safely projected only onto owned saved model-card copies; this is narrower than the rejected generic capability-row extension.",
-    "Request settings are transport/configuration, not permanent model capability facts.",
-    "Missing feedback is not false; interaction is not judgment.",
-    "Historical QQ media evidence remains valid only within its premises and must be revalidated when REGRESSION_SCOPE invalidators fire.",
+    "AstrBot owns provider lifecycle, routing, fallback, retry, model-card management, and the shared Dashboard schema.",
+    "The plugin may adapt only a verified private model-dialog schema clone that already has the selected Source type.",
+    "The video checklist value is explicit user transport configuration, not a model capability inference.",
+    "Foreign provider schemas and cards must remain unchanged by the Volcengine extension.",
+    "Unknown Dashboard assets degrade to the original UI without blocking Provider registration.",
+    "Historical QQ media evidence remains valid unless a REGRESSION_SCOPE invalidator fires.",
     "Development documentation and evidence stay outside the allow-list runtime package."
   ],
   "current_strategy": {
-    "source_ui": "frozen_released_0.1.18_behavior",
-    "model_ui": "project bilingual horizontal rows only onto owned saved Ark and Agent Plan model-card copies",
-    "foreign_provider_policy": "strip_and_never_render_volcengine_model_fields",
-    "modalities_mutation": false,
-    "video": {
-      "source_shortcut_boolean": "volcengine_video_input_enabled",
-      "profile_field": "volcengine_video_input_profile",
-      "ui_modes": ["off", "compressed", "original"],
-      "legacy_true_default": "original",
-      "compressed_transport": "ffmpeg_h264_mp4_fail_closed",
-      "off_behavior": "disable_boolean_but_preserve_last_non_off_profile"
-    },
-    "request_override_priority": [
-      "explicit_horizontal_model_field",
-      "same_key_in_custom_extra_body",
-      "AstrBot_or_Ark_or_model_default"
+    "model_dialog_boundary": "private_schema_clone_plus_selected_provider_source_type",
+    "owned_source_types": [
+      "volcengine_ark_chat_completion",
+      "volcengine_agent_plan_chat_completion"
     ],
-    "optional_numeric_empty_semantics": "empty_means_do_not_inject_not_zero",
-    "optional_numeric_finite_semantics": "all_persisted_float_overrides_must_be_finite",
-    "release_version_authority": "metadata_yaml_unsigned_three_part_version_to_runtime_manifest_to_candidate_and_installed_metadata_identity_checks_with_strictly_newer_version_for_changed_runtime_tree",
-    "native_archive_retry": "maximum_three_attempts_only_for_http_408_429_5xx_or_httpx_transport_errors_with_partial_install_cleanup",
-    "github_actions_supply_chain": "all_external_actions_are_pinned_to_full_commit_sha",
+    "owned_modalities_action": "append_video_to_private_clone_only",
+    "foreign_provider_action": "leave_modalities_unchanged_and_hide_volcengine_rows",
+    "save_boundary": "mirror_explicit_modalities_video_membership_to_legacy_runtime_boolean_on_owned_cards",
+    "core_disk_mutation": false,
+    "unknown_dashboard_asset": "leave_original_asset_untouched_and_skip_optional_model_field_ui",
+    "lifecycle": "reversible_static_resolver_wrapper_with_plugin_owned_temporary_copy",
+    "decision": "docs/ADR/ADR-0006-source-scoped-modalities-clone.md",
+    "release_version_authority": "metadata_yaml_to_runtime_manifest_to_candidate_and_installed_metadata_identity",
+    "native_archive_retry": "maximum_three_attempts_only_for_retryable_http_or_transport_errors_with_partial_install_cleanup",
     "reasoning": {
       "thinking_mode": "maps_to_thinking.type_when_explicit",
       "reasoning_effort": "maps_to_reasoning_effort_when_explicit",
@@ -85,66 +73,43 @@
     }
   },
   "validation_progress": {
-    "knowledge_drift_guard": {
-      "status": "passed",
-      "workflow": "Runtime Distribution Gate / artifact-boundary / Reject stale HOT documentation authority",
-      "meaning": "metadata version, HOT frontier, WARM decision index, entry-point HOT pointers, cold archive, and strategy supersession markers are mechanically consistent"
+    "runtime_package": {
+      "status": "passed_local_candidate",
+      "version": "0.1.20.dev3",
+      "file_count": 24
     },
-    "runtime_distribution_gate": {
-      "run_id": 31624873790,
-      "head": "cfd25d1d0200d58eb5e50b715ded8b9f76aaf009",
-      "status": "passed",
-      "astrbot_versions": ["4.26.1", "4.27.2"],
-      "compressed_video_positive_contract": "passed_real_ffmpeg_round_trip"
+    "unit_and_contract_matrix": {
+      "status": "passed_local_candidate",
+      "tests": 9
     },
-    "real_dashboard_model_field_evidence": {
-      "run_id": 31624873834,
-      "head": "cfd25d1d0200d58eb5e50b715ded8b9f76aaf009",
-      "status": "passed_complete_job",
-      "matrix_all_passed": true,
-      "page_errors": [],
-      "ark": "passed_bilingual_fields_save_reopen_persistence_and_0.1.18_source_ui_preservation",
-      "agent_plan": "passed_bilingual_fields_save_reopen_persistence_and_0.1.18_source_ui_preservation",
-      "foreign_openai": "passed_no_volcengine_field_leak",
-      "explicit_server_teardown": "passed",
-      "setup_uv_post_cleanup": "passed",
-      "artifact_upload": "passed"
+    "dashboard_asset_scope_matrix": {
+      "status": "passed_local_candidate",
+      "owned": ["ark", "agent_plan"],
+      "foreign": ["openai", "google"]
     },
-    "merged_feature_runtime_distribution_gate": {
-      "run_id": 31625904337,
-      "head": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
-      "status": "passed",
-      "meaning": "the initially merged 0.1.19 runtime artifact and packaged behavior passed before the publication blocker was found"
+    "bundled_astrbot_4_27_2_asset_probe": {
+      "status": "passed_local_candidate",
+      "structural_matches": 1
     },
-    "failed_runtime_publisher": {
-      "run_id": 31626139699,
-      "head": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
-      "status": "failed_before_promotion",
-      "deterministic_root_cause": "validate-runtime-store-source.yml compared the 0.1.19 manifest with a stale literal 0.1.18",
-      "runtime_unchanged": "4586aa2eb573eb97a72baaaa152c727e3b35530e",
-      "candidate_cleanup": "passed_no_residual_candidate_branch"
+    "asset_bridge_lifecycle": {
+      "status": "passed_local_candidate",
+      "resolver_restored": true,
+      "temporary_copy_removed": true
     },
-    "released_main_runtime_distribution_gate": {
-      "run_id": 31630774583,
-      "head": "9f406dda365213685f7c67d04b3d0cac583fb153",
-      "status": "passed",
-      "astrbot_versions": ["4.26.1", "4.27.2"],
-      "meaning": "the exact repaired main release artifact and packaged behavior passed before promotion"
+    "real_desktop_dashboard_observation": {
+      "status": "partial_pass_candidate",
+      "observed_date": "2026-08-13",
+      "approved_instance": "codex_test_instance",
+      "ark_video_checkbox": "visible_and_save_reopen_persisted",
+      "foreign_provider_video_checkbox": "absent",
+      "astrbot_core_asset_on_disk": "unchanged",
+      "agent_plan_visual_observation": "pending_final_marketplace_install_validation"
     },
-    "successful_runtime_publisher": {
-      "run_id": 31630921686,
-      "attempt": 4,
-      "head": "9f406dda365213685f7c67d04b3d0cac583fb153",
-      "status": "passed",
-      "prepare_candidate": "passed",
-      "pre_promotion_native_installer_cells": "4_of_4_passed",
-      "promotion": "passed",
-      "post_promotion_native_installer_cells": "4_of_4_passed",
-      "runtime_commit": "d7dc0f171cca237304b24604137659bc98a3d962",
-      "runtime_tree": "d394a878ee250c6d6d116b9a954589ab0df59ae2",
-      "runtime_metadata_version": "0.1.19",
-      "candidate_cleanup": "passed_no_candidate_refs",
-      "paid_volcengine_api_calls": false
+    "repository_and_runtime_publication": {
+      "status": "pending"
+    },
+    "marketplace_update_and_logs": {
+      "status": "pending"
     }
   },
   "known_false_failures": [],
@@ -155,48 +120,29 @@
       "failed_run": 31621942332,
       "failed_layer": "workflow_teardown_only",
       "root_cause": "background uv -> astrbot process held setup-uv cache lock while post-step uv cache prune --ci waited 300 seconds",
-      "product_evidence_on_failed_run": "passed_before_teardown",
-      "fix": [
-        "disable setup-uv cache in real Dashboard evidence workflow",
-        "start evidence server in its own process group with setsid",
-        "explicitly stop the uv/AstrBot process group before action post-steps"
-      ],
       "verification_run": 31624873834,
-      "verification": "complete job green including explicit Stop AstrBot evidence server and Post Run astral-sh/setup-uv"
+      "verification": "complete job green including explicit AstrBot evidence-server stop"
     },
     {
       "id": "PUBLISH-0.1.19-STALE-VERSION-LITERAL",
       "lifecycle": "historical_resolved",
       "failed_run": 31626139699,
       "failed_layer": "pre_promotion_native_install_validation",
-      "root_cause": "validate-runtime-store-source.yml compared the generated 0.1.19 manifest with a stale hardcoded 0.1.18 literal",
-      "fix": "derive the runtime manifest from metadata.yaml and compare candidate and installed metadata with the manifest instead of a duplicated release literal",
+      "root_cause": "release validation compared generated metadata with a duplicated stale release version literal",
+      "fix": "derive expected identity from metadata and the generated runtime manifest",
       "verification_run": 31630921686,
-      "verification": "publisher attempt 4 passed all pre-promotion and post-promotion cells"
-    },
-    {
-      "id": "PUBLISH-0.1.19-GITHUB-ARCHIVE-TRANSIENTS",
-      "lifecycle": "historical_resolved",
-      "failed_run": 31626139699,
-      "jobs": [94212920906, 94212921033],
-      "observations": [
-        "GitHub archive returned HTTP 503",
-        "GitHub archive disconnected before sending a response"
-      ],
-      "product_meaning": "none; the same candidate was downloaded by the other matrix cells",
-      "fix": "bounded retry only for retryable HTTP status or transport failures, with partial-install cleanup",
-      "verification_run": 31630921686,
-      "verification": "publisher attempt 4 passed all eight native-installer cells"
+      "verification": "publisher passed all pre-promotion and post-promotion cells"
     }
   ],
   "active_validation_frontier": {
-    "release": "0.1.19",
-    "name": "external_distribution_observation",
-    "current_stage": "repository_and_runtime_published_external_store_and_windows_install_unobserved",
+    "release": "0.1.20",
+    "name": "formal_release_and_marketplace_update",
+    "current_stage": "latest_main_preserved_candidate_being_formalized",
     "next_actions": [
-      "Observe whether AstrBot Store refreshes to metadata version 0.1.19 without inferring that state from repository CI.",
-      "Record a real Windows Store installation only if it is directly performed and observed.",
-      "Keep repository/runtime publication complete even while those external states remain unknown."
+      "Run the formal-version knowledge, runtime-package, contract, and secret-boundary gates.",
+      "Publish the reviewed change to main and promote the exact accepted runtime artifact.",
+      "Refresh the AstrBot marketplace and update the approved desktop instance from 0.1.20.dev3 to 0.1.20.",
+      "Restart only the AstrBot instance through Launcher, then verify both owned cards, a foreign card, persisted configuration, and logs."
     ]
   },
   "knowledge_lifecycle": {
@@ -204,7 +150,7 @@
     "hot_authority": "docs/PROJECT_STATE.json",
     "warm_navigation": "docs/DECISION_INDEX.json",
     "cold_archive": "docs/archive/",
-    "old_0_1_18_frontier_status": "historical_not_action_driving"
+    "old_0_1_19_frontier_status": "historical_published_baseline"
   },
   "authoritative_stable_constraints": [
     "docs/AI_RULES.md",

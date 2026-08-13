@@ -105,7 +105,14 @@ Agent Plan is not an `agent_runner` card.
 
 ### Dashboard / config isolation
 
-For the released 0.1.18 Source UI:
+For the 0.1.20 model-dialog video option:
+
+- only the private dialog schema clone selected for Ark/Agent Plan receives the additional `video` option;
+- foreign provider dialogs retain the host's original `modalities` options and hide Volcengine request rows;
+- owned save/reopen keeps `modalities: video` and the compatibility runtime Boolean aligned;
+- the AstrBot Dashboard asset on disk remains unchanged, and an unknown/ambiguous asset skips only the optional UI rather than blocking Provider registration.
+
+For the historical 0.1.18 Source UI:
 
 - the shared top capability row is not extended globally for Volcengine video;
 - owned Sources receive the Source-specific presentation workflow;

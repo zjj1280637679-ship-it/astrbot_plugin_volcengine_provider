@@ -38,8 +38,8 @@
       "migration_semantics": "preserve_previous_user_transport_intent_only"
     },
     "volcengine_video_controls_visible": {
-      "kind": "source_page_presentation_preference",
-      "scope": "one_owned_provider_source",
+      "kind": "retired_source_page_presentation_preference",
+      "scope": "legacy_owned_provider_source_config_only",
       "authoritative_for": [
         "whether_the_source_page_per_model_video_selector_is_visible"
       ],
@@ -51,34 +51,36 @@
         "routing_or_fallback_selection"
       ],
       "false_means": "hide_selector_and_preserve_all_per_card_transport_values",
-      "persistent": true,
+      "persistent": false,
+      "retired_in": "0.1.20",
       "runtime_transport_authority": false
     }
   },
   "dashboard_transport_ui": {
-    "surface": "owned_provider_source_page",
+    "surface": "current_model_dialog_private_schema_clone",
     "canonical_field_in_shared_schema": false,
-    "canonical_field_in_generic_model_card_projection": false,
+    "canonical_field_in_generic_model_card_projection": true,
     "owned_sources_only": true,
-    "persistent_visibility_field": "volcengine_video_controls_visible",
-    "visibility_field_authority": "presentation_only",
+    "identity_boundary": "selected_provider_source_type_after_private_schema_clone",
+    "persistent_visibility_field": null,
+    "visibility_field_authority": "selected_source_type_only",
     "temporary_selector_key_prefix": "_volcengine_video_models_ui_",
     "temporary_selector_key_encoding": "source_id_utf8_hex_reversible_injective",
     "temporary_selector_identity": "exact_model_card_ids_belonging_to_current_source",
-    "temporary_selector_condition": {
-      "volcengine_video_controls_visible": true
-    },
+    "temporary_selector_condition": null,
     "temporary_selector_persistent": false,
-    "save_boundary_action": "when_visible_and_selector_submitted_write_exact_source_card_choices_to_per_card_volcengine_video_input_enabled_then_strip_selector",
-    "hidden_or_omitted_selector_action": "preserve_all_existing_per_card_transport_values",
-    "runtime_truth": "per_card_volcengine_video_input_enabled_only",
+    "save_boundary_action": "mirror_explicit_video_membership_in_owned_card_modalities_to_per_card_volcengine_video_input_enabled",
+    "hidden_or_omitted_selector_action": "not_applicable_current_ui",
+    "runtime_truth": "per_card_modalities_video_and_compatibility_mirror_volcengine_video_input_enabled",
     "foreign_provider_visibility": false,
     "foreign_ui_key_can_create_plugin_state": false,
     "requires_host_apis": [
       "get_provider_schema",
-      "upsert_provider_source"
+      "create_provider",
+      "update_provider",
+      "static_file_resolver"
     ],
-    "missing_required_host_api": "disable_transport_ui_only",
+    "missing_required_host_api": "skip_optional_model_field_ui_without_blocking_provider_registration",
     "legacy_open_model_dialog_compatibility": {
       "temporary_key_prefix": "_volcengine_video_transport_ui_",
       "promotion_eligibility": "boolean_value_on_owned_card_whose_key_encodes_that_cards_exact_provider_source_id",
@@ -90,7 +92,7 @@
       "visible_entry_point": false,
       "purpose": "translate_and_strip_a_stale_already_open_0_1_17_model_dialog"
     },
-    "source_save_failure_action": "restore_entire_pre_call_model_card_list_then_reraise_host_error",
+    "source_save_failure_action": "legacy_0_1_18_compatibility_only",
     "service_validation": {
       "astrbot_4_26_1": "L3_pass",
       "astrbot_4_27_2": "L3_pass",
@@ -181,9 +183,9 @@
     "remove_all_retired_and_temporary_ui_keys_after_resolution": true,
     "remove_source_only_video_fields_from_model_cards": true,
     "remove_model_only_and_temporary_video_fields_from_sources": true,
-    "owned_source_visibility_field_may_persist": "volcengine_video_controls_visible",
+    "owned_source_visibility_field_may_persist": false,
     "foreign_source_visibility_field_may_persist": false,
-    "modalities_mutation": false
+    "modalities_mutation": "owned_model_card_explicit_user_configuration_only"
   },
   "display_contract": {
     "unknown": "no_plugin_claim",

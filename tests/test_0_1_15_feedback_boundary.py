@@ -253,7 +253,10 @@ def main() -> None:
     )
     assert VIDEO_INPUT_ENABLED_KEY not in polluted_cards["foreign/forged"]
     ark_source, foreign_source = polluted_cfg["provider_sources"]
-    assert ark_source[VIDEO_CONTROLS_VISIBLE_KEY] is True
+    # 0.1.20 retires the Source-level presentation master completely. Its
+    # historical value may seed a card during migration, but the Source object
+    # itself must be clean afterwards.
+    assert VIDEO_CONTROLS_VISIBLE_KEY not in ark_source
     assert VIDEO_CONTROLS_VISIBLE_KEY not in foreign_source
     assert all(
         VIDEO_INPUT_ENABLED_KEY not in source
@@ -373,8 +376,8 @@ def main() -> None:
     }
     out = _inject_model_card_video_control(payload)
     assert VIDEO_INPUT_ENABLED_KEY not in out["providers"][0]
-    assert out["provider_sources"][0][VIDEO_CONTROLS_VISIBLE_KEY] is False
-    assert out["provider_sources"][0][_source_video_selector_ui_key("ark")] == []
+    assert VIDEO_CONTROLS_VISIBLE_KEY not in out["provider_sources"][0]
+    assert _source_video_selector_ui_key("ark") not in out["provider_sources"][0]
     assert VIDEO_INPUT_ENABLED_KEY not in out["providers"][1]
     assert _source_video_selector_ui_key("foreign") not in out["provider_sources"][1]
 

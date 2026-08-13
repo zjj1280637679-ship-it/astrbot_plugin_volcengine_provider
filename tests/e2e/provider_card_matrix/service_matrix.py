@@ -27,7 +27,6 @@ from astrbot_plugin_volcengine_provider.capabilities import (
     REASONING_MODE_KEY,
     STOP_SEQUENCES_KEY,
     TEMPERATURE_KEY,
-    VIDEO_CONTROLS_VISIBLE_KEY,
     VIDEO_INPUT_ENABLED_KEY,
     VIDEO_INPUT_MODE_UI_KEY,
     VIDEO_INPUT_PROFILE_KEY,
@@ -136,8 +135,9 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
     ui_key = registry._video_ui_key(source_id)
     selector_key = registry._source_video_selector_ui_key(source_id)
 
-    # The real host Source upsert validates, saves and reloads. Open applies the
-    # current Source selection; closed ignores even a stale hidden selector.
+    # 0.1.20 retires the Source selector. A stale 0.1.18 Source payload must be
+    # cleaned without changing the model card; the standard model-card
+    # ``modalities`` list is now the only visible selection input.
     existing_id = f"{source_id}/existing"
     source_type = (
         AGENT_PLAN_PROVIDER_TYPE if source_id == "plan-A" else ARK_PROVIDER_TYPE
@@ -151,13 +151,12 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
             "type": source_type,
             "provider_type": "chat_completion",
             "enable": True,
-            VIDEO_CONTROLS_VISIBLE_KEY: True,
             selector_key: [existing_id],
         },
     )
     persisted = service.provider_manager.get_provider_config_by_id(existing_id)
     assert persisted is not None
-    assert persisted[VIDEO_INPUT_ENABLED_KEY] is True
+    assert persisted[VIDEO_INPUT_ENABLED_KEY] is False
     if source_id == "ark-A":
         assert persisted[VIDEO_INPUT_PROFILE_KEY] == "compressed"
 
@@ -170,13 +169,12 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
             "type": source_type,
             "provider_type": "chat_completion",
             "enable": True,
-            VIDEO_CONTROLS_VISIBLE_KEY: False,
             selector_key: [],
         },
     )
     persisted = service.provider_manager.get_provider_config_by_id(existing_id)
     assert persisted is not None
-    assert persisted[VIDEO_INPUT_ENABLED_KEY] is True
+    assert persisted[VIDEO_INPUT_ENABLED_KEY] is False
     if source_id == "ark-A":
         assert persisted[VIDEO_INPUT_PROFILE_KEY] == "compressed"
 
@@ -185,7 +183,8 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
         {
             "id": f"{source_id}/new",
             "model": "new",
-            ui_key: True,
+            "modalities": ["text", "video"],
+            ui_key: False,
             VIDEO_INPUT_MODE_UI_KEY: "compressed",
             TEMPERATURE_KEY: "0.6",
             REASONING_MODE_KEY: "auto",
@@ -206,7 +205,11 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
 
     await ProviderConfigService.create_provider(
         service,
-        {"id": f"{source_id}/default", "model": "default"},
+        {
+            "id": f"{source_id}/default",
+            "model": "default",
+            "modalities": ["text"],
+        },
         source_id,
     )
     created_default = service.provider_manager.created[-1]
@@ -223,15 +226,22 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
             "id": existing_id,
             "provider_source_id": source_id,
             "model": existing_model,
+            "modalities": ["text", "video"],
             VIDEO_INPUT_ENABLED_KEY: False,
-            ui_key: True,
+            ui_key: False,
             VIDEO_INPUT_MODE_UI_KEY: "original",
             TEMPERATURE_KEY: "0.4",
         },
     )
     _, updated = service.provider_manager.updated[-1]
     assert_owned_model_card_saved(updated, expected_video_enabled=True)
-    assert updated[VIDEO_INPUT_PROFILE_KEY] == "original"
+    # Current 0.1.20 modalities outrank the retired 0.1.19 UI field. Because no
+    # current quality row was submitted, preserve the persisted compressed
+    # preference rather than letting the stale old tab rewrite it.
+    if source_id == "ark-A":
+        assert updated[VIDEO_INPUT_PROFILE_KEY] == "compressed"
+    else:
+        assert VIDEO_INPUT_PROFILE_KEY not in updated
     assert updated[TEMPERATURE_KEY] == 0.4
 
     return {
@@ -239,7 +249,7 @@ async def _exercise_owned(service: ProviderConfigService, source_id: str) -> dic
         "create_enabled": True,
         "create_default": False,
         "update_enabled": True,
-        "source_hide_preserved": True,
+        "retired_source_ui_ignored": True,
         "model_fields": "normalized",
     }
 

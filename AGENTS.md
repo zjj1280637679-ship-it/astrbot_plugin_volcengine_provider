@@ -41,10 +41,11 @@ This repository implements Volcengine Ark providers for AstrBot. It adapts Volce
 
 ## Dashboard scope rule
 
-Do not overgeneralize the 0.1.18 Source-UI decision.
+Do not overgeneralize the historical 0.1.18 Source-UI decision.
 
-- The shared **top capability/modalities** surface is not a reliable provider-specific extension boundary for the fifth video capability checkbox/icon.
-- Ordinary **saved-model edit-body rows** can be provider-specific when the owned Source/model identity is known and the fields are projected only onto owned model copies.
+- The shared **top capability/modalities schema instance** is not a reliable provider-specific extension boundary for the fifth video capability checkbox/icon.
+- A **private per-dialog schema clone** can be provider-specific after the selected Source type is known; ADR-0006 governs the 0.1.20 video checkbox.
+- Ordinary **saved-model edit-body rows** can also be provider-specific when the owned Source/model identity is known and the fields are projected only onto owned model copies.
 
 ADR-0003 governs the first problem; ADR-0005 records the scope correction and knowledge-lifecycle rule.
 

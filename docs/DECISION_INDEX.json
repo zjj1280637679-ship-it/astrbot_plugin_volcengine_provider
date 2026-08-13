@@ -55,6 +55,16 @@
       "tests": [".github/workflows/runtime-distribution-gate.yml"]
     },
     {
+      "id": "ADR-0006",
+      "lifecycle": "candidate_constraint",
+      "topic": "source-scoped modalities dialog clone",
+      "question": "Can the existing Video capability checkbox be isolated to Volcengine model dialogs without mutating the shared schema?",
+      "decision": "Yes on a verified private dialog-schema clone that already has the selected Source type; unknown assets keep the original UI and do not block Provider registration.",
+      "doc": "docs/ADR/ADR-0006-source-scoped-modalities-clone.md",
+      "code": ["capabilities/dashboard_asset_bridge.py", "capabilities/model_fields.py", "capabilities/model_scope.py"],
+      "tests": ["tests/test_0_1_20_dashboard_asset_scope.py", "tests/test_dashboard_save_boundary.py"]
+    },
+    {
       "id": "KB-0001",
       "lifecycle": "active_constraint",
       "topic": "interaction versus judgment",

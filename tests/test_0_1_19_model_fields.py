@@ -17,6 +17,7 @@ from astrbot_plugin_volcengine_provider.capabilities import (
     TEMPERATURE_KEY,
     TOP_P_KEY,
     VIDEO_INPUT_ENABLED_KEY,
+    VIDEO_INPUT_ENABLED_UI_KEY,
     VIDEO_INPUT_MODE_UI_KEY,
     VIDEO_INPUT_PROFILE_KEY,
     apply_request_overrides,
@@ -47,32 +48,69 @@ def main() -> None:
         VIDEO_INPUT_PROFILE_KEY: "compressed",
     }
     assert video_input_mode(saved) == "off"
-    projected = project_model_fields({}, saved)
-    assert projected[VIDEO_INPUT_MODE_UI_KEY] == "off"
+    projected = project_model_fields({"modalities": ["text", "image"]}, saved)
+    assert projected["modalities"] == ["text", "image"]
+    assert VIDEO_INPUT_ENABLED_UI_KEY not in projected
+    assert VIDEO_INPUT_MODE_UI_KEY not in projected
     assert projected[VIDEO_INPUT_PROFILE_KEY] == "compressed"
 
-    # Turning the horizontal row back on changes only the boolean/profile pair.
+    # The canonical AstrBot checklist is the current switch. The retired key
+    # remains accepted only for an already-open old Dashboard tab.
+    canonical = normalize_model_fields_for_save(
+        {
+            "modalities": ["text", "image", "video"],
+            VIDEO_INPUT_ENABLED_KEY: False,
+            VIDEO_INPUT_PROFILE_KEY: "compressed",
+        }
+    )
+    assert canonical[VIDEO_INPUT_ENABLED_KEY] is True
+    assert canonical["modalities"] == ["text", "image", "video"]
+    canonical_wins = normalize_model_fields_for_save(
+        {
+            "modalities": ["text", "video"],
+            VIDEO_INPUT_ENABLED_UI_KEY: False,
+            VIDEO_INPUT_MODE_UI_KEY: "off",
+        }
+    )
+    assert canonical_wins[VIDEO_INPUT_ENABLED_KEY] is True
+
+    # Turning the old checkbox back on remains backward compatible.
     normalized = normalize_model_fields_for_save(
         {
             VIDEO_INPUT_ENABLED_KEY: False,
             VIDEO_INPUT_PROFILE_KEY: "compressed",
-            VIDEO_INPUT_MODE_UI_KEY: "compressed",
+            VIDEO_INPUT_ENABLED_UI_KEY: True,
         }
     )
     assert normalized[VIDEO_INPUT_ENABLED_KEY] is True
     assert normalized[VIDEO_INPUT_PROFILE_KEY] == "compressed"
     assert VIDEO_INPUT_MODE_UI_KEY not in normalized
 
-    # Off is a shortcut toggle: the last profile is deliberately retained.
+    # Off is a checkbox toggle: the last profile is deliberately retained.
     normalized = normalize_model_fields_for_save(
         {
             VIDEO_INPUT_ENABLED_KEY: True,
             VIDEO_INPUT_PROFILE_KEY: "compressed",
-            VIDEO_INPUT_MODE_UI_KEY: "off",
+            VIDEO_INPUT_ENABLED_UI_KEY: False,
         }
     )
     assert normalized[VIDEO_INPUT_ENABLED_KEY] is False
     assert normalized[VIDEO_INPUT_PROFILE_KEY] == "compressed"
+
+    # An already-open 0.1.19 tab remains readable, but the current checkbox wins
+    # when both generations are submitted together.
+    legacy = normalize_model_fields_for_save(
+        {VIDEO_INPUT_MODE_UI_KEY: "compressed"}
+    )
+    assert legacy[VIDEO_INPUT_ENABLED_KEY] is True
+    assert legacy[VIDEO_INPUT_PROFILE_KEY] == "compressed"
+    current_wins = normalize_model_fields_for_save(
+        {
+            VIDEO_INPUT_ENABLED_UI_KEY: False,
+            VIDEO_INPUT_MODE_UI_KEY: "compressed",
+        }
+    )
+    assert current_wins[VIDEO_INPUT_ENABLED_KEY] is False
 
     # Optional rows distinguish empty from the real numeric value 0.
     empty = normalize_model_fields_for_save(
@@ -205,6 +243,7 @@ def main() -> None:
     # unrelated host/user configuration.
     card = copy.deepcopy(provider)
     card[VIDEO_INPUT_PROFILE_KEY] = "compressed"
+    card[VIDEO_INPUT_ENABLED_UI_KEY] = True
     card[VIDEO_INPUT_MODE_UI_KEY] = "compressed"
     card["custom_extra_body"] = {"keep": True}
     assert strip_model_fields(card) is True

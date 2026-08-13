@@ -1,23 +1,23 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.19-e85d3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.20-e85d3f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 装上这款插件，QQ 语音会在可靠转换后，连同完整聊天上下文交给你正在使用的火山方舟主模型；本轮发送或引用的视频，也能由同一个模型看懂并继续回应。你不需要另配 STT、转录模型，也不用再搭建一条互相失忆的旁路。
 
-插件同时为 AstrBot 补齐普通 API 与 Agent Plan 两张独立供应商卡：图片、音频与工具继续使用 AstrBot 原生模型能力；视频请求通道仍逐模型保存，但在对应火山供应商 Source 页面集中勾选；密钥、端点与计费互不混线。让你的 AstrBot 不只是“接入火山方舟”，而是真正在 QQ 对话中获得听、看、理解与回应的能力。
+插件同时为 AstrBot 补齐普通 API 与 Agent Plan 两张独立供应商卡：图片、音频、工具和视频都在正确的火山模型卡按需勾选；密钥、端点与计费互不混线。让你的 AstrBot 不只是“接入火山方舟”，而是真正在 QQ 对话中获得听、看、理解与回应的能力。
 
 交流与反馈：**QQ 群 916646029**
 
 ## 你会得到什么
 
 - **QQ 语音真正交给主模型理解**：Silk、AMR 等 QQ 常见输入会先规范化成可靠 WAV，再随完整上下文进入同一个聊天模型；不是旁路转录，也不需要另配 STT。
-- **当前视频直接进入火山协议**：在对应火山供应商 Source 打开“显示逐模型视频选项”，勾选当前模型并保存后，本次发送或引用的视频会转换为官方 `video_url` 内容块，让主模型在同一轮对话里看见动态内容。
+- **当前视频直接进入火山协议**：在火山模型卡的“模型能力”中勾选“视频”并保存后，本次发送或引用的视频会转换为官方 `video_url` 内容块，让主模型在同一轮对话里看见动态内容。
 - **听、看、回答仍是一条主对话**：语音、视频、图片、文字和工具结果共享 AstrBot 组装的完整上下文，不会拆成互相失忆的多个模型流程。
-- **不污染 AstrBot 的公共能力轴**：图片、音频与工具仍按 AstrBot 原生模型卡配置；AstrBot 当前还没有原生 `video` modality，因此插件不修改 `modalities`，也不再把视频字段放进通用模型卡。每个火山 Source 只在自己的页面显示一个持久的“显示逐模型视频选项”开关；打开后出现该 Source 当前模型卡的复选列表，保存时写回各模型卡自己的 `volcengine_video_input_enabled`。关闭显示开关只隐藏列表，不清除已选项，也不停止这些模型的视频转发；其他 Provider 不出现这些字段。
+- **只改当前火山弹窗，不污染其他供应商**：插件等 Dashboard 创建当前模型弹窗的私有 schema 副本并识别出 Source 类型后，才把“视频”加入这份副本。普通 API 与 Agent Plan 可见；OpenAI、Google 等外国 Provider 的能力选项和模型字段保持原样。
 - **两条不会混线的计费通道**：普通 API 与 Agent Plan 分别使用独立供应商类型、固定端点和独立密钥。
 - **完整的模型选择**：普通 API 在线读取当前密钥真正可见的模型；Agent Plan 提供带 `agentplan/` 前缀的套餐模型候选。
 - **失败时不装懂**：附件进入插件后若解析或验证失败，本次请求会明确停止，不会把没看见、没听见伪装成理解成功。
@@ -45,7 +45,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-`0.1.19` 已在仓库与经过门禁验证的 `runtime` 分支发布；AstrBot 插件市场刷新与真实 Windows 商店安装仍属于尚未观察到的外部状态。如果市场已经显示 `0.1.19`，可以直接安装或更新；尚未刷新时，请按下面的最小运行包手动安装：
+正式版本只从经过门禁验证的 `runtime` 分支交付。你可以在 AstrBot 插件市场直接安装或更新；如果市场暂未刷新，请按下面的最小运行包手动安装：
 
 1. 下载 [runtime.zip](https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip)。
 2. 解压 ZIP，把其中唯一的插件目录放入 AstrBot 的 `data/plugins/`；不要把 ZIP 原样塞进插件目录，也不要额外套一层目录。确认 `metadata.yaml` 与 `main.py` 位于插件目录根部。
@@ -64,8 +64,8 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 1. 新增 `volcengine_ark_chat_completion`。
 2. 填写你的普通方舟推理 API Key。
 3. 获取模型列表，或手动填写官方模型 ID / 推理接入点 ID（`ep-...`）。
-4. 图片、音频与工具仍在具体模型卡按实际情况配置；需要视频时，回到当前火山供应商 Source，打开“显示逐模型视频选项”，在“启用视频请求通道的模型”里勾选目标模型卡并保存。这个选择只是请求传输设置，不是模型能力结论。
-5. 保存后，把该模型卡选为当前聊天模型并测试。以后关闭“显示逐模型视频选项”只会隐藏复选列表，已保存的选择和运行状态保持不变；重新打开即可继续调整。旧版视频字段和旧插件曾写入的 `modalities: video` 会一次性迁移为新的逐模型卡传输开关；AstrBot `modalities` 本身保持不动。
+4. 图片、音频、工具和视频都在具体模型卡按实际情况勾选；“视频”只会出现在火山模型卡。这个选择只是请求传输设置，不是模型能力结论。
+5. 保存后，把该模型卡选为当前聊天模型并测试。旧版 Source 视频选择和 0.1.19 三态页面会在保存边界兼容迁移，不需要你重新配置。
 
 普通通道会使用你当前填写的推理 Key 调用同一 `api_base` 下的 `/models`，不会再用离线白名单把结果截成少数几项。若 `/models` 明确返回模态、工具、reasoning、上下文或输出限制，这些字段只作为**当前这一轮 Source 回执**展示：缺失字段保持未反馈；明确返回的字段（包括 `False`）只在本次模型列表响应中替换同名旧展示值，读取后即丢弃，不写回 AstrBot 全局模型元数据。
 
@@ -75,7 +75,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 2. 填写你的 **Agent Plan 专属 API Key**；不要填普通方舟或 Coding Plan Key。
 3. 选择一个带 `agentplan/` 的套餐模型。
 4. 如果你希望使用控制台托管路由，可以选择 `agentplan/ark-code-latest`；它代表可变路由，不是固定模型。
-5. 图片、音频与工具继续沿 AstrBot 原生模型卡反馈配置；需要视频时，在当前 Agent Plan 供应商 Source 打开“显示逐模型视频选项”，勾选目标模型卡并保存。这个选择不作为模型能力先验；以后隐藏选择区也不会清除或停用它。
+5. 图片、音频、工具与视频继续在 Agent Plan 模型卡按需勾选。“视频”是当前模型卡的请求传输选择，不作为模型能力先验。
 
 Agent Plan 没有可由专属推理 Key 读取的 OpenAI 风格 `/models`。官方 `ListArkAgentPlanModel` 控制面接口需要权限更广的云账号 AK/SK，而且只返回 ModelID，不能证明模态、工具和长度能力。为了不给你索要不必要的高权限凭据，插件只提供控制台可见 model-name 候选并允许手动填写新模型，不再按 model ID 预填能力。
 
@@ -104,13 +104,20 @@ QQ Record
 
 ### 视频
 
-在对应火山供应商 Source 打开“显示逐模型视频选项”、勾选当前模型卡并保存后，本次消息或本次引用中的受信视频附件会转换为火山官方 `video_url`。显示开关只管配置区是否可见：关闭后已勾选模型仍照常转发视频，重新打开时原选择仍在。HTTP(S) 视频保持远程引用，本地路径、`file://` 与 Base64 引用通过 AstrBot 原生 `MediaResolver` 转成带 MIME 的 data URL。
+在当前火山模型卡的“模型能力”中勾选“视频”并保存后，本次消息或本次引用中的受信视频附件会转换为火山官方 `video_url`。你还可以选择“压缩 / 原画”质量；关闭视频不会丢失上次质量偏好。HTTP(S) 视频保持远程引用，本地路径、`file://` 与 Base64 引用通过 AstrBot 原生 `MediaResolver` 转成带 MIME 的 data URL。
 
 你手打一个像路径的字符串、旧历史里只剩下的附件标记，都不会让插件打开本地文件。需要模型在后续独立回合重新观看时，请重新引用或附加原视频。
 
 如果音频/视频在 QQ/NapCat/AstrBot 媒体解析或 Ark payload 组装阶段失败，插件会把它标成 `input_transport`：这表示有效请求**尚未到达模型**，模型能力仍未知。若火山 API 已返回模态拒绝或其他上游错误，则继续沿 AstrBot/OpenAI SDK 原生错误链处理。插件只区分失败发生在哪一层，不把一次失败写成永久能力结论，也不自行接管 fallback。
 
-## 0.1.18：视频选项只属于当前火山 Source
+## 0.1.20：视频选项只属于当前火山模型弹窗
+
+- Dashboard 先复制通用模型 schema，再把所选 Source 类型交给当前弹窗。插件只在这两个事实同时存在时，把“视频”追加到这份私有副本；没有对象身份的共享 schema 永远不改。
+- 火山 Ark / Agent Plan 模型卡显示“视频”；外国 Provider 既不显示这个选项，也不显示火山专属请求字段。保存时，标准 `modalities` 与兼容运行布尔保持同向。
+- 插件不改写 AstrBot 磁盘上的 Dashboard 文件。它只通过可撤销的静态资源解析包装提供临时副本；如果未来前端结构无法唯一识别，就保留原页面并跳过可选 UI，不阻止 Provider 加载。
+- 0.1.18 Source 页面视频选择器已经退役；旧值会继续迁移成逐模型意图。0.1.19 已打开页面中的三态视频字段仍可被保存边界读取，当前模型卡的标准勾选优先。
+
+## 0.1.18：历史 Source 视频界面
 
 - 通用模型卡不再承载插件视频字段；每个火山 Ark / Agent Plan Source 各自提供“显示逐模型视频选项”开关与只包含本 Source 模型卡的选择列表，外国 Source 不显示这些控件。
 - 显示开关只控制列表是否可见。关闭后已保存的逐模型选择与视频转发状态继续保留，重新打开即可继续调整。
@@ -199,7 +206,7 @@ registry.py
 
 ### 模型没有看见视频
 
-先到当前火山供应商 Source 打开“显示逐模型视频选项”，确认当前模型卡已在“启用视频请求通道的模型”中勾选并保存；显示开关之后可以关闭，不影响已保存选择。再确认视频属于本次消息或本次引用。随后查看 AstrBot 媒体转换日志：如果附件在形成 Provider 句柄之前就失败，聊天 Provider 无法从普通文本中反推出原视频。
+先打开当前火山模型卡，确认“模型能力”中的“视频”已经勾选并保存。再确认视频属于本次消息或本次引用。随后查看 AstrBot 媒体转换日志：如果附件在形成 Provider 句柄之前就失败，聊天 Provider 无法从普通文本中反推出原视频。
 
 ### 明明选择 Agent Plan 却产生普通 API 调用
 
@@ -226,7 +233,7 @@ registry.py
 - `features.tools.function_calling`；
 - 明确的思考能力字段。
 
-这些字段是当前 Source 的单次反馈，不自动持久化成模型卡能力真值，也不授权插件自动开关运行路径。AstrBot 当前的公共 `modalities` 仍只有文本、图片、音频与工具，没有原生视频能力轴；插件因此只为自己的 Source 提供逐模型视频请求通道的配置入口，正式值仍保存在每张模型卡，不修改公共 `modalities`、AstrBot 源码或 Dashboard 文件。未来宿主提供原生 video capability 后，这层桥可以直接收缩或移除。
+这些字段是当前 Source 的单次反馈，不自动持久化成模型卡能力真值，也不授权插件自动开关运行路径。0.1.20 只在已经识别出火山 Source 的模型弹窗私有 schema 副本中扩展 `modalities` 选项；共享 schema、外国 Provider 与 AstrBot 磁盘文件保持不变。未来宿主提供正式的 Provider 专属模型 schema 扩展钩子后，这层临时资源桥可以直接收缩或移除。
 
 ## 已完成的真实验收与当前证据
 

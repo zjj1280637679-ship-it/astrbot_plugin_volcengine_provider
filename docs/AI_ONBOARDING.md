@@ -30,7 +30,8 @@ This document lets an AI or new maintainer reconstruct the project quickly witho
 | Dynamic model feedback | Translate current Ark `/models` response for the current Source response only | `metadata/ark.py`, `capabilities/source_hints.py` |
 | Agent Plan model listing | Agent Plan model-name discovery without model-ID capability priors | `metadata/agent_plan.py` |
 | Model-card request config | Volcengine-owned per-model request fields and migration | `capabilities/model_fields.py`, `capabilities/model_fields_bridge.py`, `capabilities/model_scope.py` |
-| 0.1.18 Source UI bridge | Owned-Source video presentation and Source-save translation | `registry.py` |
+| 0.1.20 model-dialog video bridge | Source-scoped adaptation of the current dialog's private schema clone | `capabilities/dashboard_asset_bridge.py` |
+| Historical Source UI compatibility | Retired 0.1.18 Source presentation and migration cleanup | `registry.py` |
 | Machine semantics | Stable meanings for capability/feedback/config fields | `capabilities/SEMANTICS.json` |
 | Persistent regressions | Current contract tests | `tests/test_*` |
 | Product-path evidence | Host integration, UI evidence, real API attribution | `docs/E2E_MATRIX.md` |
@@ -44,7 +45,7 @@ These conditions survive individual release goals unless a later ADR explicitly 
 - AstrBot owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and shared Dashboard rendering.
 - Capability icons/metadata are incomplete feedback surfaces, not a complete model-capability truth table.
 - A model may support a modality while the complete QQ/NapCat/AstrBot/provider transport path is broken; a raw synthetic fixture is not equivalent to the product path.
-- The shared **top capability/modalities** surface is not a safe provider-specific extension boundary for the fifth Volcengine video capability control. The 0.1.18 Source UI remains the solution for that specific problem.
+- The shared **top capability/modalities schema instance** is not a safe provider-specific extension boundary. The 0.1.20 dialog-private clone plus selected Source type is the verified narrower boundary; see ADR-0006 and `PROJECT_STATE`.
 - This does **not** imply that ordinary saved-model edit-body rows are impossible. 0.1.19 uses a narrower owned-model projection path for ordinary horizontal request settings; see ADR-0005 and `PROJECT_STATE`.
 - Historical QQ-oriented media validation is retained and re-run by dependency impact, not by release number alone.
 
@@ -62,7 +63,7 @@ Then classify the strongest evidence using `docs/EVIDENCE_LEVELS.md` and verify 
 
 These are not a replacement for the current strategy in `PROJECT_STATE`; they constrain future strategies:
 
-- Keep runtime/request transport configuration distinct from AstrBot `modalities` capability truth.
+- Keep explicit per-card request configuration distinct from model capability truth. A user-selected `modalities: video` value on an owned model card may drive transport, but it is not provider feedback or a global model assertion.
 - Keep Volcengine-specific fields isolated from foreign providers.
 - Keep ordinary Ark `/models` feedback transient, Source-scoped, single-use, and async-context isolated.
 - Preserve explicit `false`, empty lists, integer `0`, and unknown future modality tokens when upstream explicitly provides them.

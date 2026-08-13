@@ -54,9 +54,9 @@ Historical QQ-oriented media success remains evidence until a dependency edge in
 
 ### What ADR-0003 actually rejects
 
-AstrBot 4.26/4.27's **shared top capability/modalities rendering path** does not provide a reliable provider-specific identity boundary for adding a fifth Volcengine video capability checkbox/icon. Earlier attempts could make that control appear for every provider or none.
+AstrBot 4.26/4.27's **shared top capability/modalities schema instance** does not provide a reliable provider-specific identity boundary for adding a fifth Volcengine video capability checkbox/icon. Earlier attempts could make that control appear for every provider or none.
 
-For that specific 0.1.18 problem, the exact Provider Source owns the reliable Source id/type, so the visible top-video selection workflow lives on the owned Source while per-card `volcengine_video_input_enabled` remains runtime/config truth.
+0.1.20 identified a narrower boundary: the Provider dialog first deep-clones that schema and then has the selected Source type. The plugin may adapt that private clone for Ark/Agent Plan without modifying the shared instance. ADR-0006 governs this correction.
 
 ### What ADR-0003 does not reject
 
@@ -83,13 +83,13 @@ These constrain the current strategy in `PROJECT_STATE`; they do not replace it.
 
 ### Request/config versus capability
 
-Provider-specific request settings may control how a request is sent. They must not be written into AstrBot `modalities` or promoted into permanent model capability truth.
+Provider-specific request settings may control how a request is sent. For an owned model card, explicit user membership of `video` in the current dialog's `modalities` list is configuration and may be mirrored into the plugin runtime boolean; it must not be promoted into permanent model capability truth or used to mutate the shared schema.
 
 ### Dynamic Ark feedback
 
 Ordinary Ark `/models` feedback remains Source-scoped, current-response-only, single-use, async-context isolated, and non-persistent in plugin-owned global metadata. Explicit current `false`, empty lists, integer `0`, and unknown/future modality tokens remain information when upstream returns them.
 
-### 0.1.18 Source video UI contract
+### 0.1.18 Source video UI contract (historical compatibility)
 
 The released 0.1.18 Source presentation control remains a stable compatibility contract:
 
@@ -101,7 +101,7 @@ The released 0.1.18 Source presentation control remains a stable compatibility c
 - AstrBot `modalities` remain unchanged;
 - Source-save rollback preserves the original host error and only claims layers actually restored.
 
-This is a stable compatibility constraint, not the current release goal.
+This remains migration and historical evidence. Its visible Source master/selector is retired in 0.1.20; old values are preserved as user intent and cleaned after migration.
 
 ### Migration
 
@@ -144,9 +144,9 @@ Reason: absence is not a negative observation and can conceal transport/account/
 
 Reason: AstrBot already owns routing/fallback/retry; duplicate state machines conflict.
 
-### Extending the shared top capability row as the general provider-specific field mechanism — rejected
+### Extending the shared schema instance as the general provider-specific field mechanism — rejected
 
-Reason: the top capability/modalities path lacks the reliable provider identity needed for isolated fifth-checkbox behavior.
+Reason: the shared schema instance lacks the reliable provider identity needed for isolated fifth-checkbox behavior. This does not reject adapting a private per-dialog clone after the selected Source type is known.
 
 Important: this does **not** reject ordinary saved-model edit-body fields.
 
