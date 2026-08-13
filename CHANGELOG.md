@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.1.21（发布候选）
+
+- 不改 Provider、音频、视频、模型路由或 Dashboard 行为；本版本只修复“商场版本标签与实际冻结包不是同一个稳定运行包”的分发身份问题。
+- 商场 `0.1.19` 的冻结 ZIP 已被逐文件证明来自默认分支旧提交 `a43b678`，而不是当前 `runtime` 提交 `d7dc0f1`：它多带了开发语义文件，并缺少后续加入的非有限浮点拒绝。版本标签、文档页面和 CI 通过都不再被当成下载件身份的替代证明。
+- 将开发语义契约移到 `docs/contracts/SEMANTICS.json`。生产代码从不读取它；默认分支归档与白名单运行包都不再携带该文件。
+- 增加默认分支归档与白名单运行包的逐路径、逐字节一致性门禁。AstrBot Cloud 当前冻结默认分支归档，而直接安装使用 `runtime` 分支；两条入口必须携带相同运行内容。
+- 知识状态机现在能分别表达“稳定版”“活动实验”“验证中的候选”“已可发布候选”，不再逼迫尚未通过阻断项的版本提前自称稳定或可发布；只有发布器要求候选达到 `ready + releaseable=true`。
+- 已退役外部效果工作流按精确身份禁止复活，不再把厂商名、端点或密钥变量名当作永久禁词；历史决策只有被 HOT 状态明确引用时才可表现为活动对象。
+
 ## 0.1.19
 
 - **冻结 0.1.18 Provider Source 面板。** 本版本不改变“显示逐模型视频选项”、当前 Source 的模型选择器、保存/回滚语义或 `volcengine_video_input_enabled` 的运行权威；0.1.19 只增强火山 Ark / Agent Plan 已配置模型的编辑弹窗。
@@ -55,7 +64,7 @@
 - 修复共享模型卡 schema 的 UI 外溢风险：不再把 `volcengine_video_input_enabled` 作为无条件公共 schema 项暴露；改为按火山 Source 的 `provider_source_id` 生成临时条件字段，使用 Source ID 的 UTF-8→hex 可逆无碰撞编码，保存边界转换回正式字段并删除，外国 Provider 无可见字段也不能用伪造临时键生成火山状态。
 - 普通 Ark 动态反馈改为单次实时回执：请求前清理旧值，使用 `ContextVar` 隔离并发模型列表请求，Dashboard 读取一次即消费；当前回执明确字段只覆盖本次 Source 响应中的同名旧展示值，不写入全局 `LLM_METADATAS`，历史回执不能压过新回执。
 - 新增 `AdapterInputTransportError` 区分本地媒体传递/归一化/Ark payload 组装失败与上游模型回执；前者明确 `reached_model=false`、`capability_observed=null`，只说明输入链路没送达，不作为模型不支持模态的证据，也不由插件自行决定 fallback。
-- 新增 `capabilities/SEMANTICS.json` 机器可读语义契约：允许未来新增能力发现与反馈来源，但必须声明来源、时效和权限，禁止把当前无反馈、历史回执或裸 model ID 升格成永久模型事实。
+- 新增机器可读语义契约（当前路径为 `docs/contracts/SEMANTICS.json`）：允许未来新增能力发现与反馈来源，但必须声明来源、时效和权限，禁止把当前无反馈、历史回执或裸 model ID 升格成永久模型事实。
 - 修正供应商适配能力与模型能力反馈的边界：视频设置改为逐模型卡 `volcengine_video_input_enabled` 请求传输开关，不再存放在 Provider Source，也不读写 AstrBot `modalities`；开关只决定是否尝试发送 `video_url`，不是模型支持/不支持视频的结论。
 - 兼容迁移旧 `volcengine_ark_video_input`、`volcengine_agent_plan_video_input`、`volcengine_model_video_input` 以及旧插件曾写入的 `modalities: video`，但迁移只生成新的插件传输字段，绝不删除或改写宿主 `modalities`。
 - 普通 Ark `/models` 改为 Source-scoped 实时稀疏反馈：缺失字段保持“未反馈”，显式 `False`、显式空列表与显式整数 `0` 都作为本轮信息保留；当前回执只在本次 Source 响应中替换同名旧展示值，未回执字段保持宿主管理，并且绝不写入全局 `LLM_METADATAS[model_id]`。

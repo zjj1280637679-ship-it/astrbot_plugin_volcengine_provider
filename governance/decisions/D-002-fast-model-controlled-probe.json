@@ -1,7 +1,14 @@
 {
   "schema_version": "0.1",
   "decision_id": "D-002",
-  "decision": "Run one controlled T2V comparison between doubao-seedance-1-5-pro-251215 and the user-listed doubao-seedance-1-0-pro-fast-251015, changing only model_id, to determine whether the exact Fast ID is executable in the current account and to collect comparable runtime/usage metadata.",
+  "lifecycle": {
+    "status": "completed_historical",
+    "action_authority": "none",
+    "completed_at": "2026-08-12",
+    "result": "evidence/D-002-controlled-model-probe.md",
+    "note": "The approved probe was executed once. Do not repeat it unless a recorded invalidator fires and new authorization is obtained."
+  },
+  "decision": "One controlled T2V comparison was authorized and completed between doubao-seedance-1-5-pro-251215 and doubao-seedance-1-0-pro-fast-251015, changing only model_id.",
   "trigger": "The exact Fast 251015 ID is visible in the user's model card but is not consistently represented in indexed Volcano Engine materials; model routing cannot safely inherit capabilities from other Fast version suffixes.",
   "rights": {
     "authorized_by": ["user instruction to continue the investigation using the supplied API/models"],
@@ -11,7 +18,7 @@
     "invalidators": ["user revokes testing authorization or API access"],
     "verdict": "pass"
   },
-  "capability": {
+  "pre_probe_capability_snapshot": {
     "required_claim_ids": ["C-001", "C-002"],
     "relation_classes": ["conditional_deterministic", "probabilistic"],
     "strongest_evidence": "1.5 Pro E2E; Fast 251015 control-plane observation only",
@@ -38,7 +45,7 @@
     "useful_output": "exact Fast 251015 execution result plus comparable task latency, usage and output metadata against a standardized 1.5 baseline",
     "verdict": "pass"
   },
-  "epistemic_review": {
+  "pre_probe_epistemic_review": {
     "is_this_a_possibility_graph_edge_or_executable_graph_edge": "Fast 251015 is a possibility edge until this probe succeeds",
     "what_exact_claim_is_being_tested_or_used": "Fast 251015 accepts and completes the same minimal 5s 16:9 T2V request as 1.5 Pro",
     "what_failure_would_falsify": "the exact Fast 251015 path under this account/request shape",
@@ -46,5 +53,16 @@
     "does_existing_evidence_make_retesting_unnecessary": false,
     "if_retesting_is_needed_why": "1.5 is repeated only as a controlled contemporaneous comparison baseline, not to re-prove its basic capability"
   },
-  "decision_result": "approved"
+  "post_probe_result": {
+    "outcome": "doubao-seedance-1-0-pro-fast-251015 completed the exact minimal 5-second 16:9 T2V path under the tested account and request shape.",
+    "evidence": "evidence/D-002-controlled-model-probe.md",
+    "verified_domain": "exact Fast 251015 model, current tested account, text-only minimal T2V request",
+    "retest_required": false,
+    "remaining_unknowns": [
+      "single-image I2V for this exact version",
+      "first/last-frame input for this exact version",
+      "stable latency or quality ranking"
+    ]
+  },
+  "decision_result": "completed"
 }

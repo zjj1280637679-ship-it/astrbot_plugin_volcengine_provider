@@ -1,4 +1,6 @@
-# Seedance Objective Conditions — v0.1
+# Seedance Objective Conditions — v0.1 (historical pre-probe snapshot)
+
+> **Lifecycle: COLD / non-action-driving.** This file records the conditions that existed before D-002, D-003 and D-006 were executed. It must not be used as current model status or as authorization to rerun paid probes. Current bounded results live in `strategy/executable-model-graph-v0.2.json`; the provider release goal lives only in `docs/PROJECT_STATE.json`.
 
 Purpose: establish what is objectively known before spending generation quota on capability probes.
 
@@ -53,6 +55,8 @@ Important distinction:
 
 The generic video API accepting image input does not logically prove every model ID supports image-to-video. Model-specific capability must be established separately.
 
+Historical pre-probe status: not yet executed. Current bounded result: exact T2V is executable; exact single-image I2V is also executable. See `evidence/D-003-remaining-models-probe.md` and `evidence/D-006-pro-250528-i2v-probe.md`.
+
 ### 3. doubao-seedance-1-0-lite-t2v-250428
 
 Hard status:
@@ -61,7 +65,7 @@ Hard status:
 - Product intent: developer-community material consistently describes the T2V variant as text-to-video oriented.
 - Current lifecycle note: an official Volcano Engine service-adjustment notice lists the 250428 Lite T2V line for replacement by Seedance 1.5 Pro in the referenced service context. This does not by itself prove the user's Ark entitlement is unavailable; account/runtime context must be distinguished from that notice's service scope.
 
-Runtime status in this project: `untested`.
+Historical pre-probe status: `untested`. Current bounded result: this exact route was rejected before task creation with `InvalidEndpointOrModel.NotFound`; the provider response does not distinguish model absence from account entitlement. See `evidence/D-003-remaining-models-probe.md`.
 
 ### 4. doubao-seedance-1-0-pro-fast-251015
 
@@ -71,7 +75,7 @@ Hard status:
 - Indexed official API/developer materials found so far commonly expose other Pro Fast suffixes (for example 250610), not this exact `251015` identifier.
 - Therefore no capability should be inherited from another Fast suffix solely by family name.
 
-Runtime status in this project: `untested`.
+Historical pre-probe status: `untested`. Current bounded result: exact minimal T2V is executable; I2V, first/last-frame and exact-version audio remain unproven. See `evidence/D-002-controlled-model-probe.md`.
 
 ## API-level facts independent of a particular model's quality
 

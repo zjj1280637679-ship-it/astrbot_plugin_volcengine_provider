@@ -92,4 +92,4 @@ They should not add a parallel lifecycle, hidden capability database, duplicate 
 
 ## Program annotations are explanatory hooks
 
-Machine-readable files such as `capabilities/SEMANTICS.json`, `docs/PROJECT_STATE.json`, and `docs/DECISION_INDEX.json` are navigation and explanation aids. Production runtime must not read them as capability truth or control policy unless a future explicit design decision changes that boundary.
+Machine-readable files such as `docs/contracts/SEMANTICS.json`, `docs/PROJECT_STATE.json`, and `docs/DECISION_INDEX.json` are navigation and explanation aids. Production runtime must not read them as capability truth or control policy unless a future explicit design decision changes that boundary.

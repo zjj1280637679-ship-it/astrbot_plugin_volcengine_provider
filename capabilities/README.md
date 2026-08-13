@@ -7,7 +7,7 @@
 - 普通 Ark `/models` **当前这一轮回执**明确返回的 Source-scoped 稀疏反馈；
 - 旧插件视频字段的一次性**用户意图迁移**。
 
-机器可读定义见 [`SEMANTICS.json`](./SEMANTICS.json)。
+开发与审计使用的机器可读定义见 [`docs/contracts/SEMANTICS.json`](../docs/contracts/SEMANTICS.json)。运行时不读取该文件。
 
 关键语义：
 

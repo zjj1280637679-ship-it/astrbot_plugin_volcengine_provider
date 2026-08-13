@@ -49,7 +49,7 @@ Run `31621942332` executed a real AstrBot 4.27.2 Dashboard against the 0.1.19 ca
 - foreign OpenAI model dialogs exposed no Volcengine fields;
 - the evidence artifact uploaded successfully.
 
-The overall GitHub job later ended red **only in `Post Run astral-sh/setup-uv@v6`**: a background `uv -> astrbot` process still held the setup-uv cache lock, `uv cache prune --ci` waited 300 seconds and timed out. This is workflow teardown evidence, not a UI-rendering failure. The HOT state tracks the cleanup action.
+The overall GitHub job later ended red **only in `Post Run astral-sh/setup-uv@v6`**: a background `uv -> astrbot` process still held the setup-uv cache lock, `uv cache prune --ci` waited 300 seconds and timed out. This is historical workflow-teardown evidence, not a UI-rendering failure. The cleanup was completed in the subsequent stable workflow; no current action is implied here. Read `docs/PROJECT_STATE.json` for the current frontier.
 
 ### L5 — downstream Volcengine protocol attribution
 

@@ -1,225 +1,117 @@
 {
-  "schema_version": 11,
+  "schema_version": 13,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
+  "verdict": {
+    "stable_release": "0.1.19",
+    "stable_status": "repository_and_runtime_published_marketplace_package_diverged",
+    "active_release_candidate": {
+      "version": "0.1.21",
+      "branch": "chore/project-state-clarity-20260814",
+      "status": "ready",
+      "releaseable": true,
+      "purpose": "Make the default-branch marketplace archive and the generated runtime package content-equivalent, without changing provider or media behavior.",
+      "validation": {
+        "source_commit": "5ca2840d4d4449dfcf730a8fad8b52d966fe67ee",
+        "runtime_gate_run": 31724706065,
+        "compatibility_baseline_run": 31724706126,
+        "result": "passed"
+      }
+    },
+    "safe_development_branch": "main",
+    "safe_install_branch": "runtime",
+    "marketplace": {
+      "listed_version": "0.1.19",
+      "status": "package_identity_mismatch",
+      "observed_git_commit": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
+      "expected_runtime_commit": "d7dc0f171cca237304b24604137659bc98a3d962"
+    },
+    "windows_marketplace_install": "blocked_until_corrected_marketplace_package_exists"
+  },
+  "active_experiment": null,
   "development": {
-    "version": "0.1.19",
-    "branch": "main",
-    "status": "released_repository_and_runtime",
-    "pull_request": 8,
-    "merged_feature_pull_request": 7,
-    "feature_main_commit": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
-    "merged_main_commit": "9f406dda365213685f7c67d04b3d0cac583fb153"
+    "version": "0.1.21",
+    "branch": "chore/project-state-clarity-20260814",
+    "track": "release_candidate",
+    "status": "ready_for_repository_and_runtime_publication",
+    "installable": true
   },
   "published_baseline": {
     "version": "0.1.19",
-    "main_branch": "main",
-    "main_release_commit": "9f406dda365213685f7c67d04b3d0cac583fb153",
+    "main_commit": "9f406dda365213685f7c67d04b3d0cac583fb153",
     "runtime_branch": "runtime",
     "runtime_commit": "d7dc0f171cca237304b24604137659bc98a3d962",
     "runtime_tree": "d394a878ee250c6d6d116b9a954589ab0df59ae2",
-    "history": [
-      "docs/archive/PROJECT_STATE-0.1.18.md",
-      "docs/TEST_HISTORY.md",
-      "CHANGELOG.md"
-    ]
+    "dashboard_evidence_run": 31630453415,
+    "runtime_gate_run": 31630774583,
+    "publisher_run": 31630921686,
+    "status": "passed"
   },
   "current_goal": {
-    "id": "0.1.19-external-distribution-observation",
-    "goal": "Preserve the published 0.1.19 repository/runtime baseline while keeping external AstrBot Store refresh and a real Windows Store installation explicitly unverified until directly observed.",
+    "id": "0.1.21-correct-marketplace-package-and-runtime-acceptance",
+    "goal": "Publish one unambiguous 0.1.21 package whose default-branch marketplace archive and generated runtime package are equivalent, then install it from the AstrBot marketplace into the approved Windows Launcher instance and verify the real provider paths.",
+    "active_decision_ids": [],
     "non_goals": [
-      "Do not redesign or extend the 0.1.18 Provider Source panel.",
-      "Do not modify AstrBot modalities or claim model capability from request settings.",
-      "Do not leak Volcengine fields into foreign provider model cards.",
-      "Do not invent a generic Thinking Budget field without a verified Ark mapping.",
-      "Do not infer marketplace refresh or Windows installation success from repository/runtime CI.",
-      "Do not spend paid Volcengine API quota merely to observe distribution state."
-    ],
-    "success_conditions": [
-      "Published repository and runtime identities remain explicit and reproducible from the recorded gate and publisher runs.",
-      "AstrBot Store is called refreshed only after it is directly observed serving 0.1.19.",
-      "Windows Store installation is called verified only after a real installation is directly observed."
+      "Do not resume or publish the stopped 0.1.20 Video-checkbox experiment.",
+      "Do not infer marketplace package identity, Windows installation, or runtime behavior from GitHub CI alone.",
+      "Do not change provider, audio, video, routing, or Dashboard behavior merely to repair distribution identity.",
+      "Do not modify AstrBot shared modalities to express a provider-specific option."
     ]
   },
-  "frozen_constraints": [
-    "AstrBot owns provider lifecycle, routing, fallback, retry, model-card management, metadata display, and shared Dashboard rendering.",
-    "The 0.1.18 Source-level volcengine_video_controls_visible value is presentation state only; per-card volcengine_video_input_enabled remains the Source shortcut/runtime Boolean authority.",
-    "The shared top capability/modalities area is not a safe provider-specific extension surface for the fifth video capability control.",
-    "Ordinary model-edit body rows can be safely projected only onto owned saved model-card copies; this is narrower than the rejected generic capability-row extension.",
-    "Request settings are transport/configuration, not permanent model capability facts.",
-    "Missing feedback is not false; interaction is not judgment.",
-    "Historical QQ media evidence remains valid only within its premises and must be revalidated when REGRESSION_SCOPE invalidators fire.",
-    "Development documentation and evidence stay outside the allow-list runtime package."
-  ],
-  "current_strategy": {
-    "source_ui": "frozen_released_0.1.18_behavior",
-    "model_ui": "project bilingual horizontal rows only onto owned saved Ark and Agent Plan model-card copies",
-    "foreign_provider_policy": "strip_and_never_render_volcengine_model_fields",
-    "modalities_mutation": false,
-    "video": {
-      "source_shortcut_boolean": "volcengine_video_input_enabled",
-      "profile_field": "volcengine_video_input_profile",
-      "ui_modes": ["off", "compressed", "original"],
-      "legacy_true_default": "original",
-      "compressed_transport": "ffmpeg_h264_mp4_fail_closed",
-      "off_behavior": "disable_boolean_but_preserve_last_non_off_profile"
-    },
-    "request_override_priority": [
-      "explicit_horizontal_model_field",
-      "same_key_in_custom_extra_body",
-      "AstrBot_or_Ark_or_model_default"
-    ],
-    "optional_numeric_empty_semantics": "empty_means_do_not_inject_not_zero",
-    "optional_numeric_finite_semantics": "all_persisted_float_overrides_must_be_finite",
-    "release_version_authority": "metadata_yaml_unsigned_three_part_version_to_runtime_manifest_to_candidate_and_installed_metadata_identity_checks_with_strictly_newer_version_for_changed_runtime_tree",
-    "native_archive_retry": "maximum_three_attempts_only_for_http_408_429_5xx_or_httpx_transport_errors_with_partial_install_cleanup",
-    "github_actions_supply_chain": "all_external_actions_are_pinned_to_full_commit_sha",
-    "reasoning": {
-      "thinking_mode": "maps_to_thinking.type_when_explicit",
-      "reasoning_effort": "maps_to_reasoning_effort_when_explicit",
-      "generic_thinking_budget": "not_admitted_without_verified_ark_mapping"
-    },
-    "astrbot_hook_compatibility": {
-      "4.26.1": "_apply_provider_specific_extra_body_overrides",
-      "4.27.2_plus": "_apply_provider_specific_request_overrides"
-    }
-  },
-  "validation_progress": {
-    "knowledge_drift_guard": {
-      "status": "passed",
-      "workflow": "Runtime Distribution Gate / artifact-boundary / Reject stale HOT documentation authority",
-      "meaning": "metadata version, HOT frontier, WARM decision index, entry-point HOT pointers, cold archive, and strategy supersession markers are mechanically consistent"
-    },
-    "runtime_distribution_gate": {
-      "run_id": 31624873790,
-      "head": "cfd25d1d0200d58eb5e50b715ded8b9f76aaf009",
-      "status": "passed",
-      "astrbot_versions": ["4.26.1", "4.27.2"],
-      "compressed_video_positive_contract": "passed_real_ffmpeg_round_trip"
-    },
-    "real_dashboard_model_field_evidence": {
-      "run_id": 31624873834,
-      "head": "cfd25d1d0200d58eb5e50b715ded8b9f76aaf009",
-      "status": "passed_complete_job",
-      "matrix_all_passed": true,
-      "page_errors": [],
-      "ark": "passed_bilingual_fields_save_reopen_persistence_and_0.1.18_source_ui_preservation",
-      "agent_plan": "passed_bilingual_fields_save_reopen_persistence_and_0.1.18_source_ui_preservation",
-      "foreign_openai": "passed_no_volcengine_field_leak",
-      "explicit_server_teardown": "passed",
-      "setup_uv_post_cleanup": "passed",
-      "artifact_upload": "passed"
-    },
-    "merged_feature_runtime_distribution_gate": {
-      "run_id": 31625904337,
-      "head": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
-      "status": "passed",
-      "meaning": "the initially merged 0.1.19 runtime artifact and packaged behavior passed before the publication blocker was found"
-    },
-    "failed_runtime_publisher": {
-      "run_id": 31626139699,
-      "head": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
-      "status": "failed_before_promotion",
-      "deterministic_root_cause": "validate-runtime-store-source.yml compared the 0.1.19 manifest with a stale literal 0.1.18",
-      "runtime_unchanged": "4586aa2eb573eb97a72baaaa152c727e3b35530e",
-      "candidate_cleanup": "passed_no_residual_candidate_branch"
-    },
-    "released_main_runtime_distribution_gate": {
-      "run_id": 31630774583,
-      "head": "9f406dda365213685f7c67d04b3d0cac583fb153",
-      "status": "passed",
-      "astrbot_versions": ["4.26.1", "4.27.2"],
-      "meaning": "the exact repaired main release artifact and packaged behavior passed before promotion"
-    },
-    "successful_runtime_publisher": {
-      "run_id": 31630921686,
-      "attempt": 4,
-      "head": "9f406dda365213685f7c67d04b3d0cac583fb153",
-      "status": "passed",
-      "prepare_candidate": "passed",
-      "pre_promotion_native_installer_cells": "4_of_4_passed",
-      "promotion": "passed",
-      "post_promotion_native_installer_cells": "4_of_4_passed",
-      "runtime_commit": "d7dc0f171cca237304b24604137659bc98a3d962",
-      "runtime_tree": "d394a878ee250c6d6d116b9a954589ab0df59ae2",
-      "runtime_metadata_version": "0.1.19",
-      "candidate_cleanup": "passed_no_candidate_refs",
-      "paid_volcengine_api_calls": false
-    }
-  },
-  "known_false_failures": [],
-  "resolved_harness_history": [
-    {
-      "id": "UI-EVIDENCE-UV-POST-CLEANUP-LOCK",
-      "lifecycle": "historical_resolved",
-      "failed_run": 31621942332,
-      "failed_layer": "workflow_teardown_only",
-      "root_cause": "background uv -> astrbot process held setup-uv cache lock while post-step uv cache prune --ci waited 300 seconds",
-      "product_evidence_on_failed_run": "passed_before_teardown",
-      "fix": [
-        "disable setup-uv cache in real Dashboard evidence workflow",
-        "start evidence server in its own process group with setsid",
-        "explicitly stop the uv/AstrBot process group before action post-steps"
-      ],
-      "verification_run": 31624873834,
-      "verification": "complete job green including explicit Stop AstrBot evidence server and Post Run astral-sh/setup-uv"
-    },
-    {
-      "id": "PUBLISH-0.1.19-STALE-VERSION-LITERAL",
-      "lifecycle": "historical_resolved",
-      "failed_run": 31626139699,
-      "failed_layer": "pre_promotion_native_install_validation",
-      "root_cause": "validate-runtime-store-source.yml compared the generated 0.1.19 manifest with a stale hardcoded 0.1.18 literal",
-      "fix": "derive the runtime manifest from metadata.yaml and compare candidate and installed metadata with the manifest instead of a duplicated release literal",
-      "verification_run": 31630921686,
-      "verification": "publisher attempt 4 passed all pre-promotion and post-promotion cells"
-    },
-    {
-      "id": "PUBLISH-0.1.19-GITHUB-ARCHIVE-TRANSIENTS",
-      "lifecycle": "historical_resolved",
-      "failed_run": 31626139699,
-      "jobs": [94212920906, 94212921033],
-      "observations": [
-        "GitHub archive returned HTTP 503",
-        "GitHub archive disconnected before sending a response"
-      ],
-      "product_meaning": "none; the same candidate was downloaded by the other matrix cells",
-      "fix": "bounded retry only for retryable HTTP status or transport failures, with partial-install cleanup",
-      "verification_run": 31630921686,
-      "verification": "publisher attempt 4 passed all eight native-installer cells"
-    }
-  ],
   "active_validation_frontier": {
-    "release": "0.1.19",
-    "name": "external_distribution_observation",
-    "current_stage": "repository_and_runtime_published_external_store_and_windows_install_unobserved",
+    "release": "0.1.21",
+    "name": "distribution_identity_and_marketplace_acceptance",
+    "current_stage": "candidate_ready_for_repository_and_runtime_publication",
     "next_actions": [
-      "Observe whether AstrBot Store refreshes to metadata version 0.1.19 without inferring that state from repository CI.",
-      "Record a real Windows Store installation only if it is directly performed and observed.",
-      "Keep repository/runtime publication complete even while those external states remain unknown."
+      "Merge only the exact 0.1.21 candidate that passed the recorded runtime and Dashboard gates so the runtime publisher can advance.",
+      "Publish 0.1.21 in AstrBot Cloud, download the frozen marketplace ZIP, and compare every path and byte with the promoted runtime package.",
+      "Only after package equivalence passes, install from the marketplace into the approved Launcher instance, fully restart AstrBot, verify registration/models/logs, and make one real configured-provider request.",
+      "Start any future feature as a separate experiment object and workflow; do not borrow evidence or code from the stopped 0.1.20 experiment."
+    ],
+    "observed": [
+      "AstrBot Cloud version tab showed v0.1.19 as Published on 2026-08-14, but the listing label did not identify the downloaded bytes.",
+      "The frozen marketplace 0.1.19 ZIP exactly matched default-branch commit a43b678, not runtime commit d7dc0f1.",
+      "The marketplace ZIP contained development-only capabilities/SEMANTICS.json and lacked the later finite-number validation in capabilities/model_fields.py.",
+      "The current Cloud publication path therefore requires the default-branch export and generated runtime artifact to be equivalent before publication."
     ]
   },
+  "closed_experiments": [
+    {
+      "id": "0.1.20-source-scoped-video-modality",
+      "version": "0.1.20",
+      "branch": "fix/source-scoped-video-0.1.20",
+      "pull_request": 10,
+      "status": "stopped_after_failure_limit",
+      "releaseable": false,
+      "merged": false,
+      "passed": [
+        "minimal runtime artifact boundary",
+        "AstrBot 4.26.1 and 4.27.2 plugin loading",
+        "Video visible on Ark and Agent Plan create dialogs",
+        "Video absent from the foreign OpenAI create dialog"
+      ],
+      "failed": [
+        "After save and reopen, both owned cards lacked _volcengine_video_input_mode_ui."
+      ],
+      "final_failed_run": 31719539311,
+      "archive": "docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md",
+      "resume_condition": "A new design must first explain and test the create-to-save-to-reopen projection boundary without modifying the stable workflow identity."
+    }
+  ],
+  "stable_boundaries": [
+    "AstrBot owns provider lifecycle, routing, fallback, retry, model-card management, and the shared Dashboard schema.",
+    "The plugin adapts Volcengine request and media protocols; it does not maintain a second global model-capability database.",
+    "Request transport settings are not permanent model-capability facts.",
+    "Provider-specific fields must not leak into foreign provider cards.",
+    "Development documentation, tests, evidence, and experiments stay outside the allow-list runtime package.",
+    "A passing gate proves only the object and layer named by that gate."
+  ],
   "knowledge_lifecycle": {
     "policy": "docs/KNOWLEDGE_LIFECYCLE.md",
     "hot_authority": "docs/PROJECT_STATE.json",
     "warm_navigation": "docs/DECISION_INDEX.json",
     "cold_archive": "docs/archive/",
-    "old_0_1_18_frontier_status": "historical_not_action_driving"
+    "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "authoritative_stable_constraints": [
-    "docs/AI_RULES.md",
-    "docs/KNOWLEDGE_BOUNDARY.md",
-    "docs/KNOWLEDGE_LIFECYCLE.md",
-    "docs/REGRESSION_SCOPE.md",
-    "docs/DESIGN_DECISIONS.md",
-    "docs/ADR/",
-    "capabilities/SEMANTICS.json"
-  ],
-  "historical_ledgers": [
-    "docs/TEST_HISTORY.md",
-    "docs/E2E_MATRIX.md",
-    "CHANGELOG.md",
-    "docs/archive/"
-  ],
-  "warning": "This file is the single HOT/current project-state authority. Other documents must reference it rather than maintaining independent current release goals or validation frontiers. It has no runtime authority and must remain outside the generated runtime distribution."
+  "warning": "Read verdict first. Stable release, active candidate, external observation, and stopped experiments are separate objects. Do not combine their green or red evidence into one project verdict."
 }

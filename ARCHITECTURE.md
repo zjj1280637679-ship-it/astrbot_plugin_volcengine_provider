@@ -13,7 +13,7 @@ astrbot_plugin_volcengine_provider/
 │   ├── errors.py           # 本地媒体传递失败的结构化来源信息
 │   └── logging.py          # SDK 音视频结构化脱敏
 ├── capabilities/
-│   ├── SEMANTICS.json      # 机器可读：信息来源、时效、权限、不成立推论
+│   ├── model_fields.py     # 逐模型请求字段；不承载开发语义契约
 │   ├── model_scope.py      # 逐模型卡视频传输设置 + 旧配置迁移
 │   ├── source_hints.py     # 当前 /models 回执的一次性 ContextVar 邮箱
 │   └── source_migration.py # 换 Source 时只清理插件字段
@@ -46,4 +46,4 @@ astrbot_plugin_volcengine_provider/
 
 ## 未来扩展
 
-当前实现不预言未来 Provider/AstrBot 能知道什么。未来可以新增自动能力发现、官方反馈源或用户验证机制，但新增信息必须声明来源、时效与权限；不能用“当前没反馈”推出“不支持”，也不能让过去一次回执压过未来新的条件与回执。详见 `capabilities/SEMANTICS.json`。
+当前实现不预言未来 Provider/AstrBot 能知道什么。未来可以新增自动能力发现、官方反馈源或用户验证机制，但新增信息必须声明来源、时效与权限；不能用“当前没反馈”推出“不支持”，也不能让过去一次回执压过未来新的条件与回执。开发与审计语义见 `docs/contracts/SEMANTICS.json`；运行时不读取该文件。

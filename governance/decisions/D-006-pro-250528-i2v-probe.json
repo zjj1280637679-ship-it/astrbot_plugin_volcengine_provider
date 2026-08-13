@@ -1,7 +1,14 @@
 {
   "schema_version": "0.1",
   "decision_id": "D-006",
-  "decision": "Run one exact single-image image-to-video probe on doubao-seedance-1-0-pro-250528 using the already verified public GitHub reference image transport and documented prompt-suffix controls.",
+  "lifecycle": {
+    "status": "completed_historical",
+    "action_authority": "none",
+    "completed_at": "2026-08-12",
+    "result": "evidence/D-006-pro-250528-i2v-probe.md",
+    "note": "The approved probe was executed once. Do not recreate or rerun its retired workflow from this record."
+  },
+  "decision": "One exact single-image image-to-video probe was authorized and completed on doubao-seedance-1-0-pro-250528 using the verified public GitHub reference transport.",
   "trigger": "The current executable model graph has only one E2E I2V route (1.5 Pro). Pro 250528 is already E2E for T2V and official Ark examples/document evidence make image input a strong candidate, but exact current-account I2V remains load-bearing unknown for fallback/routing.",
   "rights": {
     "authorized_by": ["user instruction to continue advancing model capability/modality strategy"],
@@ -11,7 +18,7 @@
     "invalidators": ["user revokes API or asset-use authorization"],
     "verdict": "pass"
   },
-  "capability": {
+  "pre_probe_capability_snapshot": {
     "required_claim_ids": ["C-001", "C-003", "C-013"],
     "relation_classes": ["conditional_deterministic"],
     "strongest_evidence": "T2V E2E + official/documented I2V candidate",
@@ -38,7 +45,7 @@
     "useful_output": "exact current-account verdict for Pro 250528 single-image I2V and observed task/output metadata",
     "verdict": "pass"
   },
-  "epistemic_review": {
+  "pre_probe_epistemic_review": {
     "is_this_a_possibility_graph_edge_or_executable_graph_edge": "candidate edge until successful E2E run",
     "what_exact_claim_is_being_tested_or_used": "Pro 250528 accepts one image_url plus text and completes a 5-second 16:9 I2V task under the current account",
     "what_failure_would_falsify": "only this exact model/account/request path",
@@ -46,5 +53,16 @@
     "does_existing_evidence_make_retesting_unnecessary": false,
     "if_retesting_is_needed_why": "this exact modality/model/account edge has never been executed; this is first verification"
   },
-  "decision_result": "approved"
+  "post_probe_result": {
+    "outcome": "doubao-seedance-1-0-pro-250528 completed the exact public single-image URL plus text I2V path and produced a downloadable MP4.",
+    "evidence": "evidence/D-006-pro-250528-i2v-probe.md",
+    "verified_domain": "exact Pro 250528 model, current tested account, one public image URL plus text, 5-second 16:9 I2V",
+    "retest_required": false,
+    "remaining_unknowns": [
+      "stable identity/detail consistency",
+      "quality ranking against 1.5 Pro",
+      "first/last-frame and native-audio support"
+    ]
+  },
+  "decision_result": "completed"
 }

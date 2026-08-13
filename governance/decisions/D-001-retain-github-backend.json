@@ -1,7 +1,14 @@
 {
   "schema_version": "0.1",
   "decision_id": "D-001",
-  "decision": "Retain GitHub Actions + Git blob transport + GitHub Artifacts as the current physical backend for single Seedance video generation; do not add MCP, Pipedream, n8n, R2, or a new Asset Gateway yet.",
+  "lifecycle": {
+    "status": "completed_historical",
+    "action_authority": "none",
+    "completed_at": "2026-08-12",
+    "current_state_source": "docs/PROJECT_STATE.json",
+    "note": "This records a completed historical choice. It does not authorize recreating retired workflows or spending quota."
+  },
+  "decision": "GitHub Actions + Git blob transport + GitHub Artifacts were retained for the completed single Seedance video-generation investigations; this is not the current provider-release backend or an instruction to recreate probes.",
   "trigger": "The single-video text-to-video and image-to-video paths are already E2E verified, while earlier architecture expansion was driven partly by misattributed failures rather than demonstrated backend limits.",
   "rights": {
     "authorized_by": [

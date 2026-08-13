@@ -1,10 +1,21 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.19-e85d3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.21_candidate-e85d3f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+## 当前状态（先看这里）
+
+| 对象 | 当前结论 |
+|---|---|
+| 你可以安装的稳定版 | **0.1.19**；当前可信来源是 `runtime.zip`，不要把商场同名标签当成包身份 |
+| 活跃发布候选 | **0.1.21**，分发身份修复已通过发布前门禁，可以推进仓库与 `runtime` 发布；尚未完成商场下载件与 Windows 实机验收 |
+| 0.1.20 原生 Video 勾选实验 | 已停止、未合并、未发布；不要当成更新版 |
+| AstrBot 商场与 Windows 安装 | 版本页显示 **v0.1.19 Published**，但冻结下载包与稳定 `runtime` 不一致；先修正为 0.1.21，再做 Windows 商场实机验收 |
+
+机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)；实验失败与稳定发布成功是两个不同对象，不能相互覆盖。
 
 装上这款插件，QQ 语音会在可靠转换后，连同完整聊天上下文交给你正在使用的火山方舟主模型；本轮发送或引用的视频，也能由同一个模型看懂并继续回应。你不需要另配 STT、转录模型，也不用再搭建一条互相失忆的旁路。
 
@@ -45,7 +56,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-`0.1.19` 已在仓库与经过门禁验证的 `runtime` 分支发布；AstrBot 插件市场刷新与真实 Windows 商店安装仍属于尚未观察到的外部状态。如果市场已经显示 `0.1.19`，可以直接安装或更新；尚未刷新时，请按下面的最小运行包手动安装：
+`0.1.19` 的仓库与 `runtime` 分支已通过门禁，但 2026-08-14 下载到的商场同名冻结包来自更早的默认分支提交，并不等同于稳定 `runtime`。在 0.1.21 完成商场发布和逐文件验收前，请不要用商场的 0.1.19 包；如需当前稳定包，请按下面的最小运行包手动安装：
 
 1. 下载 [runtime.zip](https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip)。
 2. 解压 ZIP，把其中唯一的插件目录放入 AstrBot 的 `data/plugins/`；不要把 ZIP 原样塞进插件目录，也不要额外套一层目录。确认 `metadata.yaml` 与 `main.py` 位于插件目录根部。
@@ -156,9 +167,11 @@ metadata/
   └─ agent_plan.py Agent Plan model-name 候选；不维护 model-ID 能力先验
 
 capabilities/
-  ├─ SEMANTICS.json      机器可读语义边界
   ├─ model_scope.py      逐模型卡视频请求传输设置与迁移语义
   └─ source_hints.py     当前 Source 回执的临时展示上下文
+
+docs/contracts/
+  └─ SEMANTICS.json      仅供开发与审计读取；不进入运行包
 
 compatibility/astrbot.py
   └─ 只放可删除的 AstrBot 临时兼容 shim
@@ -253,7 +266,7 @@ registry.py
 ### 0.1.19 模型设置与发布证据
 
 - 火山 Ark / Agent Plan 已保存模型卡的双语横向请求设置已在 AstrBot `4.26.1` / `4.27.2` 最小运行包合同中通过；真实 `4.27.2` Dashboard 证据确认火山模型显示并持久化这些字段、外国 Provider 不泄漏字段，0.1.18 Source 视频开关与选择器保持不变。压缩视频正向合同使用真实 ffmpeg 编码与完整解码，不调用付费火山 API。
-- PR #8 已合并到 `main` 提交 `9f406dda365213685f7c67d04b3d0cac583fb153`；主门禁 `31630774583` 与发布器 `31630921686`（第 4 次尝试）均成功。发布器的发布前、发布后原生安装矩阵各 4 格全部通过，稳定 `runtime` 提交为 `d7dc0f171cca237304b24604137659bc98a3d962`，树为 `d394a878ee250c6d6d116b9a954589ab0df59ae2`，`metadata.yaml` 报告 `0.1.19`，且当前没有候选分支残留。这些结果证明仓库与运行分发层发布完成；不代替 AstrBot 商店刷新或真实 Windows 商店安装观察。
+- PR #8 已合并到 `main` 提交 `9f406dda365213685f7c67d04b3d0cac583fb153`；主门禁 `31630774583` 与发布器 `31630921686`（第 4 次尝试）均成功。发布器的发布前、发布后原生安装矩阵各 4 格全部通过，稳定 `runtime` 提交为 `d7dc0f171cca237304b24604137659bc98a3d962`，树为 `d394a878ee250c6d6d116b9a954589ab0df59ae2`，`metadata.yaml` 报告 `0.1.19`，该次 publisher 创建的临时候选引用也已清理。这些结果证明当次仓库与运行分发层发布完成；不代替 AstrBot 商店下载件或真实 Windows 商店安装观察。
 
 真实额度测试默认跳过，只有显式注入临时环境变量时才运行。测试代码不会主动读取正式配置或保存密钥。
 
