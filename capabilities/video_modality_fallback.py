@@ -92,8 +92,9 @@ def inject_video_modality_fallback(payload: dict[str, Any]) -> dict[str, Any]:
     """Add a marked fifth Video option without mutating the host response.
 
     If AstrBot already exposes ``video`` natively, no marker is added and the
-    host metadata is left untouched.  This distinction lets the frontend avoid
-    deleting a future host-native Video capability from foreign providers.
+    host metadata is left untouched.  An existing plugin marker is preserved so
+    repeated wrappers remain idempotent and the frontend can still distinguish
+    fallback Video from future host-native Video support.
     """
 
     if not isinstance(payload, dict):
@@ -114,8 +115,9 @@ def inject_video_modality_fallback(payload: dict[str, Any]) -> dict[str, Any]:
         return result
 
     if "video" in options:
-        # Native/future host support must never be reclassified as plugin fallback.
-        modalities.pop(VIDEO_MODALITY_FALLBACK_MARKER, None)
+        if modalities.get(VIDEO_MODALITY_FALLBACK_MARKER) is not True:
+            # Native/future host support must never be reclassified as plugin fallback.
+            modalities.pop(VIDEO_MODALITY_FALLBACK_MARKER, None)
         return result
 
     next_options = [*options, "video"]
