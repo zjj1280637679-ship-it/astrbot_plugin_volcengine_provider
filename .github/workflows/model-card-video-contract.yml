@@ -16,6 +16,7 @@ on:
       - tests/test_model_card_video_runtime_switch.py
       - tests/test_model_card_video_unload_contract.py
       - tests/test_0_1_20_dashboard_asset_scope.py
+      - tests/test_0_1_23_video_delivery_fallback.py
       - tests/e2e/provider_card_matrix/**
   push:
     branches: [main]
@@ -30,6 +31,7 @@ on:
       - tests/test_model_card_video_runtime_switch.py
       - tests/test_model_card_video_unload_contract.py
       - tests/test_0_1_20_dashboard_asset_scope.py
+      - tests/test_0_1_23_video_delivery_fallback.py
       - tests/e2e/provider_card_matrix/**
 
 permissions:
@@ -107,13 +109,14 @@ jobs:
           uv run --directory AstrBot astrbot conf set dashboard.username e2e-admin
           uv run --directory AstrBot astrbot conf set dashboard.password E2e-password-123
 
-      - name: Prove runtime selection and unload contracts
+      - name: Prove runtime selection, robust delivery, and unload contracts
         shell: bash
         run: |
           set -euo pipefail
           uv run --directory AstrBot python ../tests/test_model_card_video_runtime_switch.py
           uv run --directory AstrBot python ../tests/test_model_card_video_unload_contract.py
           uv run --directory AstrBot python ../tests/test_0_1_20_dashboard_asset_scope.py
+          uv run --directory AstrBot python ../tests/test_0_1_23_video_delivery_fallback.py
 
       - name: Install Playwright Chromium
         run: |
