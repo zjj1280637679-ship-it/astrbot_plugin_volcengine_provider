@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - agent/robust-video-fallback-0.1.23
+      - fix/0.1.24-object-scope-ui
+      - test-install-0.1.24-object-scope-ui
     paths:
       - .github/workflows/real-source-type-video-differential.yml
       - tests/e2e/real_source_type_video_differential.py
@@ -20,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: real-source-type-video-differential
+  group: real-source-type-video-differential-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -131,7 +133,7 @@ jobs:
           test "$ready" = '1'
           grep -q 'Volcengine providers registered' /tmp/astrbot-real-differential.log
 
-      - name: Run same-endpoint same-key same-model differential
+      - name: Run same-endpoint same-key same-model semantic DOM differential
         run: python tests/e2e/real_source_type_video_differential.py
 
       - name: Capture redacted startup diagnostics only
