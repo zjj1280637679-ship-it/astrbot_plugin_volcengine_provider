@@ -1,77 +1,67 @@
 {
-  "schema_version": 13,
+  "schema_version": 14,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
-    "stable_release": "0.1.21",
-    "stable_status": "repository_runtime_and_marketplace_published",
-    "active_release_candidate": {
-      "version": "0.1.22",
-      "branch": "release/0.1.22-model-card-video",
-      "status": "ready",
-      "releaseable": true,
-      "purpose": "Publish the recovered source-scoped model-card Video modality implementation as a new version because its 0.1.20 candidate was never merged or published.",
-      "validation": {
-        "recovered_source_commit": "ac8cdb0d8ef1e307c7975c1adc6f8ba72cc48c4a",
-        "runtime_gate_run": 31764158444,
-        "compatibility_baseline_run": 31764158500,
-        "result": "local_and_remote_release_gates_passed"
-      }
-    },
+    "stable_release": "0.1.22",
+    "stable_status": "repository_main_and_runtime_recovered_marketplace_0_1_22_unverified",
+    "active_release_candidate": null,
     "safe_development_branch": "main",
     "safe_install_branch": "runtime",
     "marketplace": {
       "listed_version": "0.1.21",
-      "status": "published"
+      "status": "last_verified_published_0_1_21_0_1_22_external_package_unverified"
     },
-    "windows_marketplace_install": "0.1.22_pending_publication"
+    "windows_marketplace_install": "0.1.22_unverified"
   },
   "active_experiment": null,
   "development": {
     "version": "0.1.22",
-    "branch": "release/0.1.22-model-card-video",
-    "track": "release_candidate",
-    "status": "ready_recovered_model_card_video_release",
+    "branch": "main",
+    "track": "stable",
+    "status": "recovered_model_card_video_contract_locked",
     "installable": true
   },
   "published_baseline": {
-    "version": "0.1.21",
-    "main_commit": "450850b3ea45d6e054ef803ba85207d4882b7c9d",
+    "version": "0.1.22",
+    "main_commit": "d0fe4aed5b7fa6f34caaf705840cdc003f2f351b",
     "runtime_branch": "runtime",
-    "runtime_commit": "4b945d6e288e1fc6c9d718672357f319e96eb0ee",
+    "runtime_commit": "4e104b1d62dda0351e57451ab5351568f3376ef7",
     "runtime_tree": null,
-    "dashboard_evidence_run": null,
-    "runtime_gate_run": null,
+    "dashboard_evidence_run": 31766362928,
+    "runtime_gate_run": 31766362866,
     "publisher_run": null,
-    "status": "passed"
+    "status": "repository_runtime_and_contract_verified_marketplace_unverified"
   },
   "current_goal": {
-    "id": "0.1.22-publish-recovered-model-card-video",
-    "goal": "Publish the recovered model-card Video modality implementation as 0.1.22 with the new icon, without adding unrelated behavior.",
+    "id": "protect-and-externally-verify-0.1.22-model-card-video",
+    "goal": "Preserve the recovered source-scoped native model-card Video modality as the only current UI contract, prevent regression to Source-level or shared-schema substitutes, and keep marketplace/Windows observations separate until directly verified.",
     "active_decision_ids": [],
     "non_goals": [
-      "Do not add unrelated provider, media, routing, or Dashboard behavior.",
-      "Do not publish the never-released 0.1.20 identity retroactively.",
+      "Do not replace the native model-card Video modality with a Provider Source master switch or Source model selector.",
+      "Do not inject video into AstrBot's process-global/shared provider.items.modalities schema.",
       "Do not expose the Video modality on foreign provider model cards.",
-      "Do not treat the retired _volcengine_video_input_mode_ui row as a release requirement."
+      "Do not treat the retired _volcengine_video_input_mode_ui row as a release requirement.",
+      "Do not claim AstrBot marketplace 0.1.22 publication or Windows installation until the external package is directly observed."
     ]
   },
   "active_validation_frontier": {
     "release": "0.1.22",
-    "name": "recovered_model_card_video_publication",
-    "current_stage": "remote_release_gates_passed_ready_to_publish",
+    "name": "recovered_model_card_video_contract_and_external_distribution",
+    "current_stage": "repository_runtime_and_real_dashboard_contract_passed_marketplace_unverified",
     "next_actions": [
-      "Merge the exact validated 0.1.22 candidate into main.",
-      "Promote the exact 0.1.22 runtime package.",
-      "Publish the promoted runtime package in AstrBot Cloud."
+      "Keep docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md and the Model-card Video Contract workflow green for any future Video/modalities/Provider-UI change.",
+      "Verify the AstrBot marketplace listing/package for 0.1.22 directly before changing marketplace status.",
+      "Verify a real Windows/Launcher install separately before crediting that external product path."
     ],
     "observed": [
-      "AstrBot Cloud lists 0.1.11 through 0.1.19 and 0.1.21 as Published, with no 0.1.20 entry.",
-      "PR #10 for 0.1.20 is closed and unmerged; main and runtime never contained its model-card Video implementation.",
-      "The final 0.1.20 Dashboard run reached owned and foreign modality-scope assertions; its recorded failure was an obsolete requirement for _volcengine_video_input_mode_ui.",
-      "The 0.1.22 runtime restores the eight runtime files from ac8cdb0, changes only release identity and logo beyond that recovered implementation, and passes the local packaged contract matrix.",
-      "Runtime Distribution Gate run 31764158444 passed the artifact boundary and AstrBot 4.26.1 / 4.27.2 runtime-load matrix.",
-      "Compatibility Baseline Dashboard Regression run 31764158500 passed the real Dashboard evidence for owned model-card native Video selection, persistence, and foreign-provider absence."
+      "PR #12 restored the source-scoped native model-card Video implementation from the previously unmerged ac8cdb0 candidate and merged it to main as e4e5a28571898e4475d04d9c10e793a23e80fe5a.",
+      "The runtime branch currently points to 4e104b1d62dda0351e57451ab5351568f3376ef7 and its metadata reports 0.1.22.",
+      "The recovered implementation adds Video only after the Dashboard has a private model-dialog schema clone and the selected Source type is one of the two plugin-owned Volcengine types; backend shared-schema injection is not the current solution.",
+      "PR #13 merged the permanent five-condition contract, recovery anchor, runtime on/off contract, unload restoration contract, and AstrBot 4.27.3 real-Dashboard regression gate to main as d0fe4aed5b7fa6f34caaf705840cdc003f2f351b.",
+      "Model-card Video Contract run 31766362928 passed on a real AstrBot 4.27.3 Dashboard build, including owned Ark/Agent Plan Video presence, foreign-provider absence, save/reopen persistence, runtime selection behavior, and unload restoration.",
+      "Runtime Distribution Gate run 31766362866 passed the package boundary and AstrBot 4.26.1 / 4.27.2 runtime-load and packaged contract matrices.",
+      "The last recorded marketplace observation remains v0.1.21 Published; this task did not directly verify a marketplace 0.1.22 package or Windows install, so those external states remain uncredited."
     ]
   },
   "closed_experiments": [
@@ -80,7 +70,7 @@
       "version": "0.1.20",
       "branch": "fix/source-scoped-video-0.1.20",
       "pull_request": 10,
-      "status": "invalidated",
+      "status": "superseded",
       "releaseable": false,
       "merged": false,
       "passed": [
@@ -90,20 +80,21 @@
         "Video absent from the foreign OpenAI create dialog"
       ],
       "failed": [
-        "The historical test incorrectly required the retired _volcengine_video_input_mode_ui row after the native Video modality assertion had already passed."
+        "The historical final test incorrectly required the retired _volcengine_video_input_mode_ui row after the native Video modality assertion had already passed."
       ],
       "final_failed_run": 31719539311,
       "archive": "docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md",
-      "resume_condition": "Satisfied by the 0.1.22 recovery candidate, which tests native Video selection persistence directly and keeps the stable workflow identity."
+      "resume_condition": "Satisfied by the 0.1.22 recovery: the correct runtime implementation was restored, save/reopen is tested directly, foreign providers remain clean, and the obsolete Source-row requirement is retired."
     }
   ],
   "stable_boundaries": [
     "AstrBot owns provider lifecycle, routing, fallback, retry, model-card management, and the shared Dashboard schema.",
     "The plugin adapts Volcengine request and media protocols; it does not maintain a second global model-capability database.",
+    "Video is a native per-model-card modalities selection only inside the private dialog clone for the two plugin-owned Source types; Provider Source controls and shared-schema injection are not substitutes.",
     "Request transport settings are not permanent model-capability facts.",
     "Provider-specific fields must not leak into foreign provider cards.",
     "Development documentation, tests, evidence, and experiments stay outside the allow-list runtime package.",
-    "A passing gate proves only the object and layer named by that gate."
+    "A passing gate proves only the object and layer named by that gate; the five Video conditions must pass jointly before the feature is credited."
   ],
   "knowledge_lifecycle": {
     "policy": "docs/KNOWLEDGE_LIFECYCLE.md",
@@ -112,5 +103,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "Read verdict first. Stable release, active candidate, external observation, and stopped experiments are separate objects. Do not combine their green or red evidence into one project verdict."
+  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. Historical Source-level controls are evidence only and must not be reconstructed as the current product behavior. External marketplace/Windows state remains separate from repository/runtime evidence."
 }
