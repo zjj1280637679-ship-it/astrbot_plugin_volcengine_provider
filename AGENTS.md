@@ -11,9 +11,10 @@ This repository implements Volcengine Ark providers for AstrBot. It adapts Volce
 ## Read in this order
 
 1. `docs/PROJECT_STATE.json` — current verdict, stable release, active candidate, frontier, and stopped experiments.
-2. `docs/AI_ONBOARDING.md` — choose the one subsystem relevant to the task.
-3. `docs/AI_RULES.md` and `docs/KNOWLEDGE_LIFECYCLE.md` — modification and lifecycle rules.
-4. Only then read the specific ADR, test, release rule, or runtime module linked by the project map.
+2. **For any model-card / Video / modalities / Provider Source UI task, read `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md` before changing code.** This is the non-negotiable product boundary recovered in 0.1.22.
+3. `docs/AI_ONBOARDING.md` — choose the one subsystem relevant to the task.
+4. `docs/AI_RULES.md` and `docs/KNOWLEDGE_LIFECYCLE.md` — modification and lifecycle rules.
+5. Only then read the specific ADR, test, release rule, or runtime module linked by the project map.
 
 Do not bulk-read every historical document before identifying the affected object. More context is not automatically more authority.
 
@@ -40,15 +41,23 @@ Do not bulk-read every historical document before identifying the affected objec
 - Development explainability is not runtime payload: tests, CI, ADRs, evidence, experiments, internal research, and lifecycle documents stay outside the generated runtime artifact unless a concrete runtime consumer requires them.
 - The marketplace artifact is generated from an allow-list. Never publish the development repository archive as the user package.
 
-## Dashboard scope rule
+## Dashboard scope rule — recovered 0.1.22 invariant
 
-Do not overgeneralize the 0.1.18 Source-UI decision.
+Do **not** confuse the Provider Source page with one configured model card.
 
-- The shared **top capability/modalities** surface is not a reliable provider-specific extension boundary for the fifth video capability checkbox/icon.
-- Ordinary **saved-model edit-body rows** can be provider-specific when the owned Source/model identity is known and the fields are projected only onto owned model copies.
-- The closed 0.1.20 private-dialog-clone experiment achieved create-dialog isolation but failed save/reopen completeness. It is archived evidence, not a current solution.
+The recovered product requirement is exact:
 
-ADR-0003 governs the first problem; ADR-0005 records the scope correction and knowledge-lifecycle rule.
+- the native `Video` / `视频` option belongs beside Text, Image, Audio, and Tool use in the **single model card's native `modalities` checklist**;
+- it appears only after the Dashboard has selected an owned Volcengine Ark or Agent Plan Source and cloned the shared schema into that model dialog's **private schema copy**;
+- it must not appear in OpenAI, xAI, Gemini, or any other foreign Provider model card;
+- it must not be replaced by a Provider Source master switch, Source-page model selector, custom request field, explanatory row, hidden value, or create-only decoration;
+- the saved `modalities` membership is the current model-card UI truth and must survive save/reopen;
+- request-time video conversion must follow that current card value;
+- unload/release must restore the host UI/service boundary without a fifth global modality residue.
+
+A **backend-only mutation of the shared `provider.items.modalities` schema is forbidden**. At that layer a plugin cannot safely express “only these two selected Source types” without risking global leakage. The known-good implementation therefore adapts the model dialog after its private clone has access to `selectedProviderSource.type`.
+
+The historical 0.1.20 branch is useful evidence, but its old final verdict must not override the recovered 0.1.22 result: the correct source-scoped native Video implementation was recovered, validated, and merged under the 0.1.22 identity. The permanent acceptance definition is `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`, not an obsolete requirement for retired Source controls or `_volcengine_video_input_mode_ui`.
 
 ## Before changing production code
 
@@ -62,7 +71,7 @@ Identify the affected layers:
 6. release/distribution path;
 7. knowledge lifecycle: is the requirement/strategy HOT, WARM, COLD, superseded, rejected, or invalidated?
 
-Then locate the corresponding regression test, `TEST_HISTORY`, `REGRESSION_SCOPE`, release rules, and ADR. If the behavior is new, add the smallest explanation that should survive the current release.
+Then locate the corresponding regression test, `TEST_HISTORY`, `REGRESSION_SCOPE`, release rules, ADR, and—when Video/model-card scope is involved—the five-condition joint gate in `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`. If the behavior is new, add the smallest explanation that should survive the current release.
 
 ## Do not infer from names alone
 
