@@ -1,0 +1,188 @@
+name: Model-card Video Contract
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/model-card-video-contract.yml
+      - AGENTS.md
+      - adapters/video.py
+      - capabilities/**
+      - main.py
+      - providers.py
+      - registry.py
+      - docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md
+      - tests/test_model_card_video_runtime_switch.py
+      - tests/test_model_card_video_unload_contract.py
+      - tests/test_0_1_20_dashboard_asset_scope.py
+      - tests/e2e/provider_card_matrix/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/model-card-video-contract.yml
+      - adapters/video.py
+      - capabilities/**
+      - main.py
+      - providers.py
+      - registry.py
+      - docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md
+      - tests/test_model_card_video_runtime_switch.py
+      - tests/test_model_card_video_unload_contract.py
+      - tests/test_0_1_20_dashboard_asset_scope.py
+      - tests/e2e/provider_card_matrix/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.pull_request.number)
+      || github.ref
+    }}
+  cancel-in-progress: true
+
+jobs:
+  astrbot-4-27-3-real-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Clone exact AstrBot 4.27.3 host
+        run: git clone --depth 1 --branch v4.27.3 https://github.com/AstrBotDevs/AstrBot.git AstrBot
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: false
+
+      - name: Install exact AstrBot runtime
+        run: uv sync --directory AstrBot
+
+      - name: Setup pnpm exactly as the verified Dashboard baseline
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10.28.2
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24.13.0'
+          cache: pnpm
+          cache-dependency-path: AstrBot/dashboard/pnpm-lock.yaml
+
+      - name: Build the real AstrBot 4.27.3 Dashboard
+        working-directory: AstrBot/dashboard
+        run: pnpm install --frozen-lockfile && pnpm run build
+
+      - name: Install built Dashboard into AstrBot package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p AstrBot/astrbot/dashboard/dist
+          rsync -a --delete AstrBot/dashboard/dist/ AstrBot/astrbot/dashboard/dist/
+          mkdir -p AstrBot/astrbot/dashboard/dist/assets
+          printf '4.27.3' > AstrBot/astrbot/dashboard/dist/assets/version
+
+      - name: Initialize AstrBot and install this exact plugin checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '\n' | uv run --directory AstrBot astrbot init
+          target='AstrBot/data/plugins/astrbot_plugin_volcengine_provider'
+          rm -rf "$target"
+          mkdir -p "$target"
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'AstrBot' \
+            ./ "$target"/
+          uv run --directory AstrBot astrbot conf set dashboard.username e2e-admin
+          uv run --directory AstrBot astrbot conf set dashboard.password E2e-password-123
+
+      - name: Prove runtime selection and unload contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --directory AstrBot python ../tests/test_model_card_video_runtime_switch.py
+          uv run --directory AstrBot python ../tests/test_model_card_video_unload_contract.py
+          uv run --directory AstrBot python ../tests/test_0_1_20_dashboard_asset_scope.py
+
+      - name: Install Playwright Chromium
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Start AstrBot with the exact plugin checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p e2e-artifacts
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-video-contract.log 2>&1 &
+          echo $! >/tmp/astrbot-video-contract.pid
+          ready=0
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:6185/ >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/astrbot-video-contract.pid)" 2>/dev/null; then
+              cat /tmp/astrbot-video-contract.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cp /tmp/astrbot-video-contract.log e2e-artifacts/startup.log || true
+          test "$ready" = '1'
+          grep -q 'Volcengine providers registered' /tmp/astrbot-video-contract.log
+
+      - name: Run five-condition real Dashboard matrix
+        env:
+          ASTRBOT_E2E_URL: http://127.0.0.1:6185
+          ASTRBOT_E2E_USERNAME: e2e-admin
+          ASTRBOT_E2E_PASSWORD: E2e-password-123
+          ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
+        run: python tests/e2e/provider_card_matrix/browser_matrix_0_1_19.py
+
+      - name: Capture final AstrBot log
+        if: always()
+        run: cp /tmp/astrbot-video-contract.log e2e-artifacts/startup.log || true
+
+      - name: Stop AstrBot evidence server
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [ -s /tmp/astrbot-video-contract.pid ]; then
+            pid=$(cat /tmp/astrbot-video-contract.pid)
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+              for i in $(seq 1 25); do
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 0.2
+              done
+              if kill -0 "$pid" 2>/dev/null; then
+                kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+              fi
+            fi
+          fi
+          pkill -f 'astrbot run --port 6185' 2>/dev/null || true
+
+      - name: Show AstrBot log on failure
+        if: failure()
+        run: cat /tmp/astrbot-video-contract.log || true
+
+      - uses: actions/upload-artifact@ea165f8d65b76e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: model-card-video-contract-4.27.3
+          path: e2e-artifacts
+          if-no-files-found: error
+          retention-days: 14
