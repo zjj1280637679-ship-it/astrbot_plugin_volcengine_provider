@@ -50,9 +50,6 @@ _MISSES: set[Path] = set()
 _STATIC_FOLDER_ASSETS: dict[Path, Path | None] = {}
 _LOCK = threading.RLock()
 
-# The first boundary is the private model-dialog metadata clone in
-# useProviderModelConfigDialog.ts.  The same hidden-key variable must receive
-# custom_extra_body and feed the immediately following schema-item loop.
 _MODEL_DIALOG_BOUNDARY = re.compile(
     r'(?P<source_type>[A-Za-z_$][\w$]*)\s*===\s*"googlegenai_chat_completion"'
     r'[\s\S]{0,320}?'
@@ -62,12 +59,6 @@ _MODEL_DIALOG_BOUNDARY = re.compile(
     r'(?P<schema>[A-Za-z_$][\w$]*)\.provider\.items\[(?P=item)\]'
 )
 
-# The second boundary is buildModelProviderConfig(modelName) in the same compiled
-# ProviderChatCompletionPanel asset.  In AstrBot 4.27.3 the selected Provider
-# Source ref is read to obtain its id, and the function returns one concrete model
-# object containing the characteristic host keys below.  Capturing that selected
-# ref gives the patch access to its Source *type* without inferring ownership from
-# endpoint URL, API key, model id, or provider id.
 _MODEL_BUILDER_BOUNDARY = re.compile(
     r'function\s+(?P<builder>[A-Za-z_$][\w$]*)\((?P<model>[A-Za-z_$][\w$]*)\)\{'
     r'(?P<body>[\s\S]{0,2200}?'
@@ -102,16 +93,8 @@ _NEW_CARD_DEFAULTS: dict[str, Any] = {
 
 
 def _dialog_adaptation_javascript(*, source_type: str, schema: str) -> str:
-    """Mutate only one concrete dialog's private metadata clone."""
-
     owned_types = json.dumps(sorted(OWNED_SOURCE_TYPES), ensure_ascii=False)
     plugin_fields = json.dumps(sorted(MODEL_FIELD_SCHEMA), ensure_ascii=False)
-    # These arrays are used only when the host metadata stores ``labels`` as an
-    # i18n-key string.  In that representation ConfigItemRenderer resolves exactly
-    # four host labels and therefore has no fifth label for a newly appended option.
-    # The private owned clone materializes the same host-localized four labels plus
-    # only the fifth Video label.  No foreign clone is touched and no bilingual
-    # labels are introduced into the native capabilities row.
     localized_modalities = json.dumps(
         {
             "zh": ["文本", "图像", "音频", "工具使用", "视频"],
@@ -159,8 +142,6 @@ def _dialog_adaptation_javascript(*, source_type: str, schema: str) -> str:
 
 
 def _builder_object_insertion(*, selected_source_ref: str) -> str:
-    """Return an owned-only spread for one newly-created concrete model object."""
-
     owned_types = json.dumps(sorted(OWNED_SOURCE_TYPES), ensure_ascii=False)
     defaults = json.dumps(_NEW_CARD_DEFAULTS, ensure_ascii=False, separators=(",", ":"))
     return (
@@ -173,7 +154,13 @@ def _builder_object_insertion(*, selected_source_ref: str) -> str:
 
 
 def transform_dashboard_javascript(source: str) -> tuple[str, int]:
-    """Transform only when both concrete-object boundaries are uniquely known."""
+    """Return status 1 only for a complete two-boundary compatible asset.
+
+    The integer is a compatibility status, not a raw count: ``1`` means both
+    concrete-object boundaries are uniquely known; ``0`` means at least one is
+    absent while neither is ambiguous; ``>=2`` means at least one boundary is
+    ambiguous.  This keeps a half-match from being mistaken for full support.
+    """
 
     if _PATCH_MARKER in source:
         return source, 1
@@ -181,14 +168,12 @@ def transform_dashboard_javascript(source: str) -> tuple[str, int]:
     dialog_matches = list(_MODEL_DIALOG_BOUNDARY.finditer(source))
     builder_matches = list(_MODEL_BUILDER_BOUNDARY.finditer(source))
     if len(dialog_matches) != 1 or len(builder_matches) != 1:
-        # Preserve the historic return shape: 1 means a complete compatible asset;
-        # any other count means fail closed.  Summing makes ambiguous/missing states
-        # distinguishable to tests without treating a half-match as compatible.
-        return source, len(dialog_matches) + len(builder_matches)
+        if len(dialog_matches) <= 1 and len(builder_matches) <= 1:
+            return source, 0
+        return source, max(2, len(dialog_matches) + len(builder_matches))
 
     dialog = dialog_matches[0]
     builder = builder_matches[0]
-
     dialog_insertion = _dialog_adaptation_javascript(
         source_type=dialog.group("source_type"),
         schema=dialog.group("schema"),
@@ -203,8 +188,6 @@ def transform_dashboard_javascript(source: str) -> tuple[str, int]:
         selected_source_ref=builder.group("selected"),
     )
 
-    # Insert from the larger byte offset first so the earlier insertion does not
-    # invalidate the later offset computed from the original asset.
     edits = sorted(
         ((dialog_offset, dialog_insertion), (builder_offset, builder_insertion)),
         key=lambda item: item[0],
@@ -224,8 +207,6 @@ def _cache_root() -> Path:
 
 
 def _select_compatible_asset(static_folder: str | Path | None) -> Path | None:
-    """Resolve the one fully compatible asset from the Dashboard being served."""
-
     if not static_folder:
         return None
     try:
@@ -243,8 +224,8 @@ def _select_compatible_asset(static_folder: str | Path | None) -> Path | None:
                 source = candidate.read_text(encoding="utf-8")
             except (OSError, UnicodeError):
                 continue
-            transformed, matches = transform_dashboard_javascript(source)
-            if matches == 1 and transformed != source:
+            transformed, status = transform_dashboard_javascript(source)
+            if status == 1 and transformed != source:
                 compatible.append(candidate.resolve())
 
         selected = compatible[0] if len(compatible) == 1 else None
@@ -269,8 +250,8 @@ def _adapt_static_asset(path: Path, *, compatible_asset: Path) -> Path:
             _MISSES.add(resolved)
             return resolved
 
-        transformed, matches = transform_dashboard_javascript(source)
-        if matches != 1 or transformed == source:
+        transformed, status = transform_dashboard_javascript(source)
+        if status != 1 or transformed == source:
             _MISSES.add(resolved)
             return resolved
 
@@ -282,8 +263,6 @@ def _adapt_static_asset(path: Path, *, compatible_asset: Path) -> Path:
 
 
 def _adapt_index_file(path: Path, *, compatible_asset: Path) -> Path:
-    """Return a copied index that forces one request for the transformed bundle."""
-
     resolved = path.resolve()
     with _LOCK:
         cached = _INDEX_CACHE.get(resolved)
@@ -320,8 +299,6 @@ def _adapt_index_file(path: Path, *, compatible_asset: Path) -> Path:
 
 
 def acquire_dashboard_asset_bridge() -> bool:
-    """Install reversible static/index resolver wrappers when AstrBot has them."""
-
     global _DASHBOARD_ASSET_LEASE_COUNT, _RESOLVE_WRAPPER, _RESOLVE_ORIGINAL
     global _INDEX_WRAPPER, _INDEX_ORIGINAL
     if _DASHBOARD_ASSET_LEASE_COUNT:
@@ -387,8 +364,6 @@ def acquire_dashboard_asset_bridge() -> bool:
 
 
 def release_dashboard_asset_bridge() -> None:
-    """Restore AstrBot resolvers and delete only this bridge's temporary copies."""
-
     global _DASHBOARD_ASSET_LEASE_COUNT, _RESOLVE_WRAPPER, _RESOLVE_ORIGINAL
     global _INDEX_WRAPPER, _INDEX_ORIGINAL, _CACHE_ROOT
 
