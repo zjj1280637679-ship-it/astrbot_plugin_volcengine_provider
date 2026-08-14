@@ -8,14 +8,14 @@
     "active_release_candidate": {
       "version": "0.1.22",
       "branch": "release/0.1.22-model-card-video",
-      "status": "validating",
-      "releaseable": false,
+      "status": "ready",
+      "releaseable": true,
       "purpose": "Publish the recovered source-scoped model-card Video modality implementation as a new version because its 0.1.20 candidate was never merged or published.",
       "validation": {
         "recovered_source_commit": "ac8cdb0d8ef1e307c7975c1adc6f8ba72cc48c4a",
-        "runtime_gate_run": null,
-        "compatibility_baseline_run": null,
-        "result": "local_runtime_contracts_passed_remote_gates_pending"
+        "runtime_gate_run": 31764158444,
+        "compatibility_baseline_run": 31764158500,
+        "result": "local_and_remote_release_gates_passed"
       }
     },
     "safe_development_branch": "main",
@@ -31,8 +31,8 @@
     "version": "0.1.22",
     "branch": "release/0.1.22-model-card-video",
     "track": "release_candidate",
-    "status": "validating_recovered_model_card_video_release",
-    "installable": false
+    "status": "ready_recovered_model_card_video_release",
+    "installable": true
   },
   "published_baseline": {
     "version": "0.1.21",
@@ -59,17 +59,19 @@
   "active_validation_frontier": {
     "release": "0.1.22",
     "name": "recovered_model_card_video_publication",
-    "current_stage": "local_contracts_passed_remote_gates_pending",
+    "current_stage": "remote_release_gates_passed_ready_to_publish",
     "next_actions": [
-      "Run the repository runtime and real Dashboard gates for the recovered implementation.",
-      "Mark the candidate ready only after both gates pass.",
-      "Promote the exact 0.1.22 runtime package and publish it in AstrBot Cloud."
+      "Merge the exact validated 0.1.22 candidate into main.",
+      "Promote the exact 0.1.22 runtime package.",
+      "Publish the promoted runtime package in AstrBot Cloud."
     ],
     "observed": [
       "AstrBot Cloud lists 0.1.11 through 0.1.19 and 0.1.21 as Published, with no 0.1.20 entry.",
       "PR #10 for 0.1.20 is closed and unmerged; main and runtime never contained its model-card Video implementation.",
       "The final 0.1.20 Dashboard run reached owned and foreign modality-scope assertions; its recorded failure was an obsolete requirement for _volcengine_video_input_mode_ui.",
-      "The 0.1.22 runtime restores the eight runtime files from ac8cdb0, changes only release identity and logo beyond that recovered implementation, and passes the local packaged contract matrix."
+      "The 0.1.22 runtime restores the eight runtime files from ac8cdb0, changes only release identity and logo beyond that recovered implementation, and passes the local packaged contract matrix.",
+      "Runtime Distribution Gate run 31764158444 passed the artifact boundary and AstrBot 4.26.1 / 4.27.2 runtime-load matrix.",
+      "Compatibility Baseline Dashboard Regression run 31764158500 passed the real Dashboard evidence for owned model-card native Video selection, persistence, and foreign-provider absence."
     ]
   },
   "closed_experiments": [
