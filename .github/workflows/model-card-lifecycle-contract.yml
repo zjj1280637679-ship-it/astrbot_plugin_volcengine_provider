@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/model-card-lifecycle-contract.yml
       - tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24.py
+      - tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py
       - tests/e2e/provider_card_matrix/browser_matrix.py
       - main.py
       - registry.py
@@ -120,7 +121,7 @@ jobs:
           grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
 
       - name: Create owned and foreign cards, save Video, and prove Dashboard refresh
-        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24.py --stage setup
+        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage setup
 
       - name: Stop AstrBot before process-restart stage
         shell: bash
@@ -156,7 +157,7 @@ jobs:
           grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
 
       - name: Prove the saved single-card state after a real AstrBot restart
-        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24.py --stage after-restart
+        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage after-restart
 
       - name: Stop AstrBot before same-version plugin replacement
         shell: bash
@@ -207,7 +208,7 @@ jobs:
           grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
 
       - name: Prove the same model-card state after same-version plugin replacement
-        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24.py --stage after-same-version-update
+        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage after-same-version-update
 
       - name: Stop AstrBot and remove the plugin directory
         shell: bash
@@ -249,7 +250,7 @@ jobs:
           fi
 
       - name: Prove no plugin-owned public UI remains after uninstall and restart
-        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24.py --stage uninstalled
+        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage uninstalled
 
       - name: Capture lifecycle logs
         if: always()
