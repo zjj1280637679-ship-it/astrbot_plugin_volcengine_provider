@@ -51,7 +51,6 @@ class FakeService:
                     "id": "foreign-A/model",
                     "provider_source_id": "foreign-A",
                     "model": "model",
-                    # Forged fields must never reach the foreign edit dialog.
                     VIDEO_INPUT_PROFILE_KEY: "compressed",
                     TEMPERATURE_KEY: 0.1,
                     REASONING_MODE_KEY: "auto",
@@ -63,9 +62,6 @@ class FakeService:
 def main() -> None:
     service = FakeService()
 
-    # Simulate the output of the existing 0.1.18 schema wrapper: generic model
-    # card copies carry host fields only; persistent Volcengine video truth is
-    # intentionally absent from the Dashboard projection.
     payload = {
         "config_schema": {
             "provider": {
@@ -101,14 +97,26 @@ def main() -> None:
     before = copy.deepcopy(payload)
     out = _inject_owned_model_fields(service, payload)
 
-    # Projection is copy-on-write so the 0.1.18 bridge response remains intact.
+    # The service wrapper is copy-on-write: the host response object is not
+    # mutated in place merely because the plugin contributes model-card metadata.
     assert payload == before
 
     items = out["config_schema"]["provider"]["items"]
     for key, expected in MODEL_FIELD_SCHEMA.items():
-        assert items[key] == expected
+        # This is the *shared schema definition object*, whose safe state is
+        # deliberately hidden because the concrete Provider Source type is not
+        # represented by this shared object.  Apart from that one visibility
+        # state, every 0.1.19 field type/label/options/hint contract must survive
+        # unchanged.  Visibility is later relaxed only on an owned model-card
+        # private metadata clone, which is a different concrete object.
+        actual = copy.deepcopy(items[key])
+        assert actual.pop("invisible") is True
+        assert actual == expected, (key, actual, expected)
 
     owned, foreign = out["providers"]
+    # This is an existing *owned concrete model-card value copy*, so its saved
+    # values are projected for editing.  That value projection must not be
+    # confused with the shared metadata visibility state asserted above.
     assert owned["modalities"] == ["text", "image", "video"]
     assert VIDEO_INPUT_MODE_UI_KEY not in owned
     assert owned[VIDEO_INPUT_PROFILE_KEY] == "compressed"
@@ -117,8 +125,9 @@ def main() -> None:
     assert owned[REASONING_EFFORT_KEY] == "high"
     assert owned[STOP_SEQUENCES_KEY] == ["STOP"]
 
-    # Foreign model copies carry none of the Volcengine values; the frontend
-    # bridge additionally marks their shared schema definitions invisible.
+    # The foreign concrete model-card copy is a third object: it must carry none
+    # of the Volcengine-only values even though the shared schema still contains
+    # hidden definitions needed for owned cards elsewhere in the same Dashboard.
     for key in MODEL_FIELD_SCHEMA:
         assert key not in foreign
     assert foreign["custom_extra_body"] == {"foreign": "kept"}
