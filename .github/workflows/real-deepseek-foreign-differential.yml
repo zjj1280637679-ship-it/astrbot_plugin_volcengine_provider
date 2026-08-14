@@ -84,8 +84,6 @@ jobs:
                   result["raw_direct_models_http_status"] = int(response.status)
                   response.read(1)
           except urllib.error.HTTPError as exc:
-              # Status only. Do not print or persist response bodies because
-              # provider errors may echo credential material.
               result["raw_direct_models_http_status"] = int(exc.code)
           except Exception as exc:
               result["transport_error_type"] = type(exc).__name__
@@ -181,8 +179,8 @@ jobs:
           test "$ready" = '1'
           grep -q 'Volcengine providers registered' /tmp/astrbot-deepseek-real.log
 
-      - name: Run direct current-ID DeepSeek reachability through AstrBot
-        run: python tests/e2e/provider_card_matrix/deepseek_manual_latest_id_reachability.py
+      - name: Run real DeepSeek discovery correlation through AstrBot
+        run: python tests/e2e/provider_card_matrix/deepseek_real_foreign_matrix_0_1_24.py
 
       - name: Capture redacted startup diagnostics only
         if: always()
@@ -223,7 +221,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: real-deepseek-manual-id-reachability
+          name: real-deepseek-discovery-correlation
           path: e2e-artifacts
           if-no-files-found: error
           retention-days: 7
