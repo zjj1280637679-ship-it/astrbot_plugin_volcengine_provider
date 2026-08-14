@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/real-deepseek-foreign-differential.yml
       - tests/e2e/provider_card_matrix/deepseek_real_foreign_matrix_0_1_24.py
+      - tests/e2e/provider_card_matrix/deepseek_manual_latest_id_reachability.py
       - tests/e2e/provider_card_matrix/browser_matrix.py
       - main.py
       - providers.py
@@ -180,8 +181,8 @@ jobs:
           test "$ready" = '1'
           grep -q 'Volcengine providers registered' /tmp/astrbot-deepseek-real.log
 
-      - name: Run real DeepSeek foreign model-card differential through AstrBot
-        run: python tests/e2e/provider_card_matrix/deepseek_real_foreign_matrix_0_1_24.py
+      - name: Run direct current-ID DeepSeek reachability through AstrBot
+        run: python tests/e2e/provider_card_matrix/deepseek_manual_latest_id_reachability.py
 
       - name: Capture redacted startup diagnostics only
         if: always()
@@ -222,7 +223,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: real-deepseek-foreign-differential
-          path: e2e-artifacts/deepseek-real-foreign-0.1.24
+          name: real-deepseek-manual-id-reachability
+          path: e2e-artifacts
           if-no-files-found: error
           retention-days: 7
