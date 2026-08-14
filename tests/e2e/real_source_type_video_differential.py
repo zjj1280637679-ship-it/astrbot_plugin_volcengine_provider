@@ -10,13 +10,13 @@ The API key is supplied only through ``ARK_API_KEY`` and is never written to the
 evidence artifact.  The test performs model discovery only; it does not send a
 paid chat-completion request.
 
-The acceptance variable is Source ownership, not vendor/model capability:
-
-- native OpenAI@Ark model dialog: no ``video`` checkbox;
-- plugin Ark@Ark model dialog: exactly one ``video`` checkbox;
-- both model lists contain the same selected real model ID;
-- after saving/reopening the plugin card, ``video`` remains selected;
-- persisted foreign OpenAI card contains no plugin video state.
+The acceptance variable is Source ownership, not vendor/model capability.  In the
+same Chinese AstrBot Dashboard and for the same real Ark endpoint/key/model, the
+native OpenAI card is the host-owned control object: its four modality values and
+visible labels must remain untouched.  The plugin Ark card must preserve those
+same four host-owned value/label pairs and add exactly one fifth plugin-owned
+``video`` option labelled ``视频``.  Saving/reopening must retain the Video state,
+while the foreign OpenAI card must persist no plugin Video state.
 """
 
 from __future__ import annotations
@@ -66,6 +66,9 @@ ARK_CASE = Case(
     owned=True,
 )
 
+HOST_NATIVE_MODALITY_VALUES = ["text", "image", "audio", "tool_use"]
+HOST_NATIVE_ZH_LABELS = ["文本", "图像", "音频", "工具使用"]
+
 
 def write_result(payload: dict[str, Any]) -> None:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -111,8 +114,6 @@ async def fetch_real_models(page: Page) -> list[str]:
     button = page.locator(".provider-models-toolbar__actions button:has(.mdi-download)").first
     await expect(button).to_be_visible(timeout=10_000)
     await button.click()
-
-    # Wait for the fetch spinner to finish, then for at least one available row.
     await expect(button).not_to_have_attribute("disabled", "", timeout=60_000)
     rows = page.locator(".provider-models-list--available .provider-model-row__title")
     await expect(rows.first).to_be_visible(timeout=60_000)
@@ -148,6 +149,45 @@ async def modality_values(dialog: Locator) -> list[dict[str, Any]]:
         })
         """
     )
+
+
+def assert_host_native_prefix(
+    candidate: list[dict[str, Any]],
+    control: list[dict[str, Any]],
+    *,
+    object_name: str,
+) -> None:
+    """Require the plugin-owned card to preserve the host-owned first four items.
+
+    Equality is checked on the actually rendered value/label pairs from the same
+    AstrBot process, not against a plugin copy of AstrBot's translations.  The
+    fixed Chinese constants below additionally prove that this workflow really is
+    exercising AstrBot's default zh-CN locale rather than two identically wrong
+    English copies.
+    """
+
+    control_prefix = [
+        {"value": item.get("value"), "label": item.get("label")}
+        for item in control[:4]
+    ]
+    candidate_prefix = [
+        {"value": item.get("value"), "label": item.get("label")}
+        for item in candidate[:4]
+    ]
+    expected_control = [
+        {"value": value, "label": label}
+        for value, label in zip(HOST_NATIVE_MODALITY_VALUES, HOST_NATIVE_ZH_LABELS)
+    ]
+    if control_prefix != expected_control:
+        raise AssertionError(
+            f"native OpenAI@Ark control did not render the expected zh-CN host "
+            f"modalities: {control_prefix!r}"
+        )
+    if candidate_prefix != control_prefix:
+        raise AssertionError(
+            f"{object_name}: plugin rewrote host-owned native modality value/label "
+            f"pairs; control={control_prefix!r} candidate={candidate_prefix!r}"
+        )
 
 
 async def enable_video(dialog: Locator) -> None:
@@ -191,7 +231,6 @@ def _extract_persisted(source_ids: tuple[str, str], model_id: str) -> dict[str, 
     ark_key = ark_source.get("key")
     same_nonempty_key = bool(openai_key) and openai_key == ark_key
 
-    # Never serialize the secret or a secret-derived digest into evidence.
     return {
         "same_nonempty_key": same_nonempty_key,
         "openai_source_type": openai_source.get("type"),
@@ -218,8 +257,8 @@ async def main() -> None:
         raise SystemExit("ARK_API_KEY secret is unavailable")
 
     result: dict[str, Any] = {
-        "schema_version": 1,
-        "purpose": "same_endpoint_same_key_same_model_source_type_video_differential",
+        "schema_version": 2,
+        "purpose": "same_endpoint_same_key_same_model_source_type_and_host_label_ownership_differential",
         "endpoint": API_BASE,
         "browser_base_url": BASE_URL,
     }
@@ -231,11 +270,8 @@ async def main() -> None:
         await login(page)
         await open_providers(page)
 
-        openai_source_id = await configure_source(
-            page, OPENAI_CASE, api_base=API_BASE
-        )
+        openai_source_id = await configure_source(page, OPENAI_CASE, api_base=API_BASE)
         openai_models = await fetch_real_models(page)
-
         ark_source_id = await configure_source(page, ARK_CASE, api_base=None)
         ark_models = await fetch_real_models(page)
 
@@ -257,8 +293,6 @@ async def main() -> None:
             }
         )
 
-        # Re-fetch after switching Source because AstrBot intentionally clears
-        # availableModels on every Source selection.
         await select_source(page, openai_source_id)
         openai_again = await fetch_real_models(page)
         if model_id not in openai_again:
@@ -266,6 +300,11 @@ async def main() -> None:
         openai_dialog = await open_available_model(page, model_id)
         openai_modalities = await modality_values(openai_dialog)
         result["openai_dialog_modalities"] = openai_modalities
+        assert_host_native_prefix(
+            openai_modalities,
+            openai_modalities,
+            object_name="native OpenAI@Ark control",
+        )
         if any(item["value"] == "video" for item in openai_modalities):
             raise AssertionError(
                 f"OpenAI@Ark dialog leaked Video despite foreign Source type: {openai_modalities!r}"
@@ -279,10 +318,25 @@ async def main() -> None:
         ark_dialog = await open_available_model(page, model_id)
         ark_modalities = await modality_values(ark_dialog)
         result["ark_dialog_modalities_before"] = ark_modalities
+        assert_host_native_prefix(
+            ark_modalities,
+            openai_modalities,
+            object_name="plugin Ark@Ark model card",
+        )
         video_items = [item for item in ark_modalities if item["value"] == "video"]
         if len(video_items) != 1:
             raise AssertionError(
                 f"plugin Ark dialog expected one Video option, got {ark_modalities!r}"
+            )
+        if video_items[0].get("label") != "视频":
+            raise AssertionError(
+                f"plugin Ark Video must use the current zh-CN localized fifth label "
+                f"without rewriting the first four; got {video_items[0]!r}"
+            )
+        if bool(video_items[0].get("checked")) is not False:
+            raise AssertionError(
+                f"new plugin Ark Video must start user-controllable and unchecked; "
+                f"got {video_items[0]!r}"
             )
         await enable_video(ark_dialog)
         await save_model_dialog(ark_dialog)
@@ -290,10 +344,20 @@ async def main() -> None:
         reopened = await open_configured_model(page, model_id)
         reopened_modalities = await modality_values(reopened)
         result["ark_dialog_modalities_reopened"] = reopened_modalities
+        assert_host_native_prefix(
+            reopened_modalities,
+            openai_modalities,
+            object_name="reopened plugin Ark@Ark model card",
+        )
         reopened_video = [item for item in reopened_modalities if item["value"] == "video"]
-        if len(reopened_video) != 1 or reopened_video[0]["checked"] is not True:
+        if (
+            len(reopened_video) != 1
+            or reopened_video[0]["checked"] is not True
+            or reopened_video[0].get("label") != "视频"
+        ):
             raise AssertionError(
-                f"plugin Ark Video did not persist after reopen: {reopened_modalities!r}"
+                f"plugin Ark Video label/state did not persist after reopen: "
+                f"{reopened_modalities!r}"
             )
         await reopened.locator(".v-card-actions button").first.click()
         await expect(reopened).to_be_hidden(timeout=10_000)
@@ -325,8 +389,8 @@ async def main() -> None:
             {
                 "success": True,
                 "selected_common_model": model_id,
-                "openai_modalities": [i["value"] for i in result["openai_dialog_modalities"]],
-                "ark_modalities": [i["value"] for i in result["ark_dialog_modalities_before"]],
+                "openai_modalities": result["openai_dialog_modalities"],
+                "ark_modalities": result["ark_dialog_modalities_before"],
                 "ark_reopened_video_checked": True,
                 "same_nonempty_key": True,
                 "same_api_base": True,
