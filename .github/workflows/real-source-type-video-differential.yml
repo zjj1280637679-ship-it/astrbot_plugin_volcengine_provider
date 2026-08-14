@@ -81,6 +81,45 @@ jobs:
         working-directory: AstrBot/dashboard
         run: pnpm install --frozen-lockfile && pnpm run build
 
+      - name: Probe exact built ConfigItemRenderer label boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p e2e-artifacts
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          assets = Path('AstrBot/dashboard/dist/assets')
+          fingerprints = (
+              'select_provider',
+              'dashboard_totp_manager',
+              'config-checkbox',
+          )
+          candidates = []
+          for path in sorted(assets.glob('*.js')):
+              text = path.read_text(encoding='utf-8', errors='replace')
+              hits = [fingerprint for fingerprint in fingerprints if fingerprint in text]
+              if len(hits) < 2:
+                  continue
+              snippets = []
+              for needle in ('config-checkbox', '.labels', 'labels===', 'Array.isArray'):
+                  pos = text.find(needle)
+                  if pos >= 0:
+                      start = max(0, pos - 1800)
+                      end = min(len(text), pos + 2600)
+                      snippets.append({'needle': needle, 'snippet': text[start:end]})
+              candidates.append({
+                  'asset': path.name,
+                  'fingerprints': hits,
+                  'snippets': snippets[:5],
+              })
+          payload = {'renderer_candidates': candidates}
+          target = Path('e2e-artifacts/config-item-renderer-boundary.json')
+          target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(json.dumps(payload, ensure_ascii=False, indent=2)[:24000])
+          PY
+
       - name: Install built Dashboard into AstrBot package
         shell: bash
         run: |
