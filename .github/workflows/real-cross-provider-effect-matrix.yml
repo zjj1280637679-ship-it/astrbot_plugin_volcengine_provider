@@ -130,7 +130,7 @@ jobs:
           grep -q 'Volcengine providers registered' /tmp/astrbot-cross-provider.log
 
       - name: Run real cross-provider plugin effect matrix
-        run: python tests/e2e/provider_card_matrix/real_cross_provider_effect_matrix.py
+        run: PYTHONPATH="$GITHUB_WORKSPACE" python tests/e2e/provider_card_matrix/real_cross_provider_effect_matrix.py
 
       - name: Capture redacted startup diagnostics only
         if: always()
