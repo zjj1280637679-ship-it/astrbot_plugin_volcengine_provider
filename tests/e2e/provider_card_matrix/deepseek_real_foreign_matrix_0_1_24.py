@@ -1,19 +1,22 @@
 """Real DeepSeek foreign-provider differential for the 0.1.24 Video contract.
 
-This is deliberately stronger than a dummy-key UI isolation test:
+This is deliberately stronger than a dummy-key UI isolation test and deliberately
+has no predeclared DeepSeek model identifier:
 
 1. Create AstrBot 4.27.3's native ``DeepSeek`` Source (provider=deepseek,
    type=openai_chat_completion).
 2. Store ``$DEEPSEEKAPI`` in the Source key field so the real secret stays in
    the process environment and never enters screenshots/artifacts.
-3. Use AstrBot's own Source-model endpoint to fetch the official DeepSeek model
-   list and require ``deepseek-chat`` to be returned.
-4. Add that real model through the normal Dashboard model-card flow and prove
-   that neither the unsaved nor saved/reopened foreign card receives ``video``
-   or any ``volcengine_*`` model field.
-5. Use AstrBot's own provider test endpoint from the model row and require a
-   real DeepSeek chat request to pass.
-6. Check persisted config semantics without ever serializing the secret value.
+3. Press AstrBot's own "fetch model list" control and treat the model rows that
+   actually appear in the Dashboard as the only model-ID truth. The test does
+   not assume or remember any DeepSeek model name in advance.
+4. Select the first model in the live Dashboard return order, open that exact
+   fetched model card, and prove that neither its unsaved nor saved/reopened
+   foreign card receives ``video`` or any ``volcengine_*`` model field.
+5. Use AstrBot's own provider test endpoint for that same fetched model and
+   require a real DeepSeek request to pass.
+6. Check persisted config semantics using the fetched model ID, without ever
+   serializing the secret value.
 
 A successful remote request cannot substitute for UI isolation, and UI
 isolation cannot substitute for the successful remote request; both are hard
@@ -27,6 +30,7 @@ import json
 import os
 import traceback
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from playwright.async_api import Locator, Page, async_playwright, expect
@@ -35,7 +39,6 @@ from browser_matrix import (
     BASE_URL,
     PASSWORD,
     USERNAME,
-    Case,
     add_source,
     dismiss_first_run_dialog,
     login,
@@ -48,12 +51,14 @@ from browser_matrix import (
     visible_config_rows,
 )
 
-DEEPSEEK_CASE = Case(
+# This object describes only the Source template.  It intentionally has no
+# model_id attribute: a model identifier does not exist for this test until
+# AstrBot has fetched one from the live DeepSeek Source.
+DEEPSEEK_SOURCE = SimpleNamespace(
     name="foreign_deepseek_real",
     template_key="DeepSeek",
     menu_label="DeepSeek",
     expected_source_id="deepseek",
-    model_id="deepseek-chat",
     owned=False,
 )
 
@@ -167,49 +172,85 @@ async def close_validated_dialog(page: Page, dialog: Locator, *, stage: str) -> 
     raise AssertionError(f"{stage}: validated DeepSeek dialog could not be dismissed")
 
 
-async def fetch_models_through_astrbot(page: Page) -> list[str]:
+async def fetched_available_rows(page: Page) -> Locator:
+    return page.locator(".provider-models-section--available .provider-model-row")
+
+
+async def model_id_from_row(row: Locator) -> str:
+    title = row.locator(".provider-model-row__title").first
+    if not await title.count():
+        raise AssertionError("live fetched model row has no model title element")
+    return str(await title.inner_text() or "").strip()
+
+
+async def fetch_models_through_astrbot(page: Page) -> tuple[list[str], str]:
+    """Fetch through AstrBot and return (all live IDs, selected live ID).
+
+    No model identifier is supplied to this function.  The selected ID is
+    derived solely from the first non-empty model row that AstrBot renders
+    after the live fetch completes.
+    """
+
     fetch_button = page.locator(
         ".provider-models-toolbar__actions button:has(.mdi-download)"
     ).first
     await expect(fetch_button).to_be_visible(timeout=10_000)
     await fetch_button.click()
 
-    deepseek_chat = page.locator(
-        ".provider-models-section--available .provider-model-row",
-        has_text=DEEPSEEK_CASE.model_id,
-    ).first
-    await expect(deepseek_chat).to_be_visible(timeout=45_000)
+    rows = await fetched_available_rows(page)
+    await expect(rows.first).to_be_visible(timeout=45_000)
 
-    titles = await page.locator(
-        ".provider-models-section--available .provider-model-row__title"
-    ).all_text_contents()
-    models = sorted({str(item or "").strip() for item in titles if str(item or "").strip()})
-    if DEEPSEEK_CASE.model_id not in models:
+    models: list[str] = []
+    seen: set[str] = set()
+    selected_model_id = ""
+    for index in range(await rows.count()):
+        row = rows.nth(index)
+        if not await row.is_visible():
+            continue
+        model_id = await model_id_from_row(row)
+        if not model_id:
+            continue
+        if not selected_model_id:
+            selected_model_id = model_id
+        if model_id not in seen:
+            seen.add(model_id)
+            models.append(model_id)
+
+    if not selected_model_id:
         raise AssertionError(
-            f"AstrBot DeepSeek Source did not return {DEEPSEEK_CASE.model_id!r}: {models!r}"
+            "AstrBot DeepSeek Source fetch completed without any usable live model row"
         )
-    return models
+    return models, selected_model_id
 
 
-async def open_live_model_add_dialog(page: Page) -> Locator:
-    row = page.locator(
-        ".provider-models-section--available .provider-model-row",
-        has_text=DEEPSEEK_CASE.model_id,
-    ).first
-    await expect(row).to_be_visible(timeout=10_000)
+async def exact_available_model_row(page: Page, model_id: str) -> Locator:
+    rows = await fetched_available_rows(page)
+    for index in range(await rows.count()):
+        row = rows.nth(index)
+        if not await row.is_visible():
+            continue
+        if await model_id_from_row(row) == model_id:
+            return row
+    raise AssertionError(
+        f"the model selected from the live fetch is no longer present: {model_id!r}"
+    )
+
+
+async def open_live_model_add_dialog(page: Page, model_id: str) -> Locator:
+    row = await exact_available_model_row(page, model_id)
     await row.locator(".provider-model-row__main").click()
     dialog = page.locator(".v-dialog:visible").last
     await expect(dialog.locator(".config-row").first).to_be_visible(timeout=10_000)
     return dialog
 
 
-async def test_model_through_astrbot(page: Page) -> str:
-    row = page.locator(
-        ".provider-model-row",
-        has_text=f"deepseek/{DEEPSEEK_CASE.model_id}",
-    ).first
+async def test_model_through_astrbot(
+    page: Page, *, source_id: str, model_id: str
+) -> str:
+    provider_id = f"{source_id}/{model_id}"
+    row = page.locator(".provider-model-row", has_text=provider_id).first
     if not await row.count():
-        row = page.locator(".provider-model-row", has_text=DEEPSEEK_CASE.model_id).first
+        row = page.locator(".provider-model-row", has_text=model_id).first
     await expect(row).to_be_visible(timeout=15_000)
 
     test_button = row.locator("button:has(.mdi-connection)").first
@@ -225,7 +266,7 @@ async def test_model_through_astrbot(page: Page) -> str:
     return text
 
 
-def persisted_evidence(source_id: str) -> dict[str, Any]:
+def persisted_evidence(source_id: str, model_id: str) -> dict[str, Any]:
     data = json.loads(CONFIG_PATH.read_text(encoding="utf-8-sig"))
     sources = {
         str(item.get("id") or ""): item
@@ -239,7 +280,7 @@ def persisted_evidence(source_id: str) -> dict[str, Any]:
     }
 
     source = sources.get(source_id)
-    provider_id = f"{source_id}/{DEEPSEEK_CASE.model_id}"
+    provider_id = f"{source_id}/{model_id}"
     model = providers.get(provider_id)
     if not isinstance(source, dict):
         raise AssertionError(f"persisted DeepSeek Source missing: {source_id!r}")
@@ -266,7 +307,8 @@ def persisted_evidence(source_id: str) -> dict[str, Any]:
         "source_provider": source.get("provider"),
         "source_api_base": source.get("api_base"),
         "source_key_is_environment_reference": source.get("key") == ENV_REFERENCE,
-        "model_id": provider_id,
+        "selected_model_id_from_live_fetch": model_id,
+        "persisted_provider_id": provider_id,
         "model_modalities": model_modalities,
         "model_volcengine_keys": leaked_keys,
     }
@@ -287,7 +329,7 @@ async def run() -> None:
         try:
             await login(page)
             await open_providers(page)
-            source_id = await add_source(page, DEEPSEEK_CASE)
+            source_id = await add_source(page, DEEPSEEK_SOURCE)
             result["source_id"] = source_id
 
             await fill_key_with_environment_reference(page)
@@ -296,13 +338,12 @@ async def run() -> None:
             ).strip()
             await save_source(page)
 
-            models = await fetch_models_through_astrbot(page)
+            models, selected_model_id = await fetch_models_through_astrbot(page)
             result["astrbot_live_models"] = models
-            result["astrbot_live_models_contains_deepseek_chat"] = (
-                DEEPSEEK_CASE.model_id in models
-            )
+            result["selected_model_id_from_live_fetch"] = selected_model_id
+            result["selected_model_origin"] = "AstrBot live DeepSeek fetch-models Dashboard row"
 
-            create_dialog = await open_live_model_add_dialog(page)
+            create_dialog = await open_live_model_add_dialog(page, selected_model_id)
             result["unsaved_model_card"] = await assert_foreign_model_dialog(
                 create_dialog,
                 stage="deepseek/unsaved-live-model-card",
@@ -311,7 +352,7 @@ async def run() -> None:
 
             await page.locator(".provider-workbench").wait_for(state="visible", timeout=20_000)
             await select_source(page, source_id)
-            edit_dialog = await open_configured_model(page, DEEPSEEK_CASE.model_id)
+            edit_dialog = await open_configured_model(page, selected_model_id)
             result["saved_reopened_model_card"] = await assert_foreign_model_dialog(
                 edit_dialog,
                 stage="deepseek/saved-reopened-model-card",
@@ -322,8 +363,12 @@ async def run() -> None:
                 stage="deepseek/saved-reopened-close",
             )
 
-            result["persisted"] = persisted_evidence(source_id)
-            result["astrbot_provider_test_message"] = await test_model_through_astrbot(page)
+            result["persisted"] = persisted_evidence(source_id, selected_model_id)
+            result["astrbot_provider_test_message"] = await test_model_through_astrbot(
+                page,
+                source_id=source_id,
+                model_id=selected_model_id,
+            )
             result["real_remote_request_via_astrbot"] = True
             result["success"] = True
         except BaseException as exc:
