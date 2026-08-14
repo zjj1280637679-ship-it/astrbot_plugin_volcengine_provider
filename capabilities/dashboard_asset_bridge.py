@@ -1,25 +1,25 @@
 """Reversible Dashboard adaptation for source-scoped model-card fields.
 
-AstrBot 4.27 builds every model dialog from one shared schema clone.  The
-selected Provider Source type is available only inside the Dashboard composable,
-so the concrete distinction between one Volcengine-owned model card and one
-foreign model card must be made only after that private clone exists.
+AstrBot 4.27 has two distinct frontend objects that this plugin must adapt without
+collapsing their meanings:
 
-This bridge transforms the already-built provider-dialog JavaScript while it
-is served.  The original AstrBot asset is never modified on disk.  The transform
-has two narrowly separated responsibilities on that private clone only:
+* ``providerModelConfigSchema`` is a private metadata clone created only after the
+  currently selected Provider Source type is known.  For Ark / Agent Plan model
+  cards, that clone may gain one native ``video`` modality and may reveal the
+  lower Volcengine-owned bilingual request-row metadata.  Foreign clones must keep
+  AstrBot's native modalities untouched and those plugin rows hidden.
+* ``buildModelProviderConfig(modelName)`` creates the concrete data object used as
+  ``AstrBotConfig.iterable`` for a newly added model card.  AstrBot renders only
+  keys that already exist on that concrete object, so an owned new card must also
+  receive the lower Volcengine request-field default values there; foreign new
+  cards must not receive those keys at all.
 
-1. For a model card whose selected Source type is one of this plugin's Ark or
-   Agent Plan types, append the native ``video`` modality and reveal the lower
-   Volcengine-owned bilingual request rows.
-2. For every foreign model card, leave AstrBot's native modalities metadata
-   untouched and keep every Volcengine-only request row hidden.
-
-The bridge deliberately does not install any shared-schema Video fallback.  A
-failed frontend match therefore degrades to "Video unavailable" rather than
-changing OpenAI/xAI/Gemini model cards.  The served index is copied with a
-content-derived query suffix for the compatible bundle so an already-cached
-Dashboard must request the current transformed asset after plugin install/update.
+Both structural boundaries must occur exactly once in the same served Dashboard
+asset before any transformation is accepted.  This prevents a partial patch in
+which the upper capability row changes but the lower concrete data object does
+not, or vice versa.  The original AstrBot asset is never modified on disk, and a
+content-derived query suffix forces compatible browsers to request the current
+transformed copy after install/update.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from typing import Any
 from .model_fields import MODEL_FIELD_SCHEMA
 from .model_scope import OWNED_SOURCE_TYPES
 
-_PATCH_MARKER = "/*astrbot-volcengine-model-dialog-v2*/"
+_PATCH_MARKER = "/*astrbot-volcengine-model-dialog-v3*/"
 _DASHBOARD_ASSET_LEASE_COUNT = 0
 _RESOLVE_WRAPPER: Callable[..., Any] | None = None
 _RESOLVE_ORIGINAL: Callable[..., Any] | None = None
@@ -50,11 +50,9 @@ _MISSES: set[Path] = set()
 _STATIC_FOLDER_ASSETS: dict[Path, Path | None] = {}
 _LOCK = threading.RLock()
 
-# v4.27.3 source shape, expressed loosely enough to tolerate harmless minifier
-# choices such as whitespace, optional semicolons, or braces around the loop.
-# The same hidden-key variable must both receive custom_extra_body and feed the
-# following for-of loop, and the entire pattern must occur exactly once in one
-# served asset before we patch anything.
+# The first boundary is the private model-dialog metadata clone in
+# useProviderModelConfigDialog.ts.  The same hidden-key variable must receive
+# custom_extra_body and feed the immediately following schema-item loop.
 _MODEL_DIALOG_BOUNDARY = re.compile(
     r'(?P<source_type>[A-Za-z_$][\w$]*)\s*===\s*"googlegenai_chat_completion"'
     r'[\s\S]{0,320}?'
@@ -64,45 +62,94 @@ _MODEL_DIALOG_BOUNDARY = re.compile(
     r'(?P<schema>[A-Za-z_$][\w$]*)\.provider\.items\[(?P=item)\]'
 )
 
+# The second boundary is buildModelProviderConfig(modelName) in the same compiled
+# ProviderChatCompletionPanel asset.  In AstrBot 4.27.3 the selected Provider
+# Source ref is read to obtain its id, and the function returns one concrete model
+# object containing the characteristic host keys below.  Capturing that selected
+# ref gives the patch access to its Source *type* without inferring ownership from
+# endpoint URL, API key, model id, or provider id.
+_MODEL_BUILDER_BOUNDARY = re.compile(
+    r'function\s+(?P<builder>[A-Za-z_$][\w$]*)\((?P<model>[A-Za-z_$][\w$]*)\)\{'
+    r'(?P<body>[\s\S]{0,2200}?'
+    r'const\s+(?P<source_id>[A-Za-z_$][\w$]*)\s*=\s*\(\('
+    r'(?P<tmp>[A-Za-z_$][\w$]*)\s*=\s*(?P<selected>[A-Za-z_$][\w$]*)\.value\)'
+    r'\s*==\s*null\s*\?\s*void\s+0\s*:\s*(?P=tmp)\.id\)\s*\|\|'
+    r'[\s\S]{0,1500}?'
+    r'return\s*\{'
+    r'id\s*:\s*(?P<id_expr>[A-Za-z_$][\w$]*)\s*,'
+    r'enable\s*:\s*!0\s*,'
+    r'provider_source_id\s*:\s*(?P=source_id)\s*,'
+    r'model\s*:\s*(?P=model)\s*,'
+    r'modalities\s*:\s*(?P<modalities>[A-Za-z_$][\w$]*)\s*,'
+    r'custom_extra_body\s*:\s*\{\}\s*,'
+    r'max_context_tokens\s*:\s*(?P<context>[A-Za-z_$][\w$]*)\s*,'
+    r'reasoning\s*:\s*(?P<reasoning>[A-Za-z_$][\w$]*\([^{};]*?\))'
+    r'(?P<object_close>\})'
+    r')'
+)
 
-def _adaptation_javascript(*, source_type: str, schema: str) -> str:
-    """Return JS that mutates only the current dialog's private schema clone."""
+_NEW_CARD_DEFAULTS: dict[str, Any] = {
+    "volcengine_video_input_profile": "original",
+    "volcengine_reasoning_mode": "",
+    "volcengine_reasoning_effort": "",
+    "volcengine_temperature": "",
+    "volcengine_top_p": "",
+    "volcengine_max_output_tokens": "",
+    "volcengine_stop_sequences": [],
+    "volcengine_frequency_penalty": "",
+    "volcengine_presence_penalty": "",
+}
+
+
+def _dialog_adaptation_javascript(*, source_type: str, schema: str) -> str:
+    """Mutate only one concrete dialog's private metadata clone."""
 
     owned_types = json.dumps(sorted(OWNED_SOURCE_TYPES), ensure_ascii=False)
     plugin_fields = json.dumps(sorted(MODEL_FIELD_SCHEMA), ensure_ascii=False)
+    # These arrays are used only when the host metadata stores ``labels`` as an
+    # i18n-key string.  In that representation ConfigItemRenderer resolves exactly
+    # four host labels and therefore has no fifth label for a newly appended option.
+    # The private owned clone materializes the same host-localized four labels plus
+    # only the fifth Video label.  No foreign clone is touched and no bilingual
+    # labels are introduced into the native capabilities row.
+    localized_modalities = json.dumps(
+        {
+            "zh": ["文本", "图像", "音频", "工具使用", "视频"],
+            "en": ["Text", "Image", "Audio", "Tool use", "Video"],
+            "ru": ["Текст", "Изображение", "Аудио", "Инструменты", "Видео"],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     return (
         _PATCH_MARKER
         + f"const __abVolcOwned={owned_types}.includes({source_type});"
         + f"const __abVolcModalities={schema}.provider.items.modalities;"
         + f"const __abVolcPluginFields={plugin_fields};"
         + "if(__abVolcOwned){"
-        # Lower request rows: only this concrete Volcengine card may reveal them.
         + "for(const __abVolcKey of __abVolcPluginFields){"
         + f"const __abVolcField={schema}.provider.items[__abVolcKey];"
         + "if(__abVolcField)__abVolcField.invisible=false;"
         + "}"
-        # Upper native modalities row: append Video without globally replacing
-        # the host schema or changing any foreign dialog.
         + "if(__abVolcModalities){"
         + "const __abVolcOptions=Array.isArray(__abVolcModalities.options)"
         + "?__abVolcModalities.options:[];"
         + "if(!__abVolcOptions.includes(\"video\"))"
         + "__abVolcModalities.options=[...__abVolcOptions,\"video\"];"
-        # If the host response already contains a concrete label array, preserve
-        # every existing label byte-for-byte and append only the fifth label.
-        + "if(Array.isArray(__abVolcModalities.labels)"
-        + "&&__abVolcModalities.labels.length===__abVolcOptions.length){"
         + "const __abVolcLang=(document.documentElement.lang||"
         + "globalThis.localStorage?.getItem?.(\"astrbot-locale\")||\"zh-CN\").toLowerCase();"
-        + "const __abVolcVideoLabel=__abVolcLang.startsWith(\"zh\")?\"视频\":"
-        + "(__abVolcLang.startsWith(\"ru\")?\"Видео\":\"Video\");"
-        + "__abVolcModalities.labels=[...__abVolcModalities.labels,__abVolcVideoLabel];"
+        + "const __abVolcLocale=__abVolcLang.startsWith(\"zh\")?\"zh\":"
+        + "(__abVolcLang.startsWith(\"ru\")?\"ru\":\"en\");"
+        + f"const __abVolcLocalizedModalities={localized_modalities};"
+        + "if(Array.isArray(__abVolcModalities.labels)"
+        + "&&__abVolcModalities.labels.length===__abVolcOptions.length){"
+        + "__abVolcModalities.labels=[...__abVolcModalities.labels,"
+        + "__abVolcLocalizedModalities[__abVolcLocale][4]];"
+        + "}else if(typeof __abVolcModalities.labels===\"string\"){"
+        + "__abVolcModalities.labels=[...__abVolcLocalizedModalities[__abVolcLocale]];"
         + "}"
         + "}"
         + "}else{"
-        # Foreign model cards inherit the shared hidden state for plugin rows and
-        # we reinforce it on this private clone.  Crucially, modalities is not
-        # touched at all here: no plugin Video option, no label rewrite.
         + "for(const __abVolcKey of __abVolcPluginFields){"
         + f"const __abVolcField={schema}.provider.items[__abVolcKey];"
         + "if(__abVolcField)__abVolcField.invisible=true;"
@@ -111,28 +158,62 @@ def _adaptation_javascript(*, source_type: str, schema: str) -> str:
     )
 
 
+def _builder_object_insertion(*, selected_source_ref: str) -> str:
+    """Return an owned-only spread for one newly-created concrete model object."""
+
+    owned_types = json.dumps(sorted(OWNED_SOURCE_TYPES), ensure_ascii=False)
+    defaults = json.dumps(_NEW_CARD_DEFAULTS, ensure_ascii=False, separators=(",", ":"))
+    return (
+        ",...(("
+        + f"{selected_source_ref}.value"
+        + ")&&"
+        + f"{owned_types}.includes({selected_source_ref}.value.type)"
+        + f"?{defaults}:{{}})"
+    )
+
+
 def transform_dashboard_javascript(source: str) -> tuple[str, int]:
-    """Return the source-scoped model-dialog asset and structural match count."""
+    """Transform only when both concrete-object boundaries are uniquely known."""
 
     if _PATCH_MARKER in source:
         return source, 1
-    matches = list(_MODEL_DIALOG_BOUNDARY.finditer(source))
-    if len(matches) != 1:
-        return source, len(matches)
 
-    match = matches[0]
-    insertion = _adaptation_javascript(
-        source_type=match.group("source_type"),
-        schema=match.group("schema"),
+    dialog_matches = list(_MODEL_DIALOG_BOUNDARY.finditer(source))
+    builder_matches = list(_MODEL_BUILDER_BOUNDARY.finditer(source))
+    if len(dialog_matches) != 1 or len(builder_matches) != 1:
+        # Preserve the historic return shape: 1 means a complete compatible asset;
+        # any other count means fail closed.  Summing makes ambiguous/missing states
+        # distinguishable to tests without treating a half-match as compatible.
+        return source, len(dialog_matches) + len(builder_matches)
+
+    dialog = dialog_matches[0]
+    builder = builder_matches[0]
+
+    dialog_insertion = _dialog_adaptation_javascript(
+        source_type=dialog.group("source_type"),
+        schema=dialog.group("schema"),
     )
-    # Insert immediately before the hidden-key loop.  The matched prefix may vary
-    # across minifier builds, so locate the first for-token inside this match rather
-    # than assuming the exact v0.1.22 byte sequence.
-    relative_for = re.search(r'for\s*\(', match.group(0))
+    relative_for = re.search(r'for\s*\(', dialog.group(0))
     if relative_for is None:
         return source, 0
-    offset = match.start() + relative_for.start()
-    return source[:offset] + insertion + source[offset:], 1
+    dialog_offset = dialog.start() + relative_for.start()
+
+    builder_offset = builder.start("object_close")
+    builder_insertion = _builder_object_insertion(
+        selected_source_ref=builder.group("selected"),
+    )
+
+    # Insert from the larger byte offset first so the earlier insertion does not
+    # invalidate the later offset computed from the original asset.
+    edits = sorted(
+        ((dialog_offset, dialog_insertion), (builder_offset, builder_insertion)),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    transformed = source
+    for offset, insertion in edits:
+        transformed = transformed[:offset] + insertion + transformed[offset:]
+    return transformed, 1
 
 
 def _cache_root() -> Path:
@@ -143,7 +224,7 @@ def _cache_root() -> Path:
 
 
 def _select_compatible_asset(static_folder: str | Path | None) -> Path | None:
-    """Resolve the one compatible asset from the Dashboard actually being served."""
+    """Resolve the one fully compatible asset from the Dashboard being served."""
 
     if not static_folder:
         return None
@@ -275,10 +356,7 @@ def acquire_dashboard_asset_bridge() -> bool:
         compatible_asset = _select_compatible_asset(static_folder)
         if compatible_asset is None:
             return original_path
-        return _adapt_static_asset(
-            original_path,
-            compatible_asset=compatible_asset,
-        )
+        return _adapt_static_asset(original_path, compatible_asset=compatible_asset)
 
     resolve_wrapper._volcengine_dashboard_asset_wrapper = True  # type: ignore[attr-defined]
     resolve_wrapper._volcengine_dashboard_asset_original = current  # type: ignore[attr-defined]
@@ -297,10 +375,7 @@ def acquire_dashboard_asset_bridge() -> bool:
             compatible_asset = _select_compatible_asset(static_folder)
             if compatible_asset is None:
                 return original_path
-            return _adapt_index_file(
-                original_path,
-                compatible_asset=compatible_asset,
-            )
+            return _adapt_index_file(original_path, compatible_asset=compatible_asset)
 
         index_wrapper._volcengine_dashboard_index_wrapper = True  # type: ignore[attr-defined]
         index_wrapper._volcengine_dashboard_index_original = index_current  # type: ignore[attr-defined]
@@ -332,15 +407,13 @@ def release_dashboard_asset_bridge() -> None:
     if StaticFileService is not None:
         if (
             _RESOLVE_WRAPPER is not None
-            and getattr(StaticFileService, "resolve_static_file", None)
-            is _RESOLVE_WRAPPER
+            and getattr(StaticFileService, "resolve_static_file", None) is _RESOLVE_WRAPPER
             and _RESOLVE_ORIGINAL is not None
         ):
             StaticFileService.resolve_static_file = _RESOLVE_ORIGINAL  # type: ignore[method-assign]
         if (
             _INDEX_WRAPPER is not None
-            and getattr(StaticFileService, "resolve_index_file", None)
-            is _INDEX_WRAPPER
+            and getattr(StaticFileService, "resolve_index_file", None) is _INDEX_WRAPPER
             and _INDEX_ORIGINAL is not None
         ):
             StaticFileService.resolve_index_file = _INDEX_ORIGINAL  # type: ignore[method-assign]
