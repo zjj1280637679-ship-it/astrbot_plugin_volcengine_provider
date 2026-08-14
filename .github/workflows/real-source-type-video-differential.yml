@@ -91,11 +91,7 @@ jobs:
           from pathlib import Path
 
           assets = Path('AstrBot/dashboard/dist/assets')
-          fingerprints = (
-              'select_provider',
-              'dashboard_totp_manager',
-              'config-checkbox',
-          )
+          fingerprints = ('select_provider', 'dashboard_totp_manager', 'config-checkbox')
           candidates = []
           for path in sorted(assets.glob('*.js')):
               text = path.read_text(encoding='utf-8', errors='replace')
@@ -161,6 +157,7 @@ jobs:
               _MODEL_BUILDER_BOUNDARY,
               _MODEL_DIALOG_BOUNDARY,
               _PATCH_MARKER,
+              _RENDERER_LABEL_BOUNDARY,
               _adapt_static_asset,
               _select_compatible_asset,
               transform_dashboard_javascript,
@@ -172,12 +169,14 @@ jobs:
               source = candidate.read_text(encoding='utf-8', errors='replace')
               dialog_count = len(list(_MODEL_DIALOG_BOUNDARY.finditer(source)))
               builder_count = len(list(_MODEL_BUILDER_BOUNDARY.finditer(source)))
+              renderer_count = len(list(_RENDERER_LABEL_BOUNDARY.finditer(source)))
               transformed, status = transform_dashboard_javascript(source)
-              if dialog_count or builder_count or status:
+              if dialog_count or builder_count or renderer_count or status:
                   rows.append({
                       'asset': candidate.name,
                       'dialog_boundary_count': dialog_count,
                       'builder_boundary_count': builder_count,
+                      'renderer_label_boundary_count': renderer_count,
                       'compatibility_status': status,
                       'transform_changed_source': transformed != source,
                       'transform_contains_marker': _PATCH_MARKER in transformed,
@@ -196,6 +195,12 @@ jobs:
 
           payload = {
               'static_root': str(static_root),
+              'patch_marker': _PATCH_MARKER,
+              'required_boundary_contract': {
+                  'dialog_private_metadata_clone': 1,
+                  'new_card_concrete_data_builder': 1,
+                  'checkbox_label_renderer': 1,
+              },
               'boundary_candidates': rows,
               'selected_compatible_asset': selected_name,
               'adapted_asset_name': adapted_name,
@@ -247,18 +252,30 @@ jobs:
           root = Path(os.environ['ASTRBOT_E2E_ARTIFACT_DIR'])
           pre = json.loads((root / 'delivery-probe-prestart.json').read_text(encoding='utf-8'))
           selected = pre.get('selected_compatible_asset')
+          marker = str(pre.get('patch_marker') or '')
           payload = {
               'selected_compatible_asset': selected,
+              'patch_marker_checked': marker,
               'http_target_requested': None,
-              'http_response_contains_marker': False,
+              'http_response_contains_current_marker': False,
+              'http_response_headers': {},
+              'index_directly_references_lazy_chunk': False,
               'index_contains_cache_busted_selected_asset': False,
           }
-          index = urllib.request.urlopen(os.environ['ASTRBOT_E2E_URL'] + '/', timeout=15).read().decode('utf-8', 'replace')
+          index_response = urllib.request.urlopen(os.environ['ASTRBOT_E2E_URL'] + '/', timeout=15)
+          index = index_response.read().decode('utf-8', 'replace')
           if selected:
               target = '/assets/' + selected
               payload['http_target_requested'] = target
-              body = urllib.request.urlopen(os.environ['ASTRBOT_E2E_URL'] + target, timeout=15).read().decode('utf-8', 'replace')
-              payload['http_response_contains_marker'] = '/*astrbot-volcengine-model-dialog-v3*/' in body
+              response = urllib.request.urlopen(os.environ['ASTRBOT_E2E_URL'] + target, timeout=15)
+              body = response.read().decode('utf-8', 'replace')
+              payload['http_response_contains_current_marker'] = bool(marker and marker in body)
+              payload['http_response_headers'] = {
+                  key: response.headers.get(key)
+                  for key in ('Cache-Control', 'ETag', 'Last-Modified', 'Expires')
+                  if response.headers.get(key) is not None
+              }
+              payload['index_directly_references_lazy_chunk'] = selected in index
               payload['index_contains_cache_busted_selected_asset'] = (
                   selected + '?astrbot_volcengine=' in index
               )
