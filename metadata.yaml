@@ -2,7 +2,7 @@ name: astrbot_plugin_volcengine_provider
 display_name: "火山方舟双通道模型供应商"
 desc: "别让你的 AI 在 QQ 里只会看字。QQ 语音会在可靠转换后，连同完整聊天上下文交给你正在使用的火山方舟主模型；本轮发送或引用的视频，也能由同一个模型看懂并继续回应。你无需另配 STT、转录模型或第二套对话流程。插件同时提供普通 API 与 Agent Plan 两张独立供应商卡，让音视频请求沿 AstrBot 原有模型卡与反馈机制按需执行，密钥、端点与计费互不混线。"
 short_desc: "让你的 AI 直接听懂 QQ 语音、看懂本轮及引用的视频；无需另配 STT 或第二套对话模型，普通 API 与 Agent Plan 两条通道互不混线。"
-version: "0.1.21"
+version: "0.1.22"
 astrbot_version: ">=4.26.1"
 author: "羊膜大人"
 repo: "https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/tree/runtime"

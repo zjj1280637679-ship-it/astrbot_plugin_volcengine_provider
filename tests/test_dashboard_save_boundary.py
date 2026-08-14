@@ -13,28 +13,19 @@ from astrbot_plugin_volcengine_provider import registry
 from astrbot_plugin_volcengine_provider.capabilities import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
-    LEGACY_MODEL_VIDEO_INPUT_KEY,
-    LEGACY_SOURCE_VIDEO_KEYS,
-    VIDEO_CONTROLS_VISIBLE_KEY,
+    MODEL_FIELD_SCHEMA,
     VIDEO_INPUT_ENABLED_KEY,
+    VIDEO_INPUT_ENABLED_UI_KEY,
+    VIDEO_INPUT_PROFILE_KEY,
+    acquire_model_fields_bridge,
+    release_model_fields_bridge,
 )
+from astrbot_plugin_volcengine_provider.capabilities import model_fields_bridge
 
 
 class FakeManager:
     def __init__(self, providers: list[dict]) -> None:
         self.providers = providers
-        self.provider_sources_config: list[dict] = []
-        self.providers_config = providers
-        self.created: list[dict] = []
-        self.updated: list[tuple[str, dict]] = []
-        self.reloaded: list[dict] = []
-        self.reload_failures: list[str] = []
-
-    async def create_provider(self, config: dict) -> None:
-        self.created.append(copy.deepcopy(config))
-
-    async def update_provider(self, provider_id: str, config: dict) -> None:
-        self.updated.append((provider_id, copy.deepcopy(config)))
 
     def get_provider_config_by_id(self, provider_id: str, **_: object) -> dict | None:
         for provider in self.providers:
@@ -42,524 +33,162 @@ class FakeManager:
                 return copy.deepcopy(provider)
         return None
 
-    async def reload(self, provider_config: dict) -> None:
-        saved = copy.deepcopy(provider_config)
-        self.reloaded.append(saved)
-        provider_id = str(saved.get("id") or "")
-        if self.reload_failures and provider_id == self.reload_failures[0]:
-            self.reload_failures.pop(0)
-            raise RuntimeError(
-                f"simulated provider reload failure after save: {provider_id}"
-            )
-
-
-class PersistedConfig(dict):
-    """Minimal AstrBotConfig double that records each durable save."""
-
-    def __init__(self, value: dict) -> None:
-        super().__init__(value)
-        self.persisted = copy.deepcopy(value)
-        self.save_count = 0
-        self.fail_next_save_message: str | None = None
-
-    def save_config(self, replace_config: dict | None = None, **_: object) -> None:
-        if self.fail_next_save_message:
-            message = self.fail_next_save_message
-            self.fail_next_save_message = None
-            raise RuntimeError(message)
-        if replace_config is not None:
-            self.update(replace_config)
-        self.save_count += 1
-        self.persisted = copy.deepcopy(dict(self))
-
 
 class FakeService:
     def __init__(self) -> None:
-        self.config = PersistedConfig({
+        self.config = {
             "provider_sources": [
-                {
-                    "id": "ark-A",
-                    "provider": "volcengine",
-                    "type": ARK_PROVIDER_TYPE,
-                },
-                {
-                    "id": "plan-A",
-                    "provider": "volcengine",
-                    "type": AGENT_PLAN_PROVIDER_TYPE,
-                },
-                {
-                    "id": "foreign-A",
-                    "provider": "openai",
-                    "type": "openai_chat_completion",
-                },
+                {"id": "ark-A", "type": ARK_PROVIDER_TYPE},
+                {"id": "plan-A", "type": AGENT_PLAN_PROVIDER_TYPE},
+                {"id": "foreign-A", "type": "openai_chat_completion"},
             ],
             "provider": [
                 {
-                    "id": "ark-A/a",
+                    "id": "ark-A/card",
                     "provider_source_id": "ark-A",
                     "model": "same-model",
+                    "modalities": ["text", "image"],
                     VIDEO_INPUT_ENABLED_KEY: True,
+                    VIDEO_INPUT_PROFILE_KEY: "compressed",
                 },
                 {
-                    "id": "ark-A/b",
-                    "provider_source_id": "ark-A",
-                    "model": "same-model",
-                    VIDEO_INPUT_ENABLED_KEY: False,
-                },
-                {
-                    "id": "plan-A/a",
-                    "provider_source_id": "plan-A",
-                    "model": "same-model",
-                    VIDEO_INPUT_ENABLED_KEY: False,
-                },
-                {
-                    "id": "foreign-A/a",
+                    "id": "foreign-A/card",
                     "provider_source_id": "foreign-A",
                     "model": "same-model",
                 },
             ],
-        })
+        }
         self.provider_manager = FakeManager(self.config["provider"])
-        self.provider_manager.provider_sources_config = self.config[
-            "provider_sources"
-        ]
-        self.source_upserts: list[tuple[str, dict]] = []
-        self.fail_source_reload_after_save = False
-        self.fail_rollback_persist = False
-        self.fail_rollback_reload_id: str | None = None
+        self.created: list[dict] = []
+        self.updated: list[tuple[str, dict]] = []
 
 
-def _has_temporary_ui_key(config: dict) -> bool:
-    return any(
-        isinstance(key, str)
-        and (
-            key.startswith(registry._VIDEO_UI_KEY_PREFIX)
-            or key.startswith(registry._SOURCE_VIDEO_SELECTOR_UI_KEY_PREFIX)
-        )
-        for key in config
-    )
-
-
-def _cards(service: FakeService) -> dict[str, dict]:
-    return {str(card["id"]): card for card in service.config["provider"]}
-
-
-async def exercise() -> None:
+def _release_all() -> None:
+    while model_fields_bridge._FIELD_BRIDGE_LEASE_COUNT > 0:
+        release_model_fields_bridge()
     while registry._DASHBOARD_LEASE_COUNT > 0:
         registry.release_owned_dashboard_bridge()
 
-    original_source_upsert = ProviderConfigService.upsert_provider_source
 
-    async def record_source_upsert(self, source_id: str, config: dict) -> None:
+async def exercise() -> None:
+    _release_all()
+    originals = {
+        "get_provider_schema": ProviderConfigService.get_provider_schema,
+        "create_provider": ProviderConfigService.create_provider,
+        "update_provider": ProviderConfigService.update_provider,
+    }
+
+    def base_schema(self) -> dict:
+        return {
+            "config_schema": {
+                "provider": {
+                    "items": {
+                        "modalities": {
+                            "type": "list",
+                            "options": ["text", "image", "audio", "tool_use"],
+                        }
+                    },
+                    "config_template": {},
+                }
+            },
+            "provider_sources": copy.deepcopy(self.config["provider_sources"]),
+            "providers": copy.deepcopy(self.config["provider"]),
+        }
+
+    async def record_create(self, config: dict, source_id: str | None = None) -> None:
         saved = copy.deepcopy(config)
-        next_source_id = str(saved.get("id") or source_id)
-        affected_providers: list[dict] = []
-        self.source_upserts.append((source_id, saved))
-        for index, source in enumerate(self.config["provider_sources"]):
-            if source.get("id") == source_id:
-                self.config["provider_sources"][index] = saved
-                for provider in self.config["provider"]:
-                    if provider.get("provider_source_id") == source_id:
-                        provider["provider_source_id"] = next_source_id
-                        affected_providers.append(provider)
-                break
-        self.provider_manager.provider_sources_config = self.config[
-            "provider_sources"
-        ]
-        # Real AstrBot 4.26.1 and 4.27.2 save the full config before
-        # reloading affected Providers. Exercise that exact failure boundary.
-        self.config.save_config()
-        if self.fail_source_reload_after_save:
-            if self.fail_rollback_persist:
-                self.config.fail_next_save_message = (
-                    "simulated compensating persistence failure"
-                )
-            self.provider_manager.reload_failures.append(
-                str(affected_providers[-1]["id"])
-            )
-            if self.fail_rollback_reload_id:
-                self.provider_manager.reload_failures.append(
-                    self.fail_rollback_reload_id
-                )
-            for provider in affected_providers:
-                await self.provider_manager.reload(provider)
+        if source_id:
+            saved["provider_source_id"] = source_id
+        self.created.append(saved)
 
-    ProviderConfigService.upsert_provider_source = record_source_upsert
-    assert registry.acquire_owned_dashboard_bridge() is True
+    async def record_update(self, provider_id: str, config: dict) -> None:
+        self.updated.append((provider_id, copy.deepcopy(config)))
+
+    ProviderConfigService.get_provider_schema = base_schema
+    ProviderConfigService.create_provider = record_create
+    ProviderConfigService.update_provider = record_update
+
     try:
+        # Match plugin startup order: compatibility/feedback bridge first, then
+        # the current per-card field bridge around it.
+        assert registry.acquire_owned_dashboard_bridge() is True
+        assert acquire_model_fields_bridge() is True
         service = FakeService()
-        ark_selector = registry._source_video_selector_ui_key("ark-A")
-        plan_selector = registry._source_video_selector_ui_key("plan-A")
-        foreign_selector = registry._source_video_selector_ui_key("foreign-A")
 
-        # Closing the master switch hides the selector only. Even a stale hidden
-        # payload must not change a=true,b=false, and transient fields never save.
-        await ProviderConfigService.upsert_provider_source(
-            service,
-            "ark-A",
-            {
-                "id": "ark-A",
-                "provider": "volcengine",
-                "type": ARK_PROVIDER_TYPE,
-                VIDEO_CONTROLS_VISIBLE_KEY: False,
-                ark_selector: ["ark-A/b"],
-                VIDEO_INPUT_ENABLED_KEY: True,
-                LEGACY_MODEL_VIDEO_INPUT_KEY: True,
-                registry._video_ui_key("ark-A"): True,
-                LEGACY_SOURCE_VIDEO_KEYS[ARK_PROVIDER_TYPE]: True,
-                "hint": registry._SOURCE_TRANSPORT_UI_HINT,
-            },
-        )
-        cards = _cards(service)
-        assert cards["ark-A/a"][VIDEO_INPUT_ENABLED_KEY] is True
-        assert cards["ark-A/b"][VIDEO_INPUT_ENABLED_KEY] is False
-        _, saved_closed = service.source_upserts[-1]
-        assert saved_closed[VIDEO_CONTROLS_VISIBLE_KEY] is False
-        assert VIDEO_INPUT_ENABLED_KEY not in saved_closed
-        assert LEGACY_MODEL_VIDEO_INPUT_KEY not in saved_closed
-        assert all(key not in saved_closed for key in LEGACY_SOURCE_VIDEO_KEYS.values())
-        assert "hint" not in saved_closed
-        assert not _has_temporary_ui_key(saved_closed)
-
-        # Opening the Source selector applies only this Source's card IDs. Same
-        # model names on Plan/foreign Sources and forged IDs cannot cross scope.
-        await ProviderConfigService.upsert_provider_source(
-            service,
-            "ark-A",
-            {
-                "id": "ark-A",
-                "provider": "volcengine",
-                "type": ARK_PROVIDER_TYPE,
-                VIDEO_CONTROLS_VISIBLE_KEY: True,
-                ark_selector: ["ark-A/b", "plan-A/a", "foreign-A/a"],
-            },
-        )
-        cards = _cards(service)
-        assert cards["ark-A/a"][VIDEO_INPUT_ENABLED_KEY] is False
-        assert cards["ark-A/b"][VIDEO_INPUT_ENABLED_KEY] is True
-        assert cards["plan-A/a"][VIDEO_INPUT_ENABLED_KEY] is False
-        assert VIDEO_INPUT_ENABLED_KEY not in cards["foreign-A/a"]
-        _, saved_open = service.source_upserts[-1]
-        assert saved_open[VIDEO_CONTROLS_VISIBLE_KEY] is True
-        assert not _has_temporary_ui_key(saved_open)
-
-        # Closing again, this time with the hidden selector omitted entirely,
-        # preserves b=true. Re-projection keeps b selected for the next reopen.
-        await ProviderConfigService.upsert_provider_source(
-            service,
-            "ark-A",
-            {
-                "id": "ark-A",
-                "provider": "volcengine",
-                "type": ARK_PROVIDER_TYPE,
-                VIDEO_CONTROLS_VISIBLE_KEY: False,
-            },
-        )
-        cards = _cards(service)
-        assert cards["ark-A/a"][VIDEO_INPUT_ENABLED_KEY] is False
-        assert cards["ark-A/b"][VIDEO_INPUT_ENABLED_KEY] is True
-
-        projected = registry._inject_model_card_video_control(
-            {
-                "config_schema": {"provider": {"items": {}, "config_template": {}}},
-                "provider_sources": service.config["provider_sources"],
-                "providers": service.config["provider"],
-            }
-        )
-        projected_ark = next(
-            source
-            for source in projected["provider_sources"]
-            if source.get("id") == "ark-A"
-        )
-        assert projected_ark[VIDEO_CONTROLS_VISIBLE_KEY] is False
-        assert projected_ark[ark_selector] == ["ark-A/b"]
-
-        # Agent Plan has the same owned behavior through its own exact Source ID.
-        await ProviderConfigService.upsert_provider_source(
-            service,
-            "plan-A",
-            {
-                "id": "plan-A",
-                "provider": "volcengine",
-                "type": AGENT_PLAN_PROVIDER_TYPE,
-                VIDEO_CONTROLS_VISIBLE_KEY: True,
-                plan_selector: ["plan-A/a"],
-            },
-        )
-        assert _cards(service)["plan-A/a"][VIDEO_INPUT_ENABLED_KEY] is True
-
-        # A foreign Source cannot persist forged presentation fields or mutate
-        # any model-card Volcengine state.
-        await ProviderConfigService.upsert_provider_source(
-            service,
-            "foreign-A",
-            {
-                "id": "foreign-A",
-                "provider": "openai",
-                "type": "openai_chat_completion",
-                VIDEO_CONTROLS_VISIBLE_KEY: True,
-                foreign_selector: ["ark-A/a"],
-                "hint": "host-or-user-hint",
-            },
-        )
-        _, foreign_saved = service.source_upserts[-1]
-        assert VIDEO_CONTROLS_VISIBLE_KEY not in foreign_saved
-        assert not _has_temporary_ui_key(foreign_saved)
-        assert foreign_saved["hint"] == "host-or-user-hint"
-        assert _cards(service)["ark-A/a"][VIDEO_INPUT_ENABLED_KEY] is False
-
-        # Rejected Source renames are checked before any per-card mutation.
-        snapshot = copy.deepcopy(service.config["provider"])
-        try:
-            await ProviderConfigService.upsert_provider_source(
-                service,
-                "ark-A",
-                {
-                    "id": "plan-A",
-                    "provider": "volcengine",
-                    "type": ARK_PROVIDER_TYPE,
-                    VIDEO_CONTROLS_VISIBLE_KEY: True,
-                    ark_selector: ["ark-A/a"],
-                },
-            )
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("duplicate Source rename should fail")
-        assert service.config["provider"] == snapshot
-
-        # If Provider reload raises after AstrBot has already saved the plugin's
-        # translated selection, restore the entire per-card list in memory and
-        # on disk while preserving the original reload error.
-        snapshot = copy.deepcopy(service.config["provider"])
-        source_snapshot = copy.deepcopy(service.config["provider_sources"])
-        persisted_snapshot = copy.deepcopy(service.config.persisted["provider"])
-        persisted_source_snapshot = copy.deepcopy(
-            service.config.persisted["provider_sources"]
-        )
-        saves_before_failure = service.config.save_count
-        reloads_before_failure = len(service.provider_manager.reloaded)
-        service.fail_source_reload_after_save = True
-        try:
-            await ProviderConfigService.upsert_provider_source(
-                service,
-                "ark-A",
-                {
-                    "id": "ark-A",
-                    "provider": "volcengine",
-                    "type": ARK_PROVIDER_TYPE,
-                    VIDEO_CONTROLS_VISIBLE_KEY: True,
-                    ark_selector: ["ark-A/a"],
-                },
-            )
-        except RuntimeError as exc:
-            assert "simulated provider reload failure after save" in str(exc)
-        else:
-            raise AssertionError("post-save Provider reload failure should propagate")
-        service.fail_source_reload_after_save = False
-        assert service.config["provider"] == snapshot
-        assert service.config["provider_sources"] == source_snapshot
-        assert service.config.persisted["provider"] == persisted_snapshot
-        assert (
-            service.config.persisted["provider_sources"]
-            == persisted_source_snapshot
-        )
-        assert service.provider_manager.provider_sources_config is service.config[
-            "provider_sources"
+        projected = ProviderConfigService.get_provider_schema(service)
+        items = projected["config_schema"]["provider"]["items"]
+        assert items["modalities"]["options"] == [
+            "text",
+            "image",
+            "audio",
+            "tool_use",
         ]
-        assert service.provider_manager.providers_config is service.config["provider"]
-        rollback_reloads = service.provider_manager.reloaded[
-            reloads_before_failure + 2 :
-        ]
-        assert rollback_reloads == [
-            card for card in snapshot if card.get("provider_source_id") == "ark-A"
-        ]
-        assert service.config.save_count == saves_before_failure + 2
+        assert "video" not in items["modalities"]["options"]
+        for key, metadata in MODEL_FIELD_SCHEMA.items():
+            assert items[key] == metadata
 
-        # A failed rename is the strongest rollback case: the real host changes
-        # both the Source ID and every matching card's provider_source_id before
-        # it saves and starts Provider reload. All live, persisted, and manager
-        # views must return to the exact pre-call state.
-        snapshot = copy.deepcopy(service.config["provider"])
-        source_snapshot = copy.deepcopy(service.config["provider_sources"])
-        persisted_snapshot = copy.deepcopy(service.config.persisted)
-        saves_before_failure = service.config.save_count
-        reloads_before_failure = len(service.provider_manager.reloaded)
-        service.fail_source_reload_after_save = True
-        try:
-            await ProviderConfigService.upsert_provider_source(
-                service,
-                "ark-A",
-                {
-                    "id": "ark-A-renamed",
-                    "provider": "volcengine",
-                    "type": ARK_PROVIDER_TYPE,
-                    VIDEO_CONTROLS_VISIBLE_KEY: True,
-                    ark_selector: ["ark-A/a"],
-                },
-            )
-        except RuntimeError as exc:
-            assert "simulated provider reload failure after save" in str(exc)
-        else:
-            raise AssertionError("post-save Source rename failure should propagate")
-        service.fail_source_reload_after_save = False
-        assert service.config["provider"] == snapshot
-        assert service.config["provider_sources"] == source_snapshot
-        assert service.config.persisted == persisted_snapshot
-        assert service.provider_manager.provider_sources_config is service.config[
-            "provider_sources"
-        ]
-        assert service.provider_manager.providers_config is service.config["provider"]
-        failed_host_reloads = service.provider_manager.reloaded[
-            reloads_before_failure : reloads_before_failure + 2
-        ]
-        assert all(
-            card.get("provider_source_id") == "ark-A-renamed"
-            for card in failed_host_reloads
-        )
-        rollback_reloads = service.provider_manager.reloaded[
-            reloads_before_failure + 2 :
-        ]
-        assert rollback_reloads == [
-            card for card in snapshot if card.get("provider_source_id") == "ark-A"
-        ]
-        assert all(
-            card.get("provider_source_id") != "ark-A-renamed"
-            for card in service.config["provider"]
-        )
-        assert service.config.save_count == saves_before_failure + 2
+        owned, foreign = projected["providers"]
+        assert owned["modalities"] == ["text", "image", "video"]
+        assert owned[VIDEO_INPUT_PROFILE_KEY] == "compressed"
+        for key in MODEL_FIELD_SCHEMA:
+            assert key not in foreign
 
-        # A best-effort runtime restoration failure is diagnostic context, not
-        # a replacement for the host's original post-save reload exception.
-        snapshot = copy.deepcopy(service.config)
-        persisted_snapshot = copy.deepcopy(service.config.persisted)
-        service.fail_source_reload_after_save = True
-        service.fail_rollback_reload_id = "ark-A/a"
-        try:
-            await ProviderConfigService.upsert_provider_source(
-                service,
-                "ark-A",
-                {
-                    "id": "ark-A",
-                    "provider": "volcengine",
-                    "type": ARK_PROVIDER_TYPE,
-                    VIDEO_CONTROLS_VISIBLE_KEY: True,
-                    ark_selector: ["ark-A/a"],
-                },
-            )
-        except RuntimeError as exc:
-            assert str(exc).endswith("ark-A/b")
-            notes = getattr(exc, "__notes__", [])
-            assert any("ark-A/a" in note for note in notes)
-        else:
-            raise AssertionError("original Provider reload failure should propagate")
-        service.fail_source_reload_after_save = False
-        service.fail_rollback_reload_id = None
-        assert dict(service.config) == snapshot
-        assert service.config.persisted == persisted_snapshot
-
-        # A failed compensating disk write also remains diagnostic context. The
-        # wrapper must restore every in-memory view, report that durable state
-        # could not be restored, and still propagate the original host reload
-        # exception as the primary failure.
-        snapshot = copy.deepcopy(service.config)
-        persisted_snapshot = copy.deepcopy(service.config.persisted)
-        service.fail_source_reload_after_save = True
-        service.fail_rollback_persist = True
-        try:
-            await ProviderConfigService.upsert_provider_source(
-                service,
-                "ark-A",
-                {
-                    "id": "ark-A",
-                    "provider": "volcengine",
-                    "type": ARK_PROVIDER_TYPE,
-                    VIDEO_CONTROLS_VISIBLE_KEY: True,
-                    ark_selector: ["ark-A/a"],
-                },
-            )
-        except RuntimeError as exc:
-            assert str(exc).endswith("ark-A/b")
-            notes = getattr(exc, "__notes__", [])
-            assert any(
-                "simulated compensating persistence failure" in note
-                for note in notes
-            )
-        else:
-            raise AssertionError("original Provider reload failure should propagate")
-        service.fail_source_reload_after_save = False
-        service.fail_rollback_persist = False
-        assert dict(service.config) == snapshot
-        assert service.config.persisted != persisted_snapshot
-        service.config.save_config()
-        assert service.config.persisted == snapshot
-
-        # Compatibility for a stale already-open 0.1.17 model dialog: its old
-        # temporary bool is still translated and stripped at save.
-        legacy_model_ui = registry._video_ui_key("ark-A")
         await ProviderConfigService.create_provider(
             service,
-            {"id": "ark-A/new", "model": "new", legacy_model_ui: True},
+            {
+                "id": "ark-A/new",
+                "provider_source_id": "ark-A",
+                "modalities": ["text", "video"],
+                VIDEO_INPUT_PROFILE_KEY: "original",
+            },
             "ark-A",
         )
-        created = service.provider_manager.created[-1]
-        assert created[VIDEO_INPUT_ENABLED_KEY] is True
-        assert not _has_temporary_ui_key(created)
+        saved_owned = service.created[-1]
+        assert saved_owned[VIDEO_INPUT_ENABLED_KEY] is True
+        assert saved_owned["modalities"] == ["text", "video"]
+        assert saved_owned[VIDEO_INPUT_PROFILE_KEY] == "original"
+        assert VIDEO_INPUT_ENABLED_UI_KEY not in saved_owned
 
-        # A foreign model save cannot persist any canonical, legacy, Source-only
-        # or temporary Volcengine video state, even when a client forges it.
+        # A forged plugin checkbox on a foreign card is erased at both wrapper
+        # boundaries and cannot become persistent foreign state.
         await ProviderConfigService.create_provider(
             service,
             {
                 "id": "foreign-A/new",
-                "model": "new",
+                "provider_source_id": "foreign-A",
+                VIDEO_INPUT_ENABLED_UI_KEY: True,
                 VIDEO_INPUT_ENABLED_KEY: True,
-                LEGACY_MODEL_VIDEO_INPUT_KEY: True,
-                VIDEO_CONTROLS_VISIBLE_KEY: True,
-                foreign_selector: ["ark-A/a"],
-                registry._video_ui_key("foreign-A"): True,
-                LEGACY_SOURCE_VIDEO_KEYS[AGENT_PLAN_PROVIDER_TYPE]: True,
+                VIDEO_INPUT_PROFILE_KEY: "compressed",
             },
             "foreign-A",
         )
-        foreign_created = service.provider_manager.created[-1]
-        assert VIDEO_INPUT_ENABLED_KEY not in foreign_created
-        assert LEGACY_MODEL_VIDEO_INPUT_KEY not in foreign_created
-        assert VIDEO_CONTROLS_VISIBLE_KEY not in foreign_created
-        assert all(
-            key not in foreign_created for key in LEGACY_SOURCE_VIDEO_KEYS.values()
-        )
-        assert not _has_temporary_ui_key(foreign_created)
+        saved_foreign = service.created[-1]
+        assert VIDEO_INPUT_ENABLED_UI_KEY not in saved_foreign
+        assert VIDEO_INPUT_ENABLED_KEY not in saved_foreign
+        assert VIDEO_INPUT_PROFILE_KEY not in saved_foreign
 
         await ProviderConfigService.update_provider(
             service,
-            "ark-A/a",
+            "ark-A/card",
             {
-                "id": "ark-A/a",
-                "provider_source_id": "foreign-A",
-                "model": "same-model",
-                VIDEO_INPUT_ENABLED_KEY: True,
-                LEGACY_MODEL_VIDEO_INPUT_KEY: True,
-                VIDEO_CONTROLS_VISIBLE_KEY: True,
-                foreign_selector: ["ark-A/a"],
-                LEGACY_SOURCE_VIDEO_KEYS[ARK_PROVIDER_TYPE]: True,
-                legacy_model_ui: True,
-                "modalities": ["text", "video"],
+                "id": "ark-A/card",
+                "provider_source_id": "ark-A",
+                "modalities": ["text", "image"],
+                VIDEO_INPUT_PROFILE_KEY: "compressed",
             },
         )
-        _, moved = service.provider_manager.updated[-1]
-        assert VIDEO_INPUT_ENABLED_KEY not in moved
-        assert LEGACY_MODEL_VIDEO_INPUT_KEY not in moved
-        assert VIDEO_CONTROLS_VISIBLE_KEY not in moved
-        assert all(key not in moved for key in LEGACY_SOURCE_VIDEO_KEYS.values())
-        assert not _has_temporary_ui_key(moved)
-        assert moved["modalities"] == ["text", "video"]
+        _, saved_update = service.updated[-1]
+        assert saved_update[VIDEO_INPUT_ENABLED_KEY] is False
+        assert saved_update["modalities"] == ["text", "image"]
+        assert saved_update[VIDEO_INPUT_PROFILE_KEY] == "compressed"
+        assert VIDEO_INPUT_ENABLED_UI_KEY not in saved_update
+
+        print("DASHBOARD_SAVE_BOUNDARY=OK")
     finally:
-        while registry._DASHBOARD_LEASE_COUNT > 0:
-            registry.release_owned_dashboard_bridge()
-        ProviderConfigService.upsert_provider_source = original_source_upsert
+        _release_all()
+        for name, method in originals.items():
+            setattr(ProviderConfigService, name, method)
 
 
 if __name__ == "__main__":
     asyncio.run(exercise())
-    print("DASHBOARD_SAVE_BOUNDARY=OK")

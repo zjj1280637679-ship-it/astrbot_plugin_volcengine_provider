@@ -1,8 +1,8 @@
 """Per-model-card Volcengine adapter settings and legacy migration.
 
-This module never infers model capabilities. The video flag is only a
-request-transport setting. AstrBot native capability feedback such as
-``modalities`` remains host-owned and is never rewritten here.
+This module never infers model capabilities. The video selection is explicit
+user configuration in AstrBot's native ``modalities`` field; the plugin-owned
+boolean remains a compatibility/runtime mirror for older installations.
 """
 
 from __future__ import annotations
@@ -127,6 +127,10 @@ def normalize_owned_model_card_for_save(
     if not owned_source_type_for_card(provider_config, provider_sources):
         return provider_config
 
+    modalities = provider_config.get("modalities")
+    if isinstance(modalities, list):
+        provider_config[VIDEO_INPUT_ENABLED_KEY] = "video" in modalities
+
     explicit = provider_config.get(VIDEO_INPUT_ENABLED_KEY)
     source_id = str(provider_config.get("provider_source_id") or "").strip()
     retired_ui = (
@@ -181,10 +185,15 @@ def migrate_legacy_video_settings(config: dict[str, Any]) -> list[str]:
             if old_source_key in source:
                 source.pop(old_source_key, None)
                 source_changed = True
-        # Defensive wrong-layer cleanup. The visibility preference is the only
-        # plugin video field allowed to persist on an owned Source.
+        # Defensive wrong-layer cleanup. Since 0.1.20 the video control belongs
+        # to each model card, so the retired Source visibility preference is
+        # debris on owned and foreign Sources alike.
         for key in list(source):
-            if key in {VIDEO_INPUT_ENABLED_KEY, LEGACY_MODEL_VIDEO_INPUT_KEY} or (
+            if key in {
+                VIDEO_INPUT_ENABLED_KEY,
+                LEGACY_MODEL_VIDEO_INPUT_KEY,
+                VIDEO_CONTROLS_VISIBLE_KEY,
+            } or (
                 isinstance(key, str)
                 and (
                     key.startswith(LEGACY_MODEL_VIDEO_UI_KEY_PREFIX)
@@ -193,12 +202,6 @@ def migrate_legacy_video_settings(config: dict[str, Any]) -> list[str]:
             ):
                 source.pop(key, None)
                 source_changed = True
-        if (
-            source_type not in OWNED_SOURCE_TYPES
-            and VIDEO_CONTROLS_VISIBLE_KEY in source
-        ):
-            source.pop(VIDEO_CONTROLS_VISIBLE_KEY, None)
-            source_changed = True
 
     changed_ids: list[str] = []
     any_changed = source_changed

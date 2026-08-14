@@ -39,6 +39,7 @@ class FakeService:
                     "id": "ark-A/model",
                     "provider_source_id": "ark-A",
                     "model": "model",
+                    "modalities": ["text", "image"],
                     VIDEO_INPUT_ENABLED_KEY: True,
                     VIDEO_INPUT_PROFILE_KEY: "compressed",
                     TEMPERATURE_KEY: 0.6,
@@ -82,6 +83,7 @@ def main() -> None:
                 "id": "ark-A/model",
                 "provider_source_id": "ark-A",
                 "model": "model",
+                "modalities": ["text", "image"],
                 "enable": True,
                 "custom_extra_body": {},
             },
@@ -107,16 +109,16 @@ def main() -> None:
         assert items[key] == expected
 
     owned, foreign = out["providers"]
-    assert owned[VIDEO_INPUT_MODE_UI_KEY] == "compressed"
+    assert owned["modalities"] == ["text", "image", "video"]
+    assert VIDEO_INPUT_MODE_UI_KEY not in owned
     assert owned[VIDEO_INPUT_PROFILE_KEY] == "compressed"
     assert owned[TEMPERATURE_KEY] == "0.6"
     assert owned[REASONING_MODE_KEY] == "auto"
     assert owned[REASONING_EFFORT_KEY] == "high"
     assert owned[STOP_SEQUENCES_KEY] == ["STOP"]
 
-    # The shared schema can contain the field definitions safely because
-    # AstrBotConfig iterates the actual model object. Foreign model copies carry
-    # none of the Volcengine keys and therefore render none of the rows.
+    # Foreign model copies carry none of the Volcengine values; the frontend
+    # bridge additionally marks their shared schema definitions invisible.
     for key in MODEL_FIELD_SCHEMA:
         assert key not in foreign
     assert foreign["custom_extra_body"] == {"foreign": "kept"}

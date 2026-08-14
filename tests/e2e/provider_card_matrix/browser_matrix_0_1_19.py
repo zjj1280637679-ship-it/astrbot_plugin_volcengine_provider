@@ -1,8 +1,9 @@
-"""Real AstrBot 4.27.2 Dashboard evidence for 0.1.19 model-card fields.
+"""Real AstrBot 4.27.2 Dashboard evidence for the 0.1.20 model-card scope.
 
-This browser matrix deliberately keeps the released 0.1.18 Source UI contract
-intact while proving that configured Volcengine model edit dialogs gain the new
-bilingual horizontal rows and foreign model dialogs do not.
+This browser matrix proves the complete user-facing boundary: the private
+Volcengine model-dialog schema gains the native ``video`` modality option and
+the bilingual advanced rows, while foreign dialogs retain the host schema and
+all Source panels remain free of retired video controls.
 
 No Volcengine request is sent. The API key is a dummy value and the test never
 presses model-test/fetch-models buttons.
@@ -34,7 +35,6 @@ from browser_matrix import (
     save_source,
     select_source,
     semantic_page_snapshot,
-    set_source_video_master,
     source_video_master_row,
     source_video_selector_row,
     visible_config_rows,
@@ -42,7 +42,7 @@ from browser_matrix import (
 
 ARTIFACT_DIR = Path(
     os.environ.get("ASTRBOT_E2E_ARTIFACT_DIR", "e2e-artifacts")
-) / "model-fields-0.1.19"
+) / "model-fields-0.1.20"
 
 VIDEO_MODE_KEY = "_volcengine_video_input_mode_ui"
 VIDEO_PROFILE_KEY = "volcengine_video_input_profile"
@@ -56,7 +56,7 @@ FREQUENCY_PENALTY_KEY = "volcengine_frequency_penalty"
 PRESENCE_PENALTY_KEY = "volcengine_presence_penalty"
 
 VISIBLE_FIELD_KEYS = (
-    VIDEO_MODE_KEY,
+    VIDEO_PROFILE_KEY,
     REASONING_MODE_KEY,
     REASONING_EFFORT_KEY,
     TEMPERATURE_KEY,
@@ -66,10 +66,10 @@ VISIBLE_FIELD_KEYS = (
     FREQUENCY_PENALTY_KEY,
     PRESENCE_PENALTY_KEY,
 )
-ALL_PLUGIN_MODEL_KEYS = (*VISIBLE_FIELD_KEYS, VIDEO_PROFILE_KEY)
+ALL_PLUGIN_MODEL_KEYS = (VIDEO_MODE_KEY, *VISIBLE_FIELD_KEYS)
 
 EXPECTED_BILINGUAL_NAMES = {
-    VIDEO_MODE_KEY: "视频输入模式 / Video Input Mode",
+    VIDEO_PROFILE_KEY: "视频质量 / Video Quality",
     REASONING_MODE_KEY: "思考模式 / Thinking Mode",
     REASONING_EFFORT_KEY: "思考强度 / Reasoning Effort",
     TEMPERATURE_KEY: "温度 / Temperature",
@@ -134,7 +134,7 @@ async def row_visible_text(dialog: Locator, key: str) -> str:
     return " ".join((await row.inner_text()).split())
 
 
-async def assert_source_surface_unchanged(page: Page, *, owned: bool) -> dict[str, Any]:
+async def assert_source_surface_retired(page: Page) -> dict[str, Any]:
     master_count = await source_video_master_row(page).count()
     selector_count = await source_video_selector_row(page).count()
     source_text = await page.locator(".provider-config-shell").inner_text()
@@ -147,13 +147,10 @@ async def assert_source_surface_unchanged(page: Page, *, owned: bool) -> dict[st
         raise AssertionError(
             f"model-card fields leaked into Source panel: {leaked_model_labels}"
         )
-    if owned:
-        if master_count != 1:
-            raise AssertionError(
-                f"owned Source must keep exactly one 0.1.18 video master, got {master_count}"
-            )
-    elif master_count or selector_count:
-        raise AssertionError("foreign Source exposes 0.1.18 Volcengine video controls")
+    if master_count or selector_count:
+        raise AssertionError(
+            "retired Source-level Volcengine video controls are still visible"
+        )
     return {
         "master_count": master_count,
         "selector_count": selector_count,
@@ -161,9 +158,96 @@ async def assert_source_surface_unchanged(page: Page, *, owned: bool) -> dict[st
     }
 
 
-async def assert_create_dialog_is_host_native(
-    dialog: Locator, *, case_name: str
+async def modality_options(dialog: Locator) -> list[dict[str, Any]]:
+    row = await row_for_key(dialog, "modalities")
+    return await row.evaluate(
+        """
+        (row) => Array.from(row.querySelectorAll('input[type="checkbox"]')).map((input) => {
+          const labels = Array.from(row.querySelectorAll('label'));
+          const direct = input.id ? labels.find((label) => label.htmlFor === input.id) : null;
+          const control = input.closest('.v-selection-control');
+          return {
+            value: String(input.value || ''),
+            text: String(direct?.textContent || control?.textContent || '').replace(/\\s+/g, ' ').trim(),
+            checked: Boolean(input.checked),
+          };
+        })
+        """
+    )
+
+
+async def video_modality_control(dialog: Locator) -> Locator:
+    row = await row_for_key(dialog, "modalities")
+    by_value = row.locator('input[type="checkbox"][value="video"]')
+    value_count = await by_value.count()
+    if value_count == 1:
+        return by_value
+    if value_count > 1:
+        raise AssertionError(f"modalities has {value_count} video-valued controls")
+
+    labelled = row.locator('.v-selection-control', has_text="视频").locator(
+        'input[type="checkbox"]'
+    )
+    label_count = await labelled.count()
+    if label_count == 1:
+        return labelled
+    raise AssertionError(
+        f"modalities has no unique video control; options={await modality_options(dialog)!r}"
+    )
+
+
+async def enable_video_modality(dialog: Locator) -> None:
+    """Activate Video through Vuetify's visible label, like a real user click."""
+
+    control = await video_modality_control(dialog)
+    control_id = await control.get_attribute("id")
+    if not control_id:
+        raise AssertionError("native Video checkbox has no label target id")
+    row = await row_for_key(dialog, "modalities")
+    label = row.locator(f'label[for="{control_id}"]')
+    if await label.count() != 1:
+        raise AssertionError(
+            f"native Video checkbox has no unique visible label for id={control_id!r}"
+        )
+    await label.click()
+    await expect(control).to_be_checked(timeout=5_000)
+
+
+async def assert_video_modality_scope(
+    dialog: Locator,
+    *,
+    expected: bool,
+    case_name: str,
+    expected_checked: bool | None = None,
 ) -> list[dict[str, Any]]:
+    options = await modality_options(dialog)
+    matches = [
+        item
+        for item in options
+        if item.get("value") == "video" or "视频" in str(item.get("text") or "")
+    ]
+    if expected and len(matches) != 1:
+        raise AssertionError(
+            f"{case_name}: expected exactly one native Video option, got {matches!r}; "
+            f"all options={options!r}"
+        )
+    if expected and expected_checked is not None:
+        actual_checked = bool(matches[0].get("checked"))
+        if actual_checked is not expected_checked:
+            raise AssertionError(
+                f"{case_name}: Video selection state is {actual_checked}, "
+                f"expected {expected_checked}; option={matches[0]!r}"
+            )
+    if not expected and matches:
+        raise AssertionError(
+            f"{case_name}: foreign model dialog leaked Video option: {matches!r}"
+        )
+    return options
+
+
+async def assert_create_dialog_scope(
+    dialog: Locator, *, case_name: str, owned: bool
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     rows = await visible_config_rows(dialog)
     keys = {row["key"] for row in rows}
     leaked = sorted(set(ALL_PLUGIN_MODEL_KEYS) & keys)
@@ -172,17 +256,24 @@ async def assert_create_dialog_is_host_native(
             f"{case_name}: unsaved model-create dialog unexpectedly contains "
             f"server-projected fields: {leaked}"
         )
-    return rows
+    options = await assert_video_modality_scope(
+        dialog, expected=owned, case_name=case_name
+    )
+    return rows, options
 
 
 async def assert_owned_edit_rows(dialog: Locator) -> list[dict[str, Any]]:
+    await assert_video_modality_scope(
+        dialog,
+        expected=True,
+        case_name="owned edit",
+        expected_checked=True,
+    )
     rows = await visible_config_rows(dialog)
     by_key = {row["key"]: row for row in rows}
     missing = [key for key in VISIBLE_FIELD_KEYS if key not in by_key]
     if missing:
         raise AssertionError(f"owned configured model is missing rows: {missing}")
-    if VIDEO_PROFILE_KEY in by_key:
-        raise AssertionError("hidden video profile rendered as a visible row")
     for key, expected_name in EXPECTED_BILINGUAL_NAMES.items():
         actual_name = str(by_key[key].get("name") or "")
         if expected_name not in actual_name:
@@ -193,6 +284,7 @@ async def assert_owned_edit_rows(dialog: Locator) -> list[dict[str, Any]]:
 
 
 async def assert_foreign_edit_rows(dialog: Locator) -> list[dict[str, Any]]:
+    await assert_video_modality_scope(dialog, expected=False, case_name="foreign edit")
     rows = await visible_config_rows(dialog)
     keys = {row["key"] for row in rows}
     leaked = sorted(set(ALL_PLUGIN_MODEL_KEYS) & keys)
@@ -210,15 +302,15 @@ async def assert_foreign_edit_rows(dialog: Locator) -> list[dict[str, Any]]:
 
 
 async def exercise_owned_fields(dialog: Locator) -> dict[str, Any]:
-    # Source checkbox enabled the new model before this dialog was opened, so the
-    # first projected three-state mode must be Original (0.1.18 compatibility).
-    initial_video = await row_visible_text(dialog, VIDEO_MODE_KEY)
+    # The native Video modality selected during model creation projects to the
+    # plugin's separate quality preference as Original quality.
+    initial_video = await row_visible_text(dialog, VIDEO_PROFILE_KEY)
     if "原画 / Original Quality" not in initial_video:
         raise AssertionError(
             f"0.1.18 enabled video did not project as Original: {initial_video!r}"
         )
 
-    await select_row_option(dialog, VIDEO_MODE_KEY, "压缩 / Compressed")
+    await select_row_option(dialog, VIDEO_PROFILE_KEY, "压缩 / Compressed")
     await select_row_option(dialog, REASONING_MODE_KEY, "自动 / Auto")
     await select_row_option(dialog, REASONING_EFFORT_KEY, "高 / High")
     await fill_row_input(dialog, TEMPERATURE_KEY, "0.6")
@@ -241,11 +333,11 @@ async def exercise_owned_fields(dialog: Locator) -> dict[str, Any]:
 
 
 async def verify_owned_persisted_fields(dialog: Locator) -> dict[str, Any]:
-    video_text = await row_visible_text(dialog, VIDEO_MODE_KEY)
+    video_text = await row_visible_text(dialog, VIDEO_PROFILE_KEY)
     reasoning_mode_text = await row_visible_text(dialog, REASONING_MODE_KEY)
     effort_text = await row_visible_text(dialog, REASONING_EFFORT_KEY)
     if "压缩 / Compressed" not in video_text:
-        raise AssertionError(f"video mode did not persist: {video_text!r}")
+        raise AssertionError(f"video quality did not persist: {video_text!r}")
     if "自动 / Auto" not in reasoning_mode_text:
         raise AssertionError(f"thinking mode did not persist: {reasoning_mode_text!r}")
     if "高 / High" not in effort_text:
@@ -293,16 +385,19 @@ async def run_case(page: Page, case) -> dict[str, Any]:
         source_id = await add_source(page, case)
         result["source_id"] = source_id
         await fill_dummy_source_key(page)
-        result["source_before_model"] = await assert_source_surface_unchanged(
-            page, owned=case.owned
-        )
+        result["source_before_model"] = await assert_source_surface_retired(page)
         await save_source(page)
         result["stages"]["source_saved"] = True
 
         create_dialog = await open_manual_model_add(page, case.model_id)
-        result["model_create_rows"] = await assert_create_dialog_is_host_native(
-            create_dialog, case_name=case.name
+        create_rows, create_options = await assert_create_dialog_scope(
+            create_dialog, case_name=case.name, owned=case.owned
         )
+        result["model_create_rows"] = create_rows
+        result["model_create_modalities"] = create_options
+        if case.owned:
+            await enable_video_modality(create_dialog)
+            result["stages"]["model_video_selected"] = True
         await page.screenshot(
             path=str(case_dir / "01-model-create-host-native.png"), full_page=True
         )
@@ -313,23 +408,7 @@ async def run_case(page: Page, case) -> dict[str, Any]:
             state="visible", timeout=20_000
         )
         await select_source(page, source_id)
-        if case.owned:
-            # Preserve the released 0.1.18 Source workflow and use it as the
-            # shortcut that enables video for this configured card.
-            await set_source_video_master(page, True)
-            selector = source_video_selector_row(page)
-            await expect(selector).to_be_visible(timeout=10_000)
-            checks = selector.locator('input[type="checkbox"]')
-            if await checks.count() != 1:
-                raise AssertionError(
-                    f"{case.name}: expected one Source video checkbox, got {await checks.count()}"
-                )
-            await checks.first.set_checked(True, force=True)
-            await expect(checks.first).to_be_checked(timeout=5_000)
-            await save_source(page)
-            result["stages"]["source_video_enabled"] = True
-        else:
-            await assert_source_surface_unchanged(page, owned=False)
+        result["source_after_model_create"] = await assert_source_surface_retired(page)
 
         edit_dialog = await open_configured_model(page, case.model_id)
         if case.owned:
@@ -351,17 +430,7 @@ async def run_case(page: Page, case) -> dict[str, Any]:
             result["stages"]["model_fields_reopened"] = True
 
             await select_source(page, source_id)
-            source_state = await assert_source_surface_unchanged(page, owned=True)
-            # We intentionally left the 0.1.18 master open, so its one-model
-            # selector must still be present after model-field save/reload.
-            source_state["selector_count_after_model_save"] = await source_video_selector_row(
-                page
-            ).count()
-            if source_state["selector_count_after_model_save"] != 1:
-                raise AssertionError(
-                    "0.1.19 model save disturbed the 0.1.18 Source selector"
-                )
-            result["source_after_model_save"] = source_state
+            result["source_after_model_save"] = await assert_source_surface_retired(page)
         else:
             result["model_edit_rows"] = await assert_foreign_edit_rows(edit_dialog)
             await page.screenshot(
@@ -415,7 +484,7 @@ async def main() -> None:
 
     summary = {
         "schema_version": 1,
-        "purpose": "0.1.19_real_dashboard_model_field_evidence",
+        "purpose": "0.1.20_real_dashboard_source_scoped_video_evidence",
         "cases": results,
         "page_errors": page_errors,
         "all_passed": all(case.get("success") for case in results) and not page_errors,

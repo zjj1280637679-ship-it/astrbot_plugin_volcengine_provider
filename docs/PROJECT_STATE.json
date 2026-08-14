@@ -3,76 +3,75 @@
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
-    "stable_release": "0.1.19",
-    "stable_status": "repository_and_runtime_published_marketplace_package_diverged",
+    "stable_release": "0.1.21",
+    "stable_status": "repository_runtime_and_marketplace_published",
     "active_release_candidate": {
-      "version": "0.1.21",
-      "branch": "chore/project-state-clarity-20260814",
+      "version": "0.1.22",
+      "branch": "release/0.1.22-model-card-video",
       "status": "ready",
       "releaseable": true,
-      "purpose": "Make the default-branch marketplace archive and the generated runtime package content-equivalent, without changing provider or media behavior.",
+      "purpose": "Publish the recovered source-scoped model-card Video modality implementation as a new version because its 0.1.20 candidate was never merged or published.",
       "validation": {
-        "source_commit": "5ca2840d4d4449dfcf730a8fad8b52d966fe67ee",
-        "runtime_gate_run": 31724706065,
-        "compatibility_baseline_run": 31724706126,
-        "result": "passed"
+        "recovered_source_commit": "ac8cdb0d8ef1e307c7975c1adc6f8ba72cc48c4a",
+        "runtime_gate_run": 31764158444,
+        "compatibility_baseline_run": 31764158500,
+        "result": "local_and_remote_release_gates_passed"
       }
     },
     "safe_development_branch": "main",
     "safe_install_branch": "runtime",
     "marketplace": {
-      "listed_version": "0.1.19",
-      "status": "package_identity_mismatch",
-      "observed_git_commit": "a43b678e664c7884e5e18b58487fa73b7a4cd359",
-      "expected_runtime_commit": "d7dc0f171cca237304b24604137659bc98a3d962"
+      "listed_version": "0.1.21",
+      "status": "published"
     },
-    "windows_marketplace_install": "blocked_until_corrected_marketplace_package_exists"
+    "windows_marketplace_install": "0.1.22_pending_publication"
   },
   "active_experiment": null,
   "development": {
-    "version": "0.1.21",
-    "branch": "chore/project-state-clarity-20260814",
+    "version": "0.1.22",
+    "branch": "release/0.1.22-model-card-video",
     "track": "release_candidate",
-    "status": "ready_for_repository_and_runtime_publication",
+    "status": "ready_recovered_model_card_video_release",
     "installable": true
   },
   "published_baseline": {
-    "version": "0.1.19",
-    "main_commit": "9f406dda365213685f7c67d04b3d0cac583fb153",
+    "version": "0.1.21",
+    "main_commit": "450850b3ea45d6e054ef803ba85207d4882b7c9d",
     "runtime_branch": "runtime",
-    "runtime_commit": "d7dc0f171cca237304b24604137659bc98a3d962",
-    "runtime_tree": "d394a878ee250c6d6d116b9a954589ab0df59ae2",
-    "dashboard_evidence_run": 31630453415,
-    "runtime_gate_run": 31630774583,
-    "publisher_run": 31630921686,
+    "runtime_commit": "4b945d6e288e1fc6c9d718672357f319e96eb0ee",
+    "runtime_tree": null,
+    "dashboard_evidence_run": null,
+    "runtime_gate_run": null,
+    "publisher_run": null,
     "status": "passed"
   },
   "current_goal": {
-    "id": "0.1.21-correct-marketplace-package-and-runtime-acceptance",
-    "goal": "Publish one unambiguous 0.1.21 package whose default-branch marketplace archive and generated runtime package are equivalent, then install it from the AstrBot marketplace into the approved Windows Launcher instance and verify the real provider paths.",
+    "id": "0.1.22-publish-recovered-model-card-video",
+    "goal": "Publish the recovered model-card Video modality implementation as 0.1.22 with the new icon, without adding unrelated behavior.",
     "active_decision_ids": [],
     "non_goals": [
-      "Do not resume or publish the stopped 0.1.20 Video-checkbox experiment.",
-      "Do not infer marketplace package identity, Windows installation, or runtime behavior from GitHub CI alone.",
-      "Do not change provider, audio, video, routing, or Dashboard behavior merely to repair distribution identity.",
-      "Do not modify AstrBot shared modalities to express a provider-specific option."
+      "Do not add unrelated provider, media, routing, or Dashboard behavior.",
+      "Do not publish the never-released 0.1.20 identity retroactively.",
+      "Do not expose the Video modality on foreign provider model cards.",
+      "Do not treat the retired _volcengine_video_input_mode_ui row as a release requirement."
     ]
   },
   "active_validation_frontier": {
-    "release": "0.1.21",
-    "name": "distribution_identity_and_marketplace_acceptance",
-    "current_stage": "candidate_ready_for_repository_and_runtime_publication",
+    "release": "0.1.22",
+    "name": "recovered_model_card_video_publication",
+    "current_stage": "remote_release_gates_passed_ready_to_publish",
     "next_actions": [
-      "Merge only the exact 0.1.21 candidate that passed the recorded runtime and Dashboard gates so the runtime publisher can advance.",
-      "Publish 0.1.21 in AstrBot Cloud, download the frozen marketplace ZIP, and compare every path and byte with the promoted runtime package.",
-      "Only after package equivalence passes, install from the marketplace into the approved Launcher instance, fully restart AstrBot, verify registration/models/logs, and make one real configured-provider request.",
-      "Start any future feature as a separate experiment object and workflow; do not borrow evidence or code from the stopped 0.1.20 experiment."
+      "Merge the exact validated 0.1.22 candidate into main.",
+      "Promote the exact 0.1.22 runtime package.",
+      "Publish the promoted runtime package in AstrBot Cloud."
     ],
     "observed": [
-      "AstrBot Cloud version tab showed v0.1.19 as Published on 2026-08-14, but the listing label did not identify the downloaded bytes.",
-      "The frozen marketplace 0.1.19 ZIP exactly matched default-branch commit a43b678, not runtime commit d7dc0f1.",
-      "The marketplace ZIP contained development-only capabilities/SEMANTICS.json and lacked the later finite-number validation in capabilities/model_fields.py.",
-      "The current Cloud publication path therefore requires the default-branch export and generated runtime artifact to be equivalent before publication."
+      "AstrBot Cloud lists 0.1.11 through 0.1.19 and 0.1.21 as Published, with no 0.1.20 entry.",
+      "PR #10 for 0.1.20 is closed and unmerged; main and runtime never contained its model-card Video implementation.",
+      "The final 0.1.20 Dashboard run reached owned and foreign modality-scope assertions; its recorded failure was an obsolete requirement for _volcengine_video_input_mode_ui.",
+      "The 0.1.22 runtime restores the eight runtime files from ac8cdb0, changes only release identity and logo beyond that recovered implementation, and passes the local packaged contract matrix.",
+      "Runtime Distribution Gate run 31764158444 passed the artifact boundary and AstrBot 4.26.1 / 4.27.2 runtime-load matrix.",
+      "Compatibility Baseline Dashboard Regression run 31764158500 passed the real Dashboard evidence for owned model-card native Video selection, persistence, and foreign-provider absence."
     ]
   },
   "closed_experiments": [
@@ -81,7 +80,7 @@
       "version": "0.1.20",
       "branch": "fix/source-scoped-video-0.1.20",
       "pull_request": 10,
-      "status": "stopped_after_failure_limit",
+      "status": "invalidated",
       "releaseable": false,
       "merged": false,
       "passed": [
@@ -91,11 +90,11 @@
         "Video absent from the foreign OpenAI create dialog"
       ],
       "failed": [
-        "After save and reopen, both owned cards lacked _volcengine_video_input_mode_ui."
+        "The historical test incorrectly required the retired _volcengine_video_input_mode_ui row after the native Video modality assertion had already passed."
       ],
       "final_failed_run": 31719539311,
       "archive": "docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md",
-      "resume_condition": "A new design must first explain and test the create-to-save-to-reopen projection boundary without modifying the stable workflow identity."
+      "resume_condition": "Satisfied by the 0.1.22 recovery candidate, which tests native Video selection persistence directly and keeps the stable workflow identity."
     }
   ],
   "stable_boundaries": [

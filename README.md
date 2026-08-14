@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>别让你的 AI 在 QQ 里只会看字：让它真正听懂语音，也看懂视频。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.21_candidate-e85d3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.22_ready-2f855a)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,10 +10,10 @@
 
 | 对象 | 当前结论 |
 |---|---|
-| 你可以安装的稳定版 | **0.1.19**；当前可信来源是 `runtime.zip`，不要把商场同名标签当成包身份 |
-| 活跃发布候选 | **0.1.21**，分发身份修复已通过发布前门禁，可以推进仓库与 `runtime` 发布；尚未完成商场下载件与 Windows 实机验收 |
-| 0.1.20 原生 Video 勾选实验 | 已停止、未合并、未发布；不要当成更新版 |
-| AstrBot 商场与 Windows 安装 | 版本页显示 **v0.1.19 Published**，但冻结下载包与稳定 `runtime` 不一致；先修正为 0.1.21，再做 Windows 商场实机验收 |
+| 你可以安装的稳定版 | **0.1.21**；AstrBot 商场已显示为 Published |
+| 活跃发布候选 | **0.1.22**，恢复从未正式发布的模型卡原生 Video 能力选择项，并带上新版图标；本地与远端门禁均已通过，等待合并、运行包晋升与商场发布 |
+| 0.1.20 原生 Video 实验 | 从未合并、从未发布；其错误验收已被推翻，正确运行代码只以新的 0.1.22 身份发布 |
+| AstrBot 商场与 Windows 安装 | 当前版本页显示 **v0.1.21 Published**；0.1.22 尚未发布 |
 
 机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)；实验失败与稳定发布成功是两个不同对象，不能相互覆盖。
 
