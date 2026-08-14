@@ -64,12 +64,16 @@ def _dashboard_fixture(*, relaxed_minifier_shape: bool = False, labels_as_i18n_k
     else:
         boundary = '$==="googlegenai_chat_completion"&&U.push("custom_extra_body");for(const M of U)k.provider.items[M]&&(k.provider.items[M].invisible=!0);'
 
+    # ``nt`` deliberately mirrors the exact AstrBot 4.27.3 production shape in
+    # which the concrete model-card object is the second operand of a return-time
+    # comma expression.  That object, not the prelude expression, is the object
+    # whose keys drive AstrBotConfig and whose values later reach createInSource.
     return f'''global.document={{documentElement:{{lang:"zh-CN"}}}};
 global.localStorage={{getItem:()=>"zh-CN"}};
 const selected={{value:{{id:"ark",type:"{ARK}"}}}};
 const base={{value:{{id:"base"}}}};
 function me(x){{return false}}
-function nt(C){{var Le,se;if(!base.value)return;const Q=((Le=selected.value)==null?void 0:Le.id)||base.value.id,q=`${{Q}}/${{C}}`,le=null;let re;re=["text","image","audio","tool_use"];let De=0;return{{id:q,enable:!0,provider_source_id:Q,model:C,modalities:re,custom_extra_body:{{}},max_context_tokens:De,reasoning:me(le)}}}}
+function nt(C){{var Le,se;if(!base.value)return;const Q=((Le=selected.value)==null?void 0:Le.id)||base.value.id,q=`${{Q}}/${{C}}`,le={{limit:{{context:128000}}}};let re;re=["text","image","audio","tool_use"];let De=0;return(se=le==null?void 0:le.limit)!=null&&se.context&&typeof le.limit.context=="number"&&(De=le.limit.context),{{id:q,enable:!0,provider_source_id:Q,model:C,modalities:re,custom_extra_body:{{}},max_context_tokens:De,reasoning:me(le)}}}}
 function newCard(type){{selected.value={{id:type,type}};return nt("model")}}
 function card(type){{
 const l={{value:{{provider:{{items:{{modalities:{{options:["text","image","audio","tool_use"],labels:{labels}}},{plugin_rows},custom_extra_body:{{type:"dict"}}}}}}}}}};
