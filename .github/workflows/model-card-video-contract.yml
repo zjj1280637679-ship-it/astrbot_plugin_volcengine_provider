@@ -84,6 +84,31 @@ jobs:
         working-directory: AstrBot/dashboard
         run: pnpm install --frozen-lockfile && pnpm run build
 
+      - name: Print bounded model-builder bundle shape for this exact host
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          matches = []
+          for path in Path('AstrBot/dashboard/dist/assets').glob('*.js'):
+              text = path.read_text(encoding='utf-8', errors='ignore')
+              for needle in ('max_context_tokens', 'googlegenai_chat_completion'):
+                  if needle not in text:
+                      break
+              else:
+                  for m in re.finditer(r'max_context_tokens', text):
+                      start = max(0, m.start() - 1200)
+                      end = min(len(text), m.end() + 1200)
+                      snippet = text[start:end]
+                      if 'provider_source_id' in snippet and 'custom_extra_body' in snippet:
+                          matches.append((path.name, snippet))
+          print(f'BOUND_MODEL_BUILDER_SNIPPETS={len(matches)}')
+          for name, snippet in matches[:3]:
+              print(f'--- {name} ---')
+              print(snippet)
+          PY
+
       - name: Install built Dashboard into AstrBot package
         shell: bash
         run: |
