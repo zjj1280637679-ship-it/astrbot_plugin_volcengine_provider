@@ -17,13 +17,20 @@ from astrbot_plugin_volcengine_provider.capabilities.dashboard_asset_bridge impo
 
 
 def main() -> None:
-    original = r'''function card(type){
-const l={value:{provider:{items:{modalities:{options:["text","image","audio","tool_use"],labels:"provider.items.modalities.labels"},volcengine_video_input_profile:{type:"string"},volcengine_temperature:{type:"string"},custom_extra_body:{type:"dict"}}}}};
+    # This fixture models the concrete AstrBot v4.27.x object that matters here:
+    # the host-owned upper modalities metadata already contains four localized
+    # Chinese labels.  The plugin is allowed to append one fifth Video label only
+    # after the current dialog is known to belong to one of its two Source types;
+    # it is not allowed to replace or bilingualize the four labels it did not own.
+    original = r'''global.document={documentElement:{lang:"zh-CN"}};
+global.localStorage={getItem:()=>"zh-CN"};
+function card(type){
+const l={value:{provider:{items:{modalities:{options:["text","image","audio","tool_use"],labels:["文本","图像","音频","工具使用"]},volcengine_video_input_profile:{type:"string",invisible:true},volcengine_temperature:{type:"string",invisible:true},custom_extra_body:{type:"dict"}}}}};
 const i={value:{type}};
 const x=(()=>{var J,F,j;if(!((F=(J=l.value)==null?void 0:J.provider)!=null&&F.items))return l.value;const k=JSON.parse(JSON.stringify(l.value)),$=(j=i.value)==null?void 0:j.type,U=["id","model"];$==="googlegenai_chat_completion"&&U.push("custom_extra_body");for(const M of U)k.provider.items[M]&&(k.provider.items[M].invisible=!0);return k})();
 return x.provider.items;
 }
-console.log(JSON.stringify({ark:card("volcengine_ark_chat_completion"),plan:card("volcengine_agent_plan_chat_completion"),openai:card("openai_chat_completion"),google:card("googlegenai_chat_completion")}));'''
+console.log(JSON.stringify({ark:card("volcengine_ark_chat_completion"),plan:card("volcengine_agent_plan_chat_completion"),openai:card("openai_chat_completion"),xai:card("xai_chat_completion"),google:card("googlegenai_chat_completion")}));'''
 
     transformed, matches = transform_dashboard_javascript(original)
     assert matches == 1
@@ -38,6 +45,9 @@ console.log(JSON.stringify({ark:card("volcengine_ark_chat_completion"),plan:card
     )
     result = json.loads(completed.stdout)
 
+    # The concrete Ark / Agent Plan model-card private clone owns only the plugin
+    # delta: one Video capability plus visibility of the lower Volcengine rows.
+    # The four native host labels must remain exactly the four host labels.
     for owned in (result["ark"], result["plan"]):
         assert owned["modalities"]["options"] == [
             "text",
@@ -53,18 +63,33 @@ console.log(JSON.stringify({ark:card("volcengine_ark_chat_completion"),plan:card
             "工具使用",
             "视频",
         ]
-        assert owned["volcengine_video_input_profile"].get("invisible") is not True
-        assert owned["volcengine_temperature"].get("invisible") is not True
+        assert owned["volcengine_video_input_profile"]["invisible"] is False
+        assert owned["volcengine_temperature"]["invisible"] is False
 
-    assert result["openai"]["modalities"]["options"] == [
-        "text",
-        "image",
-        "audio",
-        "tool_use",
-    ]
-    assert result["openai"]["modalities"]["labels"] == "provider.items.modalities.labels"
-    assert result["openai"]["volcengine_video_input_profile"]["invisible"] is True
-    assert result["openai"]["volcengine_temperature"]["invisible"] is True
+    # OpenAI and xAI are separate concrete foreign model-card objects even when a
+    # user points either one at a Volcengine-compatible endpoint.  Neither their
+    # native modalities options nor their native labels may be modified, and the
+    # lower Volcengine request rows must stay hidden.
+    for foreign_name in ("openai", "xai"):
+        foreign = result[foreign_name]
+        assert foreign["modalities"]["options"] == [
+            "text",
+            "image",
+            "audio",
+            "tool_use",
+        ]
+        assert foreign["modalities"]["labels"] == [
+            "文本",
+            "图像",
+            "音频",
+            "工具使用",
+        ]
+        assert foreign["volcengine_video_input_profile"]["invisible"] is True
+        assert foreign["volcengine_temperature"]["invisible"] is True
+
+    # Google's own host-specific hiding rule remains AstrBot's responsibility and
+    # is preserved by the plugin transform rather than being reinterpreted as a
+    # Volcengine rule.
     assert result["google"]["custom_extra_body"]["invisible"] is True
 
     untouched, missing_matches = transform_dashboard_javascript("console.log('future')")
