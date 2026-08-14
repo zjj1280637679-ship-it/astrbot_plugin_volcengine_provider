@@ -171,13 +171,13 @@ jobs:
           test "$ready" = '1'
           grep -q 'Volcengine providers registered' /tmp/astrbot-video-contract.log
 
-      - name: Run five-condition real Dashboard matrix
+      - name: Run current object-scoped real Dashboard matrix
         env:
           ASTRBOT_E2E_URL: http://127.0.0.1:6185
           ASTRBOT_E2E_USERNAME: e2e-admin
           ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
-        run: python tests/e2e/provider_card_matrix/browser_matrix_0_1_19.py
+        run: python tests/e2e/provider_card_matrix/browser_matrix_0_1_24_contract.py
 
       - name: Capture final AstrBot log
         if: always()
