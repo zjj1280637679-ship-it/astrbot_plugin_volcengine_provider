@@ -81,8 +81,8 @@ console.log(JSON.stringify({{dialogs:{{ark:card("{ARK}"),plan:card("{PLAN}"),ope
 
 
 def _run_transformed(source: str) -> dict:
-    transformed, matches = transform_dashboard_javascript(source)
-    assert matches == 1
+    transformed, status = transform_dashboard_javascript(source)
+    assert status == 1
     completed = subprocess.run(
         ["node", "-e", transformed],
         check=True,
@@ -116,9 +116,6 @@ def main() -> None:
         for key in PLUGIN_KEYS:
             assert foreign[key]["invisible"] is True
 
-    # A newly-created owned concrete model object must carry the lower request keys
-    # because AstrBotConfig iterates providerEditData's keys; foreign objects must
-    # remain structurally free of those plugin members rather than merely hiding them.
     new_cards = result["newCards"]
     for name in ("ark", "plan"):
         for key in PLUGIN_KEYS:
@@ -127,9 +124,6 @@ def main() -> None:
         for key in PLUGIN_KEYS:
             assert key not in new_cards[name], (name, key, new_cards[name])
 
-    # The real host commonly supplies modalities.labels as an i18n key string.  On
-    # the owned private clone only, that four-label host representation must become
-    # a five-entry pure Chinese array so Video receives a visible fifth label.
     i18n = _run_transformed(_dashboard_fixture(labels_as_i18n_key=True))["dialogs"]
     assert i18n["ark"]["modalities"]["labels"] == ["文本", "图像", "音频", "工具使用", "视频"]
     assert isinstance(i18n["openai"]["modalities"]["labels"], str)
@@ -138,14 +132,14 @@ def main() -> None:
     assert relaxed["dialogs"]["ark"]["modalities"]["options"][-1] == "video"
     assert "video" not in relaxed["dialogs"]["openai"]["modalities"]["options"]
 
-    # A half-compatible asset must fail closed: either concrete-object boundary
-    # missing means no transformation is accepted.
-    dialog_only = _dashboard_fixture().replace(
-        'function nt(C){var Le,se;if(!base.value)return;const Q=((Le=selected.value)==null?void 0:Le.id)||base.value.id,q=`${Q}/${C}`,le=null;let re;re=["text","image","audio","tool_use"];let De=0;return{id:q,enable:!0,provider_source_id:Q,model:C,modalities:re,custom_extra_body:{},max_context_tokens:De,reasoning:me(le)}}',
-        'function nt(C){return {model:C}}',
-    )
-    untouched, half_matches = transform_dashboard_javascript(dialog_only)
-    assert half_matches != 1
+    # Destroy only the concrete new-card builder signature while leaving the
+    # private schema-clone boundary intact.  A complete-asset status must become 0,
+    # never remain 1 merely because one of the two required objects still matches.
+    complete = _dashboard_fixture()
+    assert "provider_source_id:Q" in complete
+    dialog_only = complete.replace("provider_source_id:Q", "provider_source_x:Q", 1)
+    untouched, half_status = transform_dashboard_javascript(dialog_only)
+    assert half_status == 0
     assert untouched == dialog_only
 
     with tempfile.TemporaryDirectory(prefix="volcengine-0.1.24-object-scope-") as tmp:
