@@ -1,17 +1,25 @@
 """Reversible Dashboard adaptation for source-scoped model-card fields.
 
 AstrBot 4.27 builds every model dialog from one shared schema clone.  The
-selected Provider Source type is available only in the Dashboard composable,
-so a backend-only schema mutation cannot express "video for these two source
-types" without leaking the option to every provider.
+selected Provider Source type is available only inside the Dashboard composable,
+so the concrete distinction between one Volcengine-owned model card and one
+foreign model card must be made only after that private clone exists.
 
 This bridge transforms the already-built provider-dialog JavaScript while it
-is served.  The original AstrBot asset is never modified on disk.  A strict
-single-match probe makes an unknown Dashboard build degrade to the backend
-Video fallback instead of blocking the plugin or guessing at a new frontend
-contract.  The served index is also copied with a content-derived query suffix
-for the compatible bundle so an already-cached Dashboard must request the
-current transformed asset after plugin install/update.
+is served.  The original AstrBot asset is never modified on disk.  The transform
+has two narrowly separated responsibilities on that private clone only:
+
+1. For a model card whose selected Source type is one of this plugin's Ark or
+   Agent Plan types, append the native ``video`` modality and reveal the lower
+   Volcengine-owned bilingual request rows.
+2. For every foreign model card, leave AstrBot's native modalities metadata
+   untouched and keep every Volcengine-only request row hidden.
+
+The bridge deliberately does not install any shared-schema Video fallback.  A
+failed frontend match therefore degrades to "Video unavailable" rather than
+changing OpenAI/xAI/Gemini model cards.  The served index is copied with a
+content-derived query suffix for the compatible bundle so an already-cached
+Dashboard must request the current transformed asset after plugin install/update.
 """
 
 from __future__ import annotations
@@ -28,9 +36,8 @@ from typing import Any
 
 from .model_fields import MODEL_FIELD_SCHEMA
 from .model_scope import OWNED_SOURCE_TYPES
-from .video_modality_fallback import VIDEO_MODALITY_FALLBACK_MARKER
 
-_PATCH_MARKER = "/*astrbot-volcengine-model-dialog-v1*/"
+_PATCH_MARKER = "/*astrbot-volcengine-model-dialog-v2*/"
 _DASHBOARD_ASSET_LEASE_COUNT = 0
 _RESOLVE_WRAPPER: Callable[..., Any] | None = None
 _RESOLVE_ORIGINAL: Callable[..., Any] | None = None
@@ -43,57 +50,60 @@ _MISSES: set[Path] = set()
 _STATIC_FOLDER_ASSETS: dict[Path, Path | None] = {}
 _LOCK = threading.RLock()
 
-# Current AstrBot emits this logic from useProviderModelConfigDialog.ts.  The
-# expression is deliberately structural: minified variable names may change,
-# while the Google-only hidden field and following schema-item loop identify
-# the exact model-dialog clone boundary.
+# v4.27.3 source shape, expressed loosely enough to tolerate harmless minifier
+# choices such as whitespace, optional semicolons, or braces around the loop.
+# The same hidden-key variable must both receive custom_extra_body and feed the
+# following for-of loop, and the entire pattern must occur exactly once in one
+# served asset before we patch anything.
 _MODEL_DIALOG_BOUNDARY = re.compile(
-    r'(?P<source_type>[A-Za-z_$][\w$]*)==="googlegenai_chat_completion"'
-    r'&&(?P<hidden>[A-Za-z_$][\w$]*)\.push\("custom_extra_body"\);'
-    r'for\(const (?P<item>[A-Za-z_$][\w$]*) of (?P=hidden)\)'
+    r'(?P<source_type>[A-Za-z_$][\w$]*)\s*===\s*"googlegenai_chat_completion"'
+    r'[\s\S]{0,320}?'
+    r'(?P<hidden>[A-Za-z_$][\w$]*)\.push\(\s*"custom_extra_body"\s*\)\s*;?'
+    r'[\s\S]{0,320}?'
+    r'for\s*\(\s*const\s+(?P<item>[A-Za-z_$][\w$]*)\s+of\s+(?P=hidden)\s*\)\s*\{?\s*'
     r'(?P<schema>[A-Za-z_$][\w$]*)\.provider\.items\[(?P=item)\]'
 )
 
 
 def _adaptation_javascript(*, source_type: str, schema: str) -> str:
+    """Return JS that mutates only the current dialog's private schema clone."""
+
     owned_types = json.dumps(sorted(OWNED_SOURCE_TYPES), ensure_ascii=False)
     plugin_fields = json.dumps(sorted(MODEL_FIELD_SCHEMA), ensure_ascii=False)
-    fallback_marker = json.dumps(VIDEO_MODALITY_FALLBACK_MARKER, ensure_ascii=False)
     return (
         _PATCH_MARKER
+        + f"const __abVolcOwned={owned_types}.includes({source_type});"
         + f"const __abVolcModalities={schema}.provider.items.modalities;"
-        + "const __abVolcLocale=globalThis.localStorage?.getItem?.(\"astrbot-locale\")||\"zh-CN\";"
-        + "const __abVolcLabels5={"
-        + "\"zh-CN\":[\"文本\",\"图像\",\"音频\",\"工具使用\",\"视频\"],"
-        + "\"en-US\":[\"Text\",\"Image\",\"Audio\",\"Tool use\",\"Video\"],"
-        + "\"ru-RU\":[\"Текст\",\"Изображение\",\"Аудио\",\"Инструменты\",\"Видео\"]};"
-        + "const __abVolcLabels4={"
-        + "\"zh-CN\":[\"文本\",\"图像\",\"音频\",\"工具使用\"],"
-        + "\"en-US\":[\"Text\",\"Image\",\"Audio\",\"Tool use\"],"
-        + "\"ru-RU\":[\"Текст\",\"Изображение\",\"Аудио\",\"Инструменты\"]};"
-        + f"if({owned_types}.includes({source_type})){{"
+        + f"const __abVolcPluginFields={plugin_fields};"
+        + "if(__abVolcOwned){"
+        # Lower request rows: only this concrete Volcengine card may reveal them.
+        + "for(const __abVolcKey of __abVolcPluginFields){"
+        + f"const __abVolcField={schema}.provider.items[__abVolcKey];"
+        + "if(__abVolcField)__abVolcField.invisible=false;"
+        + "}"
+        # Upper native modalities row: append Video without globally replacing
+        # the host schema or changing any foreign dialog.
         + "if(__abVolcModalities){"
-        + f"let __abVolcFallback=__abVolcModalities[{fallback_marker}]===true;"
         + "const __abVolcOptions=Array.isArray(__abVolcModalities.options)"
         + "?__abVolcModalities.options:[];"
-        + "if(!__abVolcOptions.includes(\"video\")){"
+        + "if(!__abVolcOptions.includes(\"video\"))"
         + "__abVolcModalities.options=[...__abVolcOptions,\"video\"];"
-        + "__abVolcFallback=true;"
+        # If the host response already contains a concrete label array, preserve
+        # every existing label byte-for-byte and append only the fifth label.
+        + "if(Array.isArray(__abVolcModalities.labels)"
+        + "&&__abVolcModalities.labels.length===__abVolcOptions.length){"
+        + "const __abVolcLang=(document.documentElement.lang||"
+        + "globalThis.localStorage?.getItem?.(\"astrbot-locale\")||\"zh-CN\").toLowerCase();"
+        + "const __abVolcVideoLabel=__abVolcLang.startsWith(\"zh\")?\"视频\":"
+        + "(__abVolcLang.startsWith(\"ru\")?\"Видео\":\"Video\");"
+        + "__abVolcModalities.labels=[...__abVolcModalities.labels,__abVolcVideoLabel];"
         + "}"
-        + "if(__abVolcFallback)"
-        + "__abVolcModalities.labels=__abVolcLabels5[__abVolcLocale]||__abVolcLabels5[\"en-US\"];"
-        + f"delete __abVolcModalities[{fallback_marker}];"
         + "}"
         + "}else{"
-        + "if(__abVolcModalities"
-        + f"&&__abVolcModalities[{fallback_marker}]===true){{"
-        + "const __abVolcForeignOptions=Array.isArray(__abVolcModalities.options)"
-        + "?__abVolcModalities.options:[];"
-        + "__abVolcModalities.options=__abVolcForeignOptions.filter((__abVolcValue)=>__abVolcValue!==\"video\");"
-        + "__abVolcModalities.labels=__abVolcLabels4[__abVolcLocale]||__abVolcLabels4[\"en-US\"];"
-        + f"delete __abVolcModalities[{fallback_marker}];"
-        + "}"
-        + f"for(const __abVolcKey of {plugin_fields}){{"
+        # Foreign model cards inherit the shared hidden state for plugin rows and
+        # we reinforce it on this private clone.  Crucially, modalities is not
+        # touched at all here: no plugin Video option, no label rewrite.
+        + "for(const __abVolcKey of __abVolcPluginFields){"
         + f"const __abVolcField={schema}.provider.items[__abVolcKey];"
         + "if(__abVolcField)__abVolcField.invisible=true;"
         + "}"
@@ -115,7 +125,13 @@ def transform_dashboard_javascript(source: str) -> tuple[str, int]:
         source_type=match.group("source_type"),
         schema=match.group("schema"),
     )
-    offset = match.start() + match.group(0).index("for(")
+    # Insert immediately before the hidden-key loop.  The matched prefix may vary
+    # across minifier builds, so locate the first for-token inside this match rather
+    # than assuming the exact v0.1.22 byte sequence.
+    relative_for = re.search(r'for\s*\(', match.group(0))
+    if relative_for is None:
+        return source, 0
+    offset = match.start() + relative_for.start()
     return source[:offset] + insertion + source[offset:], 1
 
 
