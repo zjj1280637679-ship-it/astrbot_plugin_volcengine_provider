@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/real-source-type-video-differential.yml
       - tests/e2e/real_source_type_video_differential.py
+      - tests/e2e/browser_matrix.py
       - tests/e2e/provider_card_matrix/**
       - main.py
       - providers.py
