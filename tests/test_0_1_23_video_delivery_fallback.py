@@ -48,8 +48,16 @@ def _dashboard_fixture(*, with_fallback: bool) -> str:
         if with_fallback
         else ""
     )
-    options = '["text","image","audio","tool_use","video"]' if with_fallback else '["text","image","audio","tool_use"]'
-    labels = '["文本 / Text","图像 / Image","音频 / Audio","工具使用 / Tool use","视频 / Video"]' if with_fallback else '"provider.items.modalities.labels"'
+    options = (
+        '["text","image","audio","tool_use","video"]'
+        if with_fallback
+        else '["text","image","audio","tool_use"]'
+    )
+    labels = (
+        '["文本 / Text","图像 / Image","音频 / Audio","工具使用 / Tool use","视频 / Video"]'
+        if with_fallback
+        else '"provider.items.modalities.labels"'
+    )
     return f'''function card(type){{
 const l={{value:{{provider:{{items:{{modalities:{{options:{options},labels:{labels}{marker}}},volcengine_video_input_profile:{{type:"string"}},volcengine_temperature:{{type:"string"}},custom_extra_body:{{type:"dict"}}}}}}}}}};
 const i={{value:{{type}}}};
@@ -72,9 +80,7 @@ def main() -> None:
     reinjected = inject_video_modality_fallback(injected)
     re_modalities = reinjected["config_schema"]["provider"]["items"]["modalities"]
     assert re_modalities["options"].count("video") == 1
-    # Once the shared schema already contains Video it is no longer marked again;
-    # the important invariant is idempotence, not retaining a stale marker.
-    assert VIDEO_MODALITY_FALLBACK_MARKER not in re_modalities
+    assert re_modalities[VIDEO_MODALITY_FALLBACK_MARKER] is True
 
     native = inject_video_modality_fallback(_schema_payload(native_video=True))
     native_modalities = native["config_schema"]["provider"]["items"]["modalities"]
@@ -136,7 +142,7 @@ def main() -> None:
     assert "video" not in clean_result["openai"]["modalities"]["options"]
 
     # The copied index points at the same host bundle path with a content-derived
-    # query suffix.  FastAPI routes by path, while the browser cache keys the full
+    # query suffix. FastAPI routes by path, while the browser cache keys the full
     # URL, so an old cached bundle cannot satisfy this request.
     with tempfile.TemporaryDirectory(prefix="volcengine-0.1.23-delivery-") as tmp:
         dist = Path(tmp) / "dist"
