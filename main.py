@@ -11,9 +11,11 @@ from . import providers as _providers  # noqa: F401
 from .adapters.logging import install_video_log_redaction, remove_video_log_redaction
 from .capabilities import (
     acquire_dashboard_asset_bridge,
+    acquire_dashboard_runtime_bridge,
     acquire_model_fields_bridge,
     migrate_legacy_video_settings,
     release_dashboard_asset_bridge,
+    release_dashboard_runtime_bridge,
     release_model_fields_bridge,
 )
 from .registry import (
@@ -29,26 +31,36 @@ class VolcengineProviderPlugin(star.Star):
         super().__init__(context)
         self._dashboard_bridge_acquired = False
         self._dashboard_asset_bridge_acquired = False
+        self._dashboard_runtime_bridge_acquired = False
         self._model_fields_bridge_acquired = False
         self._video_log_filter = install_video_log_redaction()
         try:
             self._dashboard_bridge_acquired = acquire_owned_dashboard_bridge()
 
             # The lower, Volcengine-owned per-model request rows are a backend
-            # model-card capability and must not disappear merely because the
-            # optional Dashboard asset adaptation is unavailable.  Their save
-            # boundary already scopes persistence to our two Provider Source
-            # types, so acquire that bridge independently.
+            # model-card capability and must not disappear merely because either
+            # Dashboard delivery mechanism is unavailable. Their save boundary
+            # scopes persistence to our two Provider Source types independently.
             self._model_fields_bridge_acquired = acquire_model_fields_bridge()
 
-            # The asset bridge has one narrower responsibility: after AstrBot has
-            # cloned the shared schema for one concrete model-card dialog and the
-            # selected Provider Source type is known, adapt only that private clone
-            # so the native modalities row gains Video for our two Source types and
-            # foreign dialogs hide Volcengine-only rows.  Failure here must not take
-            # the lower request-field bridge down with it.
+            # This compiled-asset bridge remains the preferred path when one
+            # concrete Dashboard bundle exposes all three known structural
+            # boundaries. Its successful installation alone is not evidence that
+            # the served bundle matched or reached the browser.
             self._dashboard_asset_bridge_acquired = acquire_dashboard_asset_bridge()
+
+            # A real installation may serve a separately built 4.27.x WebUI whose
+            # minified identifiers differ from the CI-built chunk. Inject a second
+            # bridge through the host index resolver. It waits for one concrete
+            # AstrBotConfig model-card component, resolves ownership only through
+            # iterable.provider_source_id -> Provider Source type, and mutates that
+            # card's ordinary reactive data/private metadata so normal AstrBot
+            # rendering, v-model updates and save persistence remain authoritative.
+            self._dashboard_runtime_bridge_acquired = acquire_dashboard_runtime_bridge()
         except Exception:
+            if self._dashboard_runtime_bridge_acquired:
+                release_dashboard_runtime_bridge()
+                self._dashboard_runtime_bridge_acquired = False
             if self._dashboard_asset_bridge_acquired:
                 release_dashboard_asset_bridge()
                 self._dashboard_asset_bridge_acquired = False
@@ -63,14 +75,16 @@ class VolcengineProviderPlugin(star.Star):
             raise
         logger.info(
             "Volcengine providers registered: %s, %s; dashboard_bridge=%s; "
-            "model_fields_bridge=%s; dashboard_asset_bridge=%s; "
-            "restart AstrBot after install/update/disable because the provider type "
-            "registry has no safe plugin-owned unload hook",
+            "model_fields_bridge=%s; dashboard_asset_wrapper=%s; "
+            "dashboard_runtime_index_bridge=%s; restart AstrBot after "
+            "install/update/disable because the provider type registry has no "
+            "safe plugin-owned unload hook",
             ARK_PROVIDER_TYPE,
             AGENT_PLAN_PROVIDER_TYPE,
             "active" if self._dashboard_bridge_acquired else "host-unavailable",
             "active" if self._model_fields_bridge_acquired else "host-unavailable",
             "active" if self._dashboard_asset_bridge_acquired else "host-unavailable",
+            "active" if self._dashboard_runtime_bridge_acquired else "host-unavailable",
         )
 
     async def initialize(self) -> None:
@@ -96,6 +110,9 @@ class VolcengineProviderPlugin(star.Star):
     async def terminate(self) -> None:
         remove_video_log_redaction(self._video_log_filter)
         self._video_log_filter = None
+        if getattr(self, "_dashboard_runtime_bridge_acquired", False):
+            release_dashboard_runtime_bridge()
+            self._dashboard_runtime_bridge_acquired = False
         if getattr(self, "_dashboard_asset_bridge_acquired", False):
             release_dashboard_asset_bridge()
             self._dashboard_asset_bridge_acquired = False
