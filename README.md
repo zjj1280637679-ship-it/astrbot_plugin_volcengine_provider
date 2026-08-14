@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>让 AstrBot 的同一个主模型真正听懂 QQ 语音、看懂视频，同时把普通 API 与 Agent Plan 的计费通道彻底分开。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.22_stable-2f855a)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.23_candidate-d69e2e)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,16 +10,16 @@
 
 | 对象 | 当前结论 |
 |---|---|
-| 你可以安装的稳定版 | **0.1.22**；仓库 `main` 与安装用 `runtime` 已包含恢复后的模型卡原生 Video 实现 |
-| 活跃发布候选 | **无**；当前没有新的版本候选或视频 UI 实验 |
-| 0.1.20 原生 Video 实验 | 已被 **0.1.22** 正式恢复结果取代；旧实验最后一次失败来自已经退役的错误验收条件，不再驱动当前实现 |
-| AstrBot 商场与 Windows 安装 | 最后一次已记录的商场观察仍是 **v0.1.21 Published**；0.1.22 的商场下载件与 Windows/Launcher 安装必须单独实测后才计入证据 |
+| 你可以安装的稳定版 | **0.1.22**；安装用 `runtime` 仍是已验证稳定基线，直到 0.1.23 发布器完成晋升 |
+| 活跃发布候选 | **0.1.23**；真实同源 A/B、0.1.19 丰富功能回归、模型卡 Video 合同与 Runtime Distribution Gate 已通过，待合并 main 并由受控发布器晋升 `runtime` |
+| 0.1.23 主要变化 | 保留 0.1.22 精确 Source-scoped 模型卡 Video 路径，同时加入**有标记、可逆、foreign 保存剥离**的共享 schema 兜底，并给兼容 Dashboard bundle 加内容哈希查询参数，避免已缓存旧 JS 导致火山卡完全没有 Video |
+| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.23 未经发布器和真实重装前，不把商场/Windows/Launcher 视为已验证 |
 
 机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。任何涉及 Video、`modalities`、Provider Source 或模型卡 UI 的修改，都必须同时遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
 
-> **0.1.22 的关键边界：Video / 视频属于单个模型卡的原生“模型能力”选择区，不属于 Provider Source 页面。**
+> **0.1.23 的关键边界：Video / 视频仍属于单个模型卡的原生“模型能力”选择区，不属于 Provider Source 页面。**
 >
-> 旧版“显示逐模型视频选项”总开关、Source 页模型选择器，以及把 `video` 注入全局共享 schema 的方案都已经退役。当前实现只在火山方舟普通 API / Agent Plan 对应的**单模型卡私有 schema clone**中补充原生 `video` 选项；OpenAI、xAI、Gemini 和其他 Provider 的模型卡保持原样。
+> 首选路径仍是在已知 `selectedProviderSource.type` 的**单模型卡私有 schema clone**里，只给火山方舟普通 API / Agent Plan 补 Video。0.1.23 额外允许一个有明确 marker 的共享 schema Video 作为**投递兜底**：精确前端桥正常加载时，foreign 私有 clone 会移除这枚 fallback；如果前端桥没有执行，foreign 页面最坏可能短暂多出一个 Video，但保存边界会在持久化前剥掉它，因此不会变成 foreign 配置或请求行为。这个有界副作用用于避免火山卡再次“完全没有 Video”。
 
 交流与反馈：**QQ 群 916646029**
 
@@ -27,11 +27,12 @@
 
 - **QQ 语音直接交给当前主模型**：Silk、AMR 等常见输入经 AstrBot 媒体解析后，由插件做火山 Chat 所需的最后一公里 WAV 规范化，再进入同一条主对话；不需要额外 STT 或第二个转录模型。
 - **视频是模型卡原生能力项**：在火山 Ark / Agent Plan 的具体模型卡里，`文本 / 图像 / 音频 / 工具使用` 同层级会出现 `视频 / Video`。每张卡独立勾选、独立保存。
-- **开关与运行行为一致**：当前模型卡包含 `modalities: video` 时，本轮受信视频附件才转换为火山 `video_url`；关闭后不会走视频转换链。
-- **不会污染其他供应商**：Video 只在本插件两类 Source 下的当前模型卡私有 schema 中出现，不修改 AstrBot 的进程级公共 `provider.items.modalities`。
+- **开关与运行行为一致**：当前火山模型卡包含 `modalities: video` 时，本轮受信视频附件才转换为火山 `video_url`；关闭后不会走视频转换链。
+- **精确隔离优先、投递可降级**：兼容 Dashboard 上 OpenAI、xAI、Gemini 等 foreign 卡仍应没有插件 Video；若精确前端桥未执行，fallback 允许短暂视觉污染，但 foreign create/update 会在持久化前移除 `video`，插件也不会接管 foreign 请求。
+- **保留丰富模型卡设置**：0.1.19+ 的视频质量（压缩/原画）、思考模式、Reasoning Effort、Temperature、Top P、Max Output Tokens、Stop、Frequency/Presence Penalty 与 `custom_extra_body` 兼容入口继续保留。
 - **普通 API / Agent Plan 计费隔离**：两条通道使用独立 Provider 类型、固定端点和独立密钥；插件内部不会把一条失败请求自动改发到另一条。
 - **QQ 音视频失败时不装懂**：媒体解析或 Ark payload 组装失败会明确停止；本地传输失败不会被写成“模型永久不支持该能力”。
-- **可卸载**：Dashboard/service 兼容桥是可逆的，释放后恢复宿主原 callable，并清理插件临时 Dashboard 资产；当前合同已在 AstrBot 4.27.3 自动验证。
+- **可卸载**：Dashboard/service 兼容桥与 fallback 都可逆，释放后恢复宿主原 callable，并清理插件临时 Dashboard 资产；当前合同已在 AstrBot 4.27.3 自动验证。
 
 ## 先认清两张供应商卡
 
@@ -53,7 +54,9 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-当前仓库与安装用 `runtime` 分支都已经是 0.1.22。由于本项目把“仓库/runtime 已验证”和“商场下载件已刷新”视为两个不同事实，在你尚未确认商场展示与下载件都为 0.1.22 时，最明确的安装来源是 `runtime`：
+当前可安装稳定 `runtime` 仍为 0.1.22；**0.1.23 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会再更新为 0.1.23 stable。
+
+稳定运行包的明确安装来源始终是 `runtime`：
 
 1. 下载 [runtime.zip](https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/archive/refs/heads/runtime.zip)。
 2. 解压后，把其中唯一的插件目录放到 AstrBot `data/plugins/`；确认 `metadata.yaml` 与 `main.py` 位于插件根目录。
@@ -70,7 +73,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 2. 填写普通方舟推理 API Key。
 3. 在线获取模型列表，或手动填写官方模型 ID / 推理接入点 ID（如 `ep-...`）。
 4. 新建或编辑**具体模型卡**。
-5. 在模型卡原生“模型能力 / modalities”区域按实际需要勾选 `文本`、`图像`、`音频`、`工具使用`，以及本插件仅在当前火山卡补充的 `视频 / Video`。
+5. 在模型卡原生“模型能力 / modalities”区域按实际需要勾选 `文本`、`图像`、`音频`、`工具使用`，以及本插件在当前火山卡提供的 `视频 / Video`。
 6. 保存模型卡。关闭再打开编辑页后，Video 必须保持原值；如果不能保持，应视为回归，而不是改用 Source 页面总开关绕过。
 
 普通通道使用当前 Key 请求同一 `api_base` 下的 `/models`。上游明确返回的模态、工具、reasoning、上下文或输出限制只作为当前 Source 的反馈证据，不会自动变成跨供应商的永久能力真值。
@@ -136,17 +139,23 @@ QQ Record
 
 未知或模型专属请求参数继续使用 AstrBot 原生 `custom_extra_body`；明确横向字段只在用户实际填写时覆盖同名自定义值。
 
-## 五项联合验收
+## Video 验收
 
-当前 Video 核心能力只有同时满足以下五项才算存在：
+### 首选精确路径
+
+当前 AstrBot/Dashboard 与精确 bridge 兼容时，仍按五项联合验收：
 
 1. **正确对象出现**：Ark / Agent Plan 的单模型卡原生能力区有且只有一个 Video。
-2. **错误对象不出现**：OpenAI、xAI、Gemini 等外国 Provider 模型卡没有插件 Video；Source 页面也没有退役的总开关/模型选择器替代它。
-3. **保存重开不丢失**：保存、关闭、重开、Dashboard 刷新、AstrBot 重启或兼容更新后仍恢复当前卡原值。
-4. **运行行为与选择一致**：勾选才生成 `video_url`；关闭不走视频转换。
-5. **卸载/释放无公共残留**：插件兼容桥释放后恢复 AstrBot 宿主方法与静态资源解析，不留下全局第五模态。
+2. **错误对象不出现**：OpenAI、xAI、Gemini 等 foreign Provider 模型卡没有插件 fallback Video；Source 页面也没有退役的总开关/模型选择器替代它。
+3. **保存重开不丢失**：保存、关闭、重开、Dashboard 刷新、AstrBot 重启或兼容更新后仍恢复当前火山卡原值。
+4. **运行行为与选择一致**：火山卡勾选才生成 `video_url`；关闭不走视频转换。
+5. **卸载/释放无插件残留**：插件兼容桥释放后恢复 AstrBot 宿主方法与静态资源解析，并删除插件临时资产与 fallback 元数据。
 
-完整合同见 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。已知正确源码同时冻结在：
+### 投递降级路径
+
+若精确 frontend bridge 没有执行，0.1.23 允许共享 schema 中保留**一枚有 marker 的 fallback Video**，以保证火山卡不再完全丢失按钮。这时 foreign 卡可能短暂看到 Video，但必须满足：foreign 保存前剥离 `video`、不生成插件运行镜像、不进入插件视频请求链、卸载后恢复宿主。未来 AstrBot 自己原生提供且没有 plugin marker 的 Video 不得被删除。
+
+完整合同见 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。0.1.22 的精确路径已知正确源码仍冻结在：
 
 ```text
 archive/model-card-video-known-good-0.1.22
@@ -154,23 +163,24 @@ archive/model-card-video-known-good-0.1.22
 
 ## 真实验证边界
 
-0.1.22 的恢复实现不是只靠源码推理确认：
+0.1.23 候选不是只靠源码推理确认：
 
-- AstrBot `4.26.1` / `4.27.2` Runtime Distribution Gate 已验证运行包加载、Provider/Dashboard 合同和现有媒体回归；
-- AstrBot `4.27.3` 使用官方源码**实际构建 Dashboard**后，Playwright 真实浏览器矩阵验证了 Ark / Agent Plan Video 出现、外国 Provider 无 Video、保存重开保持选择；
-- 同一 4.27.3 门禁额外验证 Video 开/关产生不同请求行为，并验证插件 release 后宿主方法与临时 Dashboard 资产恢复干净。
+- **真实同源差分**：AstrBot `4.27.3` 中，AstrBot 原生 OpenAI Source 与插件 Ark Source 使用同一个 `https://ark.cn-beijing.volces.com/api/v3`、同一个真实非空 Key 和同一个真实模型 `deepseek-r1-250120`；两边 `/models` 各返回 129 个模型且 129 个全部重合。OpenAI 模型卡 DOM 只有 Text/Image/Audio/Tool use，插件 Ark 则额外有 Video；Ark 勾选保存重开后仍为 true，OpenAI 落盘没有插件 Video 状态。
+- **0.1.19 Compatibility Baseline**：真实 AstrBot `4.27.2` Dashboard 回归仍通过，保护视频质量、思考与采样等丰富模型字段不被本次 UI 修复删除。
+- **Model-card Video Contract**：真实 AstrBot `4.27.3` Dashboard 通过新 fallback/cache-bust 纯逻辑合同、运行开关、卸载恢复和五条件浏览器矩阵。
+- **Runtime Distribution Gate**：AstrBot `4.26.1` / `4.27.2` 最小运行包加载与现有 Provider/媒体/Dashboard 合同全部通过。
 
-这些证据证明的是仓库/runtime 与对应 AstrBot 版本下的功能边界；它们**不自动证明** AstrBot 商场缓存已经刷新，也不自动证明某台 Windows/Launcher 已安装到同一包。外部分发必须单独观察。
+这些证据证明的是候选仓库与对应 AstrBot 版本下的功能边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.23 发布后仍需要真实仓库名重装观察。
 
 ## 历史方案说明
 
 ### 0.1.18 Source 视频 UI —— 已退役
 
-0.1.18 曾把视频配置放到火山 Provider Source 页面，用“显示逐模型视频选项”与模型选择器写回每卡布尔值。这个方案是历史过渡层，**不是 0.1.22 当前行为**。后续排错或 AI 重构不得把它恢复成现行入口。
+0.1.18 曾把视频配置放到火山 Provider Source 页面，用“显示逐模型视频选项”与模型选择器写回每卡布尔值。这个方案是历史过渡层，**不是当前行为**。后续排错或 AI 重构不得把它恢复成现行入口。
 
 ### 0.1.20 未发布实验 —— 其正确代码已由 0.1.22 恢复
 
-0.1.20 的实验分支曾正确找到“模型对话框私有 schema clone + 已知 selected Source type”这个作用域，但最后的旧验收错误要求已经退役的 `_volcengine_video_input_mode_ui` 行，导致实验被错误判负且未发布。0.1.22 从该历史提交恢复正确运行代码，并把验收改为直接验证原生 Video 的保存/重开。
+0.1.20 的实验分支曾正确找到“模型对话框私有 schema clone + 已知 selected Source type”这个作用域，但最后的旧验收错误要求已经退役的 `_volcengine_video_input_mode_ui` 行，导致实验被错误判负且未发布。0.1.22 从该历史提交恢复正确运行代码，并把验收改为直接验证原生 Video 的保存/重开；0.1.23 不替换这条精确路径，只补充投递鲁棒性层。
 
 更早版本的设计、迁移和证据请看 [`CHANGELOG.md`](CHANGELOG.md)、[`docs/TEST_HISTORY.md`](docs/TEST_HISTORY.md) 与 `docs/archive/`。README 只描述当前用户行为，不再把退役 UI 当成现行说明。
 
@@ -189,12 +199,18 @@ archive/model-card-video-known-good-0.1.22
 1. 打开**当前使用的那张火山模型卡**，不要去 Source 页面找视频总开关。
 2. 确认模型卡原生能力区的 `视频 / Video` 已勾选并保存。
 3. 关闭模型卡再重开，确认 Video 仍处于同一状态。
-4. 确认视频属于本轮消息或本轮引用。
-5. 再看 AstrBot 媒体日志；如果视频在形成 Provider 句柄之前已经失败，聊天 Provider 无法从普通文本反推出原视频。
+4. 完整重启 AstrBot 后重新加载 Dashboard；0.1.23 会给兼容 bundle 使用内容哈希查询参数，正常情况下浏览器应重新请求补丁后的资源。
+5. 确认视频属于本轮消息或本轮引用。
+6. 再看 AstrBot 媒体日志；如果视频在形成 Provider 句柄之前已经失败，聊天 Provider 无法从普通文本反推出原视频。
 
 ### 火山模型卡没有 Video，但 OpenAI/Gemini 反而出现了 Video
 
-这是**明确回归**。不要用 Source 总开关或全局 schema 补丁“修复”。当前合同要求 Video 只在两类火山 Source 的私有模型卡 schema 中出现；应检查 `capabilities/dashboard_asset_bridge.py` 与 Model-card Video Contract 工作流。
+先区分两种情况：
+
+- **foreign 有 Video、火山也有 Video**：说明共享 fallback 正在工作，但精确私有-clone bridge 没有执行。这是 0.1.23 允许的降级视觉副作用；foreign 保存边界应剥掉 Video，不能形成插件运行状态。
+- **foreign 有 Video、火山仍没有 Video**：这是失败，说明连 fallback 投递都没有进入当前 Dashboard/schema 路径，应检查实际安装分支、插件启动日志和 Dashboard 服务路径。
+
+精确兼容路径的目标仍然是 OpenAI/Gemini 无插件 fallback Video、火山 Ark/Agent Plan 有 Video。
 
 ### 明明选择 Agent Plan 却产生普通 API 调用
 
@@ -206,7 +222,7 @@ archive/model-card-video-known-good-0.1.22
 
 ```text
 main.py
-  └─ 插件生命周期；安装/释放 Dashboard 与日志兼容桥
+  └─ 插件生命周期；安装/释放 Dashboard、Video fallback 与日志兼容桥
 
 providers.py
   ├─ 两张 Provider 卡与固定端点
@@ -219,16 +235,17 @@ adapters/
   └─ logging.py                音视频敏感请求日志脱敏
 
 capabilities/
-  ├─ dashboard_asset_bridge.py 私有模型对话框 schema clone 的 Source-scoped Video UI
-  ├─ model_fields_bridge.py    owned 模型卡投影/保存，foreign 清理
-  ├─ model_fields.py           modalities ↔ 逐卡兼容运行镜像
+  ├─ video_modality_fallback.py 有 marker 的共享 Video 投递兜底 + foreign 保存剥离
+  ├─ dashboard_asset_bridge.py 私有模型对话框 Source-scoped 清理/投影 + bundle cache-bust
+  ├─ model_fields_bridge.py    owned 模型卡投影/保存，foreign 丰富字段清理
+  ├─ model_fields.py           modalities ↔ 逐卡兼容运行镜像 + 0.1.19 请求字段
   └─ model_scope.py            provider_source_id → Source type 所有权解析
 
 registry.py
   └─ Provider 注册保护与 AstrBot 服务层可逆兼容桥
 ```
 
-最重要的审计原则是：**不要在 `ProviderConfigService.get_provider_schema()` 的共享公共 `provider.items.modalities` 上直接追加 `video`。** 当前选中 Source 的身份只在模型卡私有 clone 边界足以安全表达，因此全局后端注入会重新制造“所有 Provider 都显示 / 所有 Provider 都不显示”的旧问题。
+最重要的审计原则是：**共享 `provider.items.modalities` 不能成为新的跨供应商能力真值。** 0.1.23 唯一允许的共享 Video 注入必须带插件 fallback marker、可逆、被精确 private-clone bridge 在 foreign 卡移除，并在 foreign create/update 持久化边界再次剥离；任何没有这些限制的全局注入都仍然是回归。
 
 ## 隐私、日志与费用
 
