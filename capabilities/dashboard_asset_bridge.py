@@ -66,7 +66,12 @@ _MODEL_BUILDER_BOUNDARY = re.compile(
     r'(?P<tmp>[A-Za-z_$][\w$]*)\s*=\s*(?P<selected>[A-Za-z_$][\w$]*)\.value\)'
     r'\s*==\s*null\s*\?\s*void\s+0\s*:\s*(?P=tmp)\.id\)\s*\|\|'
     r'[\s\S]{0,1500}?'
-    r'return\s*\{'
+    # AstrBot 4.27.3 may return the concrete new-card object directly as
+    # ``return {..}``, or through a comma expression that first derives another
+    # host value and then returns that same concrete object as
+    # ``return(<brace/semicolon-free prelude>, {..})``.  The optional prelude is
+    # deliberately narrow so this matcher cannot jump into a later object literal.
+    r'return\s*(?:\([^{};]{0,500}?,\s*)?\{'
     r'id\s*:\s*(?P<id_expr>[A-Za-z_$][\w$]*)\s*,'
     r'enable\s*:\s*!0\s*,'
     r'provider_source_id\s*:\s*(?P=source_id)\s*,'
