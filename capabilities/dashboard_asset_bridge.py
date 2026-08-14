@@ -1,25 +1,28 @@
 """Reversible Dashboard adaptation for source-scoped model-card fields.
 
-AstrBot 4.27 has two distinct frontend objects that this plugin must adapt without
-collapsing their meanings:
+AstrBot 4.27 exposes three different frontend objects whose meanings must remain
+separate for this plugin feature to be correct:
 
 * ``providerModelConfigSchema`` is a private metadata clone created only after the
-  currently selected Provider Source type is known.  For Ark / Agent Plan model
-  cards, that clone may gain one native ``video`` modality and may reveal the
-  lower Volcengine-owned bilingual request-row metadata.  Foreign clones must keep
-  AstrBot's native modalities untouched and those plugin rows hidden.
+  currently selected Provider Source type is known. For Ark / Agent Plan model
+  cards, that clone may gain one native ``video`` option and may reveal the lower
+  Volcengine-owned bilingual request-row metadata. Foreign clones must keep the
+  host modalities metadata untouched and those plugin rows hidden.
 * ``buildModelProviderConfig(modelName)`` creates the concrete data object used as
-  ``AstrBotConfig.iterable`` for a newly added model card.  AstrBot renders only
+  ``AstrBotConfig.iterable`` for a newly added model card. AstrBot renders only
   keys that already exist on that concrete object, so an owned new card must also
-  receive the lower Volcengine request-field default values there; foreign new
-  cards must not receive those keys at all.
+  receive the lower Volcengine request-field values needed to instantiate those
+  rows; foreign new cards must not receive those keys at all.
+* ``ConfigItemRenderer`` owns the host translation path for checkbox labels. The
+  plugin must not replace AstrBot's first four modality labels merely to name its
+  fifth option. Instead, the owned private modalities clone carries a transient
+  marker, and the renderer supplies a plugin-localized label only when the host
+  translated label array has no element for the added ``video`` index.
 
-Both structural boundaries must occur exactly once in the same served Dashboard
-asset before any transformation is accepted.  This prevents a partial patch in
-which the upper capability row changes but the lower concrete data object does
-not, or vice versa.  The original AstrBot asset is never modified on disk, and a
-content-derived query suffix forces compatible browsers to request the current
-transformed copy after install/update.
+All three structural boundaries must occur exactly once in the same served
+Dashboard asset before any transformation is accepted. This prevents a partial
+patch in which one concrete object changes while another required object remains
+unadapted. The original AstrBot asset is never modified on disk.
 """
 
 from __future__ import annotations
@@ -37,7 +40,8 @@ from typing import Any
 from .model_fields import MODEL_FIELD_SCHEMA
 from .model_scope import OWNED_SOURCE_TYPES
 
-_PATCH_MARKER = "/*astrbot-volcengine-model-dialog-v3*/"
+_PATCH_MARKER = "/*astrbot-volcengine-model-dialog-v4*/"
+_VIDEO_LABEL_FALLBACK_MARKER = "__astrbot_volcengine_video_label_fallback"
 _DASHBOARD_ASSET_LEASE_COUNT = 0
 _RESOLVE_WRAPPER: Callable[..., Any] | None = None
 _RESOLVE_ORIGINAL: Callable[..., Any] | None = None
@@ -66,11 +70,6 @@ _MODEL_BUILDER_BOUNDARY = re.compile(
     r'(?P<tmp>[A-Za-z_$][\w$]*)\s*=\s*(?P<selected>[A-Za-z_$][\w$]*)\.value\)'
     r'\s*==\s*null\s*\?\s*void\s+0\s*:\s*(?P=tmp)\.id\)\s*\|\|'
     r'[\s\S]{0,1500}?'
-    # AstrBot 4.27.3 may return the concrete new-card object directly as
-    # ``return {..}``, or through a comma expression that first derives another
-    # host value and then returns that same concrete object as
-    # ``return(<brace/semicolon-free prelude>, {..})``.  The optional prelude is
-    # deliberately narrow so this matcher cannot jump into a later object literal.
     r'return\s*(?:\([^{};]{0,500}?,\s*)?\{'
     r'id\s*:\s*(?P<id_expr>[A-Za-z_$][\w$]*)\s*,'
     r'enable\s*:\s*!0\s*,'
@@ -82,6 +81,17 @@ _MODEL_BUILDER_BOUNDARY = re.compile(
     r'reasoning\s*:\s*(?P<reasoning>[A-Za-z_$][\w$]*\([^{};]*?\))'
     r'(?P<object_close>\})'
     r')'
+)
+
+_RENDERER_LABEL_BOUNDARY = re.compile(
+    r'function\s+(?P<label_fn>[A-Za-z_$][\w$]*)\s*\('
+    r'(?P<meta>[A-Za-z_$][\w$]*)\s*,'
+    r'(?P<index>[A-Za-z_$][\w$]*)\s*,'
+    r'(?P<option>[A-Za-z_$][\w$]*)\s*\)\s*\{\s*'
+    r'const\s+(?P<labels>[A-Za-z_$][\w$]*)\s*=\s*'
+    r'(?P<translated>[A-Za-z_$][\w$]*)\s*\(\s*(?P=meta)\s*\)\s*;\s*'
+    r'return\s+(?P=labels)\s*\?\s*(?P=labels)\s*\[\s*(?P=index)\s*\]\s*'
+    r':\s*(?P=option)\s*\}'
 )
 
 _NEW_CARD_DEFAULTS: dict[str, Any] = {
@@ -98,17 +108,11 @@ _NEW_CARD_DEFAULTS: dict[str, Any] = {
 
 
 def _dialog_adaptation_javascript(*, source_type: str, schema: str) -> str:
+    """Adapt only the selected Source's private model-card metadata clone."""
+
     owned_types = json.dumps(sorted(OWNED_SOURCE_TYPES), ensure_ascii=False)
     plugin_fields = json.dumps(sorted(MODEL_FIELD_SCHEMA), ensure_ascii=False)
-    localized_modalities = json.dumps(
-        {
-            "zh": ["文本", "图像", "音频", "工具使用", "视频"],
-            "en": ["Text", "Image", "Audio", "Tool use", "Video"],
-            "ru": ["Текст", "Изображение", "Аудио", "Инструменты", "Видео"],
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
+    marker = json.dumps(_VIDEO_LABEL_FALLBACK_MARKER, ensure_ascii=False)
     return (
         _PATCH_MARKER
         + f"const __abVolcOwned={owned_types}.includes({source_type});"
@@ -124,18 +128,7 @@ def _dialog_adaptation_javascript(*, source_type: str, schema: str) -> str:
         + "?__abVolcModalities.options:[];"
         + "if(!__abVolcOptions.includes(\"video\"))"
         + "__abVolcModalities.options=[...__abVolcOptions,\"video\"];"
-        + "const __abVolcLang=(document.documentElement.lang||"
-        + "globalThis.localStorage?.getItem?.(\"astrbot-locale\")||\"zh-CN\").toLowerCase();"
-        + "const __abVolcLocale=__abVolcLang.startsWith(\"zh\")?\"zh\":"
-        + "(__abVolcLang.startsWith(\"ru\")?\"ru\":\"en\");"
-        + f"const __abVolcLocalizedModalities={localized_modalities};"
-        + "if(Array.isArray(__abVolcModalities.labels)"
-        + "&&__abVolcModalities.labels.length===__abVolcOptions.length){"
-        + "__abVolcModalities.labels=[...__abVolcModalities.labels,"
-        + "__abVolcLocalizedModalities[__abVolcLocale][4]];"
-        + "}else if(typeof __abVolcModalities.labels===\"string\"){"
-        + "__abVolcModalities.labels=[...__abVolcLocalizedModalities[__abVolcLocale]];"
-        + "}"
+        + f"__abVolcModalities[{marker}]=true;"
         + "}"
         + "}else{"
         + "for(const __abVolcKey of __abVolcPluginFields){"
@@ -147,6 +140,8 @@ def _dialog_adaptation_javascript(*, source_type: str, schema: str) -> str:
 
 
 def _builder_object_insertion(*, selected_source_ref: str) -> str:
+    """Instantiate lower request-row keys only on an owned new-card data object."""
+
     owned_types = json.dumps(sorted(OWNED_SOURCE_TYPES), ensure_ascii=False)
     defaults = json.dumps(_NEW_CARD_DEFAULTS, ensure_ascii=False, separators=(",", ":"))
     return (
@@ -158,13 +153,37 @@ def _builder_object_insertion(*, selected_source_ref: str) -> str:
     )
 
 
-def transform_dashboard_javascript(source: str) -> tuple[str, int]:
-    """Return status 1 only for a complete two-boundary compatible asset.
+def _renderer_label_replacement(match: re.Match[str]) -> str:
+    """Preserve host labels and supply only the owned Video index fallback."""
 
-    The integer is a compatibility status, not a raw count: ``1`` means both
-    concrete-object boundaries are uniquely known; ``0`` means at least one is
-    absent while neither is ambiguous; ``>=2`` means at least one boundary is
-    ambiguous.  This keeps a half-match from being mistaken for full support.
+    label_fn = match.group("label_fn")
+    meta = match.group("meta")
+    index = match.group("index")
+    option = match.group("option")
+    labels = match.group("labels")
+    translated = match.group("translated")
+    marker = json.dumps(_VIDEO_LABEL_FALLBACK_MARKER, ensure_ascii=False)
+    return (
+        f"function {label_fn}({meta},{index},{option}){{"
+        f"const {labels}={translated}({meta});"
+        f"if({labels}&&{labels}[{index}]!==void 0)return {labels}[{index}];"
+        f"if({meta}&&{meta}[{marker}]===true&&{option}===\"video\"){{"
+        "const __abVolcLocale=(globalThis.localStorage?.getItem?.(\"astrbot-locale\")||\"zh-CN\").toLowerCase();"
+        "return __abVolcLocale.startsWith(\"zh\")?\"视频\":"
+        "(__abVolcLocale.startsWith(\"ru\")?\"Видео\":\"Video\");"
+        "}"
+        f"return {option}"
+        "}"
+    )
+
+
+def transform_dashboard_javascript(source: str) -> tuple[str, int]:
+    """Return status 1 only for one complete three-object compatible asset.
+
+    ``1`` means the private model-card metadata clone, concrete new-card data
+    builder, and host checkbox-label helper are each uniquely known in the same
+    asset. ``0`` means at least one required object is absent while none is
+    ambiguous. ``>=2`` means at least one required boundary is ambiguous.
     """
 
     if _PATCH_MARKER in source:
@@ -172,13 +191,17 @@ def transform_dashboard_javascript(source: str) -> tuple[str, int]:
 
     dialog_matches = list(_MODEL_DIALOG_BOUNDARY.finditer(source))
     builder_matches = list(_MODEL_BUILDER_BOUNDARY.finditer(source))
-    if len(dialog_matches) != 1 or len(builder_matches) != 1:
-        if len(dialog_matches) <= 1 and len(builder_matches) <= 1:
+    renderer_matches = list(_RENDERER_LABEL_BOUNDARY.finditer(source))
+    counts = (len(dialog_matches), len(builder_matches), len(renderer_matches))
+    if counts != (1, 1, 1):
+        if all(count <= 1 for count in counts):
             return source, 0
-        return source, max(2, len(dialog_matches) + len(builder_matches))
+        return source, max(2, sum(counts))
 
     dialog = dialog_matches[0]
     builder = builder_matches[0]
+    renderer = renderer_matches[0]
+
     dialog_insertion = _dialog_adaptation_javascript(
         source_type=dialog.group("source_type"),
         schema=dialog.group("schema"),
@@ -192,15 +215,16 @@ def transform_dashboard_javascript(source: str) -> tuple[str, int]:
     builder_insertion = _builder_object_insertion(
         selected_source_ref=builder.group("selected"),
     )
+    renderer_replacement = _renderer_label_replacement(renderer)
 
-    edits = sorted(
-        ((dialog_offset, dialog_insertion), (builder_offset, builder_insertion)),
-        key=lambda item: item[0],
-        reverse=True,
-    )
+    edits = [
+        (dialog_offset, dialog_offset, dialog_insertion),
+        (builder_offset, builder_offset, builder_insertion),
+        (renderer.start(), renderer.end(), renderer_replacement),
+    ]
     transformed = source
-    for offset, insertion in edits:
-        transformed = transformed[:offset] + insertion + transformed[offset:]
+    for start, end, replacement in sorted(edits, key=lambda item: item[0], reverse=True):
+        transformed = transformed[:start] + replacement + transformed[end:]
     return transformed, 1
 
 
@@ -212,6 +236,8 @@ def _cache_root() -> Path:
 
 
 def _select_compatible_asset(static_folder: str | Path | None) -> Path | None:
+    """Return the single asset containing all three required frontend objects."""
+
     if not static_folder:
         return None
     try:
