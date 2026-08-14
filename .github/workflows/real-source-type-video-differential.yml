@@ -1,59 +1,54 @@
-name: Model-card Video Contract
+name: Real Source-Type Video Differential
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - .github/workflows/model-card-video-contract.yml
-      - AGENTS.md
-      - adapters/video.py
-      - capabilities/**
-      - main.py
-      - providers.py
-      - registry.py
-      - docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md
-      - tests/test_model_card_video_runtime_switch.py
-      - tests/test_model_card_video_unload_contract.py
-      - tests/test_0_1_20_dashboard_asset_scope.py
-      - tests/test_0_1_23_video_delivery_fallback.py
-      - tests/e2e/provider_card_matrix/**
   push:
-    branches: [main]
+    branches:
+      - agent/robust-video-fallback-0.1.23
     paths:
-      - .github/workflows/model-card-video-contract.yml
-      - adapters/video.py
-      - capabilities/**
+      - .github/workflows/real-source-type-video-differential.yml
+      - tests/e2e/real_source_type_video_differential.py
+      - tests/e2e/browser_matrix.py
+      - tests/e2e/provider_card_matrix/**
       - main.py
       - providers.py
       - registry.py
-      - docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md
-      - tests/test_model_card_video_runtime_switch.py
-      - tests/test_model_card_video_unload_contract.py
-      - tests/test_0_1_20_dashboard_asset_scope.py
-      - tests/test_0_1_23_video_delivery_fallback.py
-      - tests/e2e/provider_card_matrix/**
+      - adapters/**
+      - capabilities/**
 
 permissions:
   contents: read
 
 concurrency:
-  group: >-
-    ${{ github.workflow }}-${{
-      github.event_name == 'pull_request'
-      && format('pr-{0}', github.event.pull_request.number)
-      || github.ref
-    }}
+  group: real-source-type-video-differential
   cancel-in-progress: true
 
 jobs:
-  astrbot-4-27-3-real-dashboard:
+  differential:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+      ASTRBOT_E2E_URL: http://127.0.0.1:6185
+      ASTRBOT_E2E_USERNAME: e2e-admin
+      ASTRBOT_E2E_PASSWORD: E2e-password-123
+      ASTRBOT_E2E_ARTIFACT_DIR: ${{ github.workspace }}/e2e-artifacts
+      ASTRBOT_E2E_CONFIG_PATH: ${{ github.workspace }}/AstrBot/data/cmd_config.json
+
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+
+      - name: Validate real Ark secret presence without printing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$ARK_API_KEY" ]; then
+            echo "HUOSHANYINQINGAPI is unavailable."
+            exit 2
+          fi
+          echo "Real Ark credential is available; value will not be printed or uploaded."
 
       - name: Clone exact AstrBot 4.27.3 host
         run: git clone --depth 1 --branch v4.27.3 https://github.com/AstrBotDevs/AstrBot.git AstrBot
@@ -69,7 +64,7 @@ jobs:
       - name: Install exact AstrBot runtime
         run: uv sync --directory AstrBot
 
-      - name: Setup pnpm exactly as the verified Dashboard baseline
+      - name: Setup pnpm for the real Dashboard
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
           version: 10.28.2
@@ -80,7 +75,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: AstrBot/dashboard/pnpm-lock.yaml
 
-      - name: Build the real AstrBot 4.27.3 Dashboard
+      - name: Build AstrBot 4.27.3 Dashboard
         working-directory: AstrBot/dashboard
         run: pnpm install --frozen-lockfile && pnpm run build
 
@@ -93,7 +88,7 @@ jobs:
           mkdir -p AstrBot/astrbot/dashboard/dist/assets
           printf '4.27.3' > AstrBot/astrbot/dashboard/dist/assets/version
 
-      - name: Initialize AstrBot and install this exact plugin checkout
+      - name: Initialize AstrBot and install exact plugin checkout
         shell: bash
         run: |
           set -euo pipefail
@@ -106,65 +101,60 @@ jobs:
             --exclude '.github' \
             --exclude 'AstrBot' \
             ./ "$target"/
-          uv run --directory AstrBot astrbot conf set dashboard.username e2e-admin
-          uv run --directory AstrBot astrbot conf set dashboard.password E2e-password-123
-
-      - name: Prove runtime selection, robust delivery, and unload contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          uv run --directory AstrBot python ../tests/test_model_card_video_runtime_switch.py
-          uv run --directory AstrBot python ../tests/test_model_card_video_unload_contract.py
-          uv run --directory AstrBot python ../tests/test_0_1_20_dashboard_asset_scope.py
-          uv run --directory AstrBot python ../tests/test_0_1_23_video_delivery_fallback.py
+          uv run --directory AstrBot astrbot conf set dashboard.username "$ASTRBOT_E2E_USERNAME"
+          uv run --directory AstrBot astrbot conf set dashboard.password "$ASTRBOT_E2E_PASSWORD"
 
       - name: Install Playwright Chromium
         run: |
           python -m pip install playwright
           python -m playwright install --with-deps chromium
 
-      - name: Start AstrBot with the exact plugin checkout
+      - name: Start AstrBot
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p e2e-artifacts
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-video-contract.log 2>&1 &
-          echo $! >/tmp/astrbot-video-contract.pid
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-real-differential.log 2>&1 &
+          echo $! >/tmp/astrbot-real-differential.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS http://127.0.0.1:6185/ >/dev/null 2>&1; then
               ready=1
               break
             fi
-            if ! kill -0 "$(cat /tmp/astrbot-video-contract.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-video-contract.log
+            if ! kill -0 "$(cat /tmp/astrbot-real-differential.pid)" 2>/dev/null; then
+              cat /tmp/astrbot-real-differential.log
               exit 1
             fi
             sleep 1
           done
-          cp /tmp/astrbot-video-contract.log e2e-artifacts/startup.log || true
           test "$ready" = '1'
-          grep -q 'Volcengine providers registered' /tmp/astrbot-video-contract.log
+          grep -q 'Volcengine providers registered' /tmp/astrbot-real-differential.log
 
-      - name: Run five-condition real Dashboard matrix
-        env:
-          ASTRBOT_E2E_URL: http://127.0.0.1:6185
-          ASTRBOT_E2E_USERNAME: e2e-admin
-          ASTRBOT_E2E_PASSWORD: E2e-password-123
-          ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
-        run: python tests/e2e/provider_card_matrix/browser_matrix_0_1_19.py
+      - name: Run same-endpoint same-key same-model differential
+        run: python tests/e2e/real_source_type_video_differential.py
 
-      - name: Capture final AstrBot log
+      - name: Capture redacted startup diagnostics only
         if: always()
-        run: cp /tmp/astrbot-video-contract.log e2e-artifacts/startup.log || true
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path('/tmp/astrbot-real-differential.log')
+          target = Path('e2e-artifacts/startup.redacted.log')
+          text = source.read_text('utf-8', errors='replace') if source.exists() else ''
+          text = re.sub(r'(?i)(authorization|api[_ -]?key|bearer)\s*[:=]\s*\S+', r'\1=<redacted>', text)
+          target.write_text(text[-50000:], encoding='utf-8')
+          PY
 
       - name: Stop AstrBot evidence server
         if: always()
         shell: bash
         run: |
           set +e
-          if [ -s /tmp/astrbot-video-contract.pid ]; then
-            pid=$(cat /tmp/astrbot-video-contract.pid)
+          if [ -s /tmp/astrbot-real-differential.pid ]; then
+            pid=$(cat /tmp/astrbot-real-differential.pid)
             if kill -0 "$pid" 2>/dev/null; then
               kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
               for i in $(seq 1 25); do
@@ -178,14 +168,10 @@ jobs:
           fi
           pkill -f 'astrbot run --port 6185' 2>/dev/null || true
 
-      - name: Show AstrBot log on failure
-        if: failure()
-        run: cat /tmp/astrbot-video-contract.log || true
-
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: model-card-video-contract-4.27.3
+          name: real-source-type-video-differential
           path: e2e-artifacts
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
