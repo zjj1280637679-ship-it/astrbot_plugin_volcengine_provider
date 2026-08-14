@@ -49,6 +49,56 @@ jobs:
           fi
           echo "Real DeepSeek credential is available; value will not be printed or uploaded."
 
+      - name: Probe raw DeepSeek secret without exposing credential material
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p e2e-artifacts/deepseek-real-foreign-0.1.24
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          raw = os.environ.get("DEEPSEEKAPI", "")
+          result = {
+              "secret_present": bool(raw),
+              "leading_or_trailing_whitespace": raw != raw.strip(),
+              "wrapped_in_matching_quotes": (
+                  len(raw) >= 2
+                  and raw[0] == raw[-1]
+                  and raw[0] in {"'", '"'}
+              ),
+              "raw_direct_models_http_status": None,
+          }
+
+          request = urllib.request.Request(
+              "https://api.deepseek.com/v1/models",
+              headers={"Authorization": f"Bearer {raw}"},
+              method="GET",
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  result["raw_direct_models_http_status"] = int(response.status)
+                  response.read(1)
+          except urllib.error.HTTPError as exc:
+              # Status only. Do not print or persist response bodies because
+              # provider errors may echo credential material.
+              result["raw_direct_models_http_status"] = int(exc.code)
+          except Exception as exc:
+              result["transport_error_type"] = type(exc).__name__
+
+          path = Path(
+              "e2e-artifacts/deepseek-real-foreign-0.1.24/raw-secret-preflight.json"
+          )
+          path.write_text(
+              json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True),
+              encoding="utf-8",
+          )
+          print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+          PY
+
       - name: Clone exact AstrBot 4.27.3 host
         run: git clone --depth 1 --branch v4.27.3 https://github.com/AstrBotDevs/AstrBot.git AstrBot
 
