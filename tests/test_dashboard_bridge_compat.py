@@ -37,14 +37,14 @@ def main() -> None:
     }
 
     try:
-        # The Source UI needs both schema projection and the Source save
-        # boundary. Without upsert, do not expose it; live feedback and stale
-        # 0.1.17 model-save compatibility can still install independently.
+        # The current card UI needs schema + card create/update only. Source
+        # upsert is deliberately irrelevant because Source-level video controls
+        # were retired.
         if hasattr(ProviderConfigService, "upsert_provider_source"):
             delattr(ProviderConfigService, "upsert_provider_source")
         acquired = registry.acquire_owned_dashboard_bridge()
         assert acquired is True
-        assert not getattr(
+        assert getattr(
             ProviderConfigService.get_provider_schema,
             "_volcengine_provider_schema_wrapper",
             False,
@@ -62,16 +62,15 @@ def main() -> None:
                 originals["upsert_provider_source"],
             )
 
-        # Source controls do not depend on model create/update wrappers. The
-        # canonical per-card values are written at Source upsert and the
-        # independent live-feedback bridge remains available.
+        # Without model create/update boundaries, no card UI schema may be
+        # exposed; the independent live-feedback model-list hook remains useful.
         for name in ("create_provider", "update_provider"):
             if hasattr(ProviderConfigService, name):
                 delattr(ProviderConfigService, name)
 
         acquired = registry.acquire_owned_dashboard_bridge()
         assert acquired is True
-        assert getattr(
+        assert not getattr(
             ProviderConfigService.get_provider_schema,
             "_volcengine_provider_schema_wrapper",
             False,
@@ -83,8 +82,11 @@ def main() -> None:
         )
         registry.release_owned_dashboard_bridge()
 
-        # Schema + Source upsert remains a complete Source-video bridge even if
-        # the independent model-list feedback hook is unavailable.
+        # The model-card bridge does not depend on the independent model-list
+        # feedback hook.
+        for name in ("create_provider", "update_provider"):
+            if originals.get(name) is not None:
+                setattr(ProviderConfigService, name, originals[name])
         if hasattr(ProviderConfigService, "list_provider_source_models"):
             delattr(ProviderConfigService, "list_provider_source_models")
         assert registry.acquire_owned_dashboard_bridge() is True
@@ -96,7 +98,10 @@ def main() -> None:
         registry.release_owned_dashboard_bridge()
 
         # With only get_provider_schema left, there is no safe/useful bridge:
-        # displaying Source state without a save boundary would be deceptive.
+        # displaying card state without create/update boundaries is deceptive.
+        for name in ("create_provider", "update_provider"):
+            if hasattr(ProviderConfigService, name):
+                delattr(ProviderConfigService, name)
         if hasattr(ProviderConfigService, "upsert_provider_source"):
             delattr(ProviderConfigService, "upsert_provider_source")
         assert registry.acquire_owned_dashboard_bridge() is False

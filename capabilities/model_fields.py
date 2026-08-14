@@ -1,10 +1,9 @@
-"""Volcengine-owned per-model fields for the 0.1.19 model-card UI.
+"""Volcengine-owned per-model fields for the model-card UI.
 
-The fields in this module are ordinary model-card configuration. They are not
-AstrBot capability metadata and never rewrite ``modalities``. Dashboard
-projection may add empty values so AstrBot renders horizontal rows; the save
-boundary removes empty values again so unused 0.1.19 fields do not pollute the
-persisted model card.
+The video switch reuses AstrBot's canonical ``modalities`` checklist.  The
+remaining fields are ordinary model-card configuration. Dashboard projection
+may add empty values so AstrBot renders horizontal rows; the save boundary
+removes empty values again so unused fields do not pollute persisted cards.
 """
 
 from __future__ import annotations
@@ -16,6 +15,9 @@ from typing import Any
 from .model_scope import VIDEO_INPUT_ENABLED_KEY, video_input_enabled
 
 VIDEO_INPUT_PROFILE_KEY = "volcengine_video_input_profile"
+# 0.1.20 visible checkbox. The 0.1.19 three-state key remains accepted only at
+# the save boundary so an already-open old Dashboard tab cannot lose intent.
+VIDEO_INPUT_ENABLED_UI_KEY = "_volcengine_video_input_enabled_ui"
 VIDEO_INPUT_MODE_UI_KEY = "_volcengine_video_input_mode_ui"
 
 REASONING_MODE_KEY = "volcengine_reasoning_mode"
@@ -45,33 +47,25 @@ MODEL_SETTING_KEYS = frozenset(
         PRESENCE_PENALTY_KEY,
     }
 )
-MODEL_UI_KEYS = frozenset({VIDEO_INPUT_MODE_UI_KEY})
+MODEL_UI_KEYS = frozenset({VIDEO_INPUT_ENABLED_UI_KEY, VIDEO_INPUT_MODE_UI_KEY})
 ALL_MODEL_FIELD_KEYS = frozenset((*MODEL_SETTING_KEYS, *MODEL_UI_KEYS))
 
-# These schema entries are shared by AstrBot, but only owned model-card copies
-# receive the corresponding keys. Foreign cards therefore render none of them.
+# AstrBot returns one shared schema. ``dashboard_asset_bridge`` applies these
+# rows only to Volcengine Source dialogs after the frontend makes its per-dialog
+# schema clone; foreign dialogs mark every row invisible.
 MODEL_FIELD_SCHEMA: dict[str, dict[str, Any]] = {
-    VIDEO_INPUT_MODE_UI_KEY: {
-        "description": "视频输入模式 / Video Input Mode",
+    VIDEO_INPUT_PROFILE_KEY: {
+        "description": "视频质量 / Video Quality",
         "type": "string",
-        "options": ["off", "compressed", "original"],
+        "options": ["compressed", "original"],
         "labels": [
-            "关闭 / Off",
             "压缩 / Compressed",
             "原画 / Original Quality",
         ],
         "hint": (
-            "控制当前模型卡的视频请求传输方式。关闭不会删除上次选择的压缩/原画偏好；"
-            "Source 页面中的逐模型视频勾选仍可作为快捷开关。 / "
-            "Controls video transport for this model card. Turning it off keeps "
-            "the last compressed/original preference; the Source-page checkbox "
-            "remains a shortcut switch."
+            "仅在当前模型卡启用视频输入时生效；关闭视频输入不会删除这里的偏好。 / "
+            "Used only while Video Input is enabled; disabling video keeps this preference."
         ),
-    },
-    VIDEO_INPUT_PROFILE_KEY: {
-        "description": "Video transport profile",
-        "type": "string",
-        "invisible": True,
     },
     REASONING_MODE_KEY: {
         "description": "思考模式 / Thinking Mode",
@@ -182,11 +176,16 @@ def project_model_fields(
     """Project editable rows onto one owned Dashboard model-card copy."""
 
     source = persisted if isinstance(persisted, Mapping) else target
-    target[VIDEO_INPUT_MODE_UI_KEY] = video_input_mode(source)
-
-    profile = video_input_profile(source)
-    if VIDEO_INPUT_PROFILE_KEY in source or profile != "original":
-        target[VIDEO_INPUT_PROFILE_KEY] = profile
+    target.pop(VIDEO_INPUT_ENABLED_UI_KEY, None)
+    target.pop(VIDEO_INPUT_MODE_UI_KEY, None)
+    modalities = target.get("modalities")
+    if isinstance(modalities, list):
+        projected_modalities = [value for value in modalities if value != "video"]
+        explicit = source.get(VIDEO_INPUT_ENABLED_KEY)
+        if explicit is True or (not isinstance(explicit, bool) and video_input_enabled(source)):
+            projected_modalities.append("video")
+        target["modalities"] = projected_modalities
+    target[VIDEO_INPUT_PROFILE_KEY] = video_input_profile(source)
 
     for key in (REASONING_MODE_KEY, REASONING_EFFORT_KEY):
         value = source.get(key)
@@ -295,16 +294,32 @@ def _normalize_stop_sequences(provider_config: dict[str, Any]) -> None:
 def normalize_model_fields_for_save(provider_config: dict[str, Any]) -> dict[str, Any]:
     """Translate UI-only values and validate persisted 0.1.19 model settings."""
 
+    if VIDEO_INPUT_ENABLED_UI_KEY in provider_config:
+        enabled = provider_config.pop(VIDEO_INPUT_ENABLED_UI_KEY)
+        if not isinstance(enabled, bool):
+            raise ValueError(
+                f"Invalid video input checkbox value: {enabled!r}"
+            )
+        provider_config[VIDEO_INPUT_ENABLED_KEY] = enabled
+
+    # Compatibility with an already-open 0.1.19 model dialog. The current
+    # checkbox value, when present, deliberately outranks this retired field.
     if VIDEO_INPUT_MODE_UI_KEY in provider_config:
         mode = str(provider_config.pop(VIDEO_INPUT_MODE_UI_KEY) or "").strip().lower()
         if mode not in VIDEO_MODE_VALUES:
             raise ValueError(f"Invalid video input mode: {mode!r}")
-        if mode == "off":
-            provider_config[VIDEO_INPUT_ENABLED_KEY] = False
-            # Keep the previous profile so Source-page off/on restores it.
-        else:
-            provider_config[VIDEO_INPUT_ENABLED_KEY] = True
-            provider_config[VIDEO_INPUT_PROFILE_KEY] = mode
+        if VIDEO_INPUT_ENABLED_KEY not in provider_config:
+            if mode == "off":
+                provider_config[VIDEO_INPUT_ENABLED_KEY] = False
+            else:
+                provider_config[VIDEO_INPUT_ENABLED_KEY] = True
+                provider_config[VIDEO_INPUT_PROFILE_KEY] = mode
+
+    # The standard AstrBot checklist is the current UI and therefore outranks
+    # compatibility values submitted by an already-open older Dashboard tab.
+    modalities = provider_config.get("modalities")
+    if isinstance(modalities, list):
+        provider_config[VIDEO_INPUT_ENABLED_KEY] = "video" in modalities
 
     if VIDEO_INPUT_PROFILE_KEY in provider_config:
         profile = str(provider_config.get(VIDEO_INPUT_PROFILE_KEY) or "").strip().lower()

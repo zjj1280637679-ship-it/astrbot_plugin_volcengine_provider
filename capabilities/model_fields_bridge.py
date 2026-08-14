@@ -1,9 +1,10 @@
-"""Dashboard bridge for 0.1.19 Volcengine-owned model-card rows.
+"""Backend half of Volcengine-owned model-card rows.
 
-This wrapper intentionally sits *outside* the 0.1.18 Source-video bridge. The
-older bridge remains responsible for Source-page visibility/selection and its
-transactional rollback. This module only projects ordinary horizontal rows onto
-owned model cards and normalizes those rows at model create/update boundaries.
+AstrBot exposes one shared schema, so this bridge adds the field definitions
+but never decides their frontend visibility. ``dashboard_asset_bridge`` makes
+that decision on each dialog's private schema clone using the selected Source
+type. This module projects saved values only onto owned cards, strips forged
+values from foreign cards, and normalizes create/update payloads.
 """
 
 from __future__ import annotations
@@ -76,7 +77,7 @@ def _owned_source_type(service: Any, source_id: str) -> str:
 
 
 def _inject_owned_model_fields(service: Any, payload: dict[str, Any]) -> dict[str, Any]:
-    """Add field schema globally but row values only to owned model-card copies."""
+    """Add field definitions globally but row values only to owned card copies."""
 
     if not isinstance(payload, dict):
         return payload
@@ -219,7 +220,7 @@ def acquire_model_fields_bridge() -> bool:
 
 
 def release_model_fields_bridge() -> None:
-    """Release one lease and restore the wrapped 0.1.18/host methods at zero."""
+    """Release one lease and restore the previously wrapped host methods."""
 
     global _FIELD_BRIDGE_LEASE_COUNT
     global _SCHEMA_WRAPPER, _SCHEMA_ORIGINAL

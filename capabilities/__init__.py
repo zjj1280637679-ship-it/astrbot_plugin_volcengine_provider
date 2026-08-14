@@ -13,6 +13,7 @@ from .model_fields import (
     STOP_SEQUENCES_KEY,
     TEMPERATURE_KEY,
     TOP_P_KEY,
+    VIDEO_INPUT_ENABLED_UI_KEY,
     VIDEO_INPUT_MODE_UI_KEY,
     VIDEO_INPUT_PROFILE_KEY,
     apply_request_overrides,
@@ -25,6 +26,11 @@ from .model_fields import (
 from .model_fields_bridge import (
     acquire_model_fields_bridge,
     release_model_fields_bridge,
+)
+from .dashboard_asset_bridge import (
+    acquire_dashboard_asset_bridge,
+    release_dashboard_asset_bridge,
+    transform_dashboard_javascript,
 )
 from .model_scope import (
     AGENT_PLAN_PROVIDER_TYPE,
@@ -73,8 +79,10 @@ __all__ = [
     "TOP_P_KEY",
     "VIDEO_CONTROLS_VISIBLE_KEY",
     "VIDEO_INPUT_ENABLED_KEY",
+    "VIDEO_INPUT_ENABLED_UI_KEY",
     "VIDEO_INPUT_MODE_UI_KEY",
     "VIDEO_INPUT_PROFILE_KEY",
+    "acquire_dashboard_asset_bridge",
     "acquire_model_fields_bridge",
     "apply_request_overrides",
     "cleanup_owned_settings_on_source_change",
@@ -87,10 +95,12 @@ __all__ = [
     "owned_source_type_for_card",
     "project_model_fields",
     "release_model_fields_bridge",
+    "release_dashboard_asset_bridge",
     "remember_source_model_hint",
     "source_scope_id",
     "source_types",
     "strip_model_fields",
+    "transform_dashboard_javascript",
     "video_input_enabled",
     "video_input_mode",
     "video_input_profile",
