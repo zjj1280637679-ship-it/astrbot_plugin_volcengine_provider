@@ -1,0 +1,186 @@
+name: Real Cross-Provider Plugin Effect Matrix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/0.1.24-object-scope-ui
+    paths:
+      - .github/workflows/real-cross-provider-effect-matrix.yml
+      - tests/e2e/provider_card_matrix/real_cross_provider_effect_matrix.py
+      - tests/e2e/provider_card_matrix/real_cross_provider_effect_matrix_runner.py
+      - tests/e2e/provider_card_matrix/browser_matrix.py
+      - main.py
+      - providers.py
+      - registry.py
+      - adapters/**
+      - capabilities/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-cross-provider-effect-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cross-provider-effect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ARK_API_KEY: ${{ secrets.HUOSHANYINQINGAPI }}
+      DEEPSEEKAPI: ${{ secrets.DEEPSEEKAPI }}
+      ASTRBOT_E2E_URL: http://127.0.0.1:6185
+      ASTRBOT_E2E_USERNAME: e2e-admin
+      ASTRBOT_E2E_PASSWORD: E2e-password-123
+      ASTRBOT_E2E_ARTIFACT_DIR: ${{ github.workspace }}/e2e-artifacts
+      ASTRBOT_E2E_CONFIG_PATH: ${{ github.workspace }}/AstrBot/data/cmd_config.json
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Validate both real provider secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ARK_API_KEY" || { echo "HUOSHANYINQINGAPI is unavailable."; exit 2; }
+          test -n "$DEEPSEEKAPI" || { echo "DEEPSEEKAPI is unavailable."; exit 2; }
+          echo "Both real provider credentials are available; values will not be printed or uploaded."
+
+      - name: Clone exact AstrBot 4.27.3 host
+        run: git clone --depth 1 --branch v4.27.3 https://github.com/AstrBotDevs/AstrBot.git AstrBot
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: false
+
+      - name: Install exact AstrBot runtime
+        run: uv sync --directory AstrBot
+
+      - name: Setup pnpm exactly as AstrBot Dashboard CI
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10.28.2
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24.13.0'
+          cache: pnpm
+          cache-dependency-path: AstrBot/dashboard/pnpm-lock.yaml
+
+      - name: Build exact AstrBot 4.27.3 Dashboard
+        working-directory: AstrBot/dashboard
+        run: pnpm install --frozen-lockfile && pnpm run build
+
+      - name: Install built Dashboard into AstrBot package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p AstrBot/astrbot/dashboard/dist
+          rsync -a --delete AstrBot/dashboard/dist/ AstrBot/astrbot/dashboard/dist/
+          mkdir -p AstrBot/astrbot/dashboard/dist/assets
+          printf '4.27.3' > AstrBot/astrbot/dashboard/dist/assets/version
+
+      - name: Initialize AstrBot and install exact plugin checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '\n' | uv run --directory AstrBot astrbot init
+          target='AstrBot/data/plugins/astrbot_plugin_volcengine_provider'
+          rm -rf "$target"
+          mkdir -p "$target"
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'AstrBot' \
+            ./ "$target"/
+          uv run --directory AstrBot astrbot conf set dashboard.username "$ASTRBOT_E2E_USERNAME"
+          uv run --directory AstrBot astrbot conf set dashboard.password "$ASTRBOT_E2E_PASSWORD"
+          mkdir -p e2e-artifacts
+
+      - name: Install Playwright Chromium
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Start AstrBot
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-cross-provider.log 2>&1 &
+          echo $! >/tmp/astrbot-cross-provider.pid
+          ready=0
+          for i in $(seq 1 90); do
+            if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/astrbot-cross-provider.pid)" 2>/dev/null; then
+              cat /tmp/astrbot-cross-provider.log
+              exit 1
+            fi
+            sleep 1
+          done
+          test "$ready" = '1'
+          grep -q 'Volcengine providers registered' /tmp/astrbot-cross-provider.log
+
+      - name: Run real cross-provider plugin effect matrix
+        run: PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/tests/e2e/provider_card_matrix" python tests/e2e/provider_card_matrix/real_cross_provider_effect_matrix_runner.py
+
+      - name: Capture redacted startup diagnostics only
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path('/tmp/astrbot-cross-provider.log')
+          target = Path('e2e-artifacts/cross-provider-startup.redacted.log')
+          text = source.read_text('utf-8', errors='replace') if source.exists() else ''
+          for name in ('ARK_API_KEY', 'DEEPSEEKAPI'):
+              secret = os.environ.get(name, '')
+              if secret:
+                  text = text.replace(secret, '<redacted>')
+          text = re.sub(
+              r'(?i)(authorization|api[_ -]?key|bearer)\s*[:=]\s*\S+',
+              r'\1=<redacted>',
+              text,
+          )
+          target.write_text(text[-50000:], encoding='utf-8')
+          PY
+
+      - name: Stop AstrBot
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [ -s /tmp/astrbot-cross-provider.pid ]; then
+            pid=$(cat /tmp/astrbot-cross-provider.pid)
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+              for i in $(seq 1 25); do
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 0.2
+              done
+              if kill -0 "$pid" 2>/dev/null; then
+                kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+              fi
+            fi
+          fi
+          pkill -f 'astrbot run --port 6185' 2>/dev/null || true
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: real-cross-provider-plugin-effect-matrix
+          path: e2e-artifacts
+          if-no-files-found: error
+          retention-days: 7

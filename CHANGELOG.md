@@ -1,5 +1,21 @@
 # 更新记录
 
+## 0.1.24（发布候选）
+
+- **退役 0.1.23 的有标记共享 schema Video 兜底**：`video_modality_fallback` 桥不再被插件入口安装。该兜底在精确前端桥未执行时会让 OpenAI、xAI、Gemini 等 foreign 模型卡短暂多出一个 Video，本版本移除这条降级路径，恢复严格对象级隔离。
+- 共享 schema 中插件模型字段（视频质量、思考模式等）默认以 `invisible: true` 贡献；编译产物桥只对已知 Source 类型的**单模型卡私有 metadata clone** 解除隐藏，并只为 owned 新建卡数据对象注入默认字段值。
+- 编译产物桥升级为**三结构边界严格单匹配**：模型卡私有 clone、新建卡数据构造器与宿主复选框标签渲染器必须在同一个 served bundle 中各出现恰好一次才接受补丁；部分匹配一律不修改资产。视频标签只在宿主翻译数组缺少第五项且带插件 marker 时由插件本地化提供，宿主的四个原生标签不再被整体替换。
+- 新增**运行时组件桥** `capabilities/dashboard_runtime_bridge.py`：通过宿主 index resolver 向页面注入幂等脚本，等待具体 AstrBotConfig 模型卡组件出现，仅凭 `iterable.provider_source_id → Provider Source type`（来自带鉴权的 `/api/v1/providers/schema`）判定所有权，只改写 owned 卡的普通响应式数据与私有 metadata。foreign 对话框从不被选中或改写；两个桥都不生效时 fail closed（火山卡没有 Video），绝不污染 foreign 卡。
+- `main.py` 生命周期改为安装/释放四条桥：registry Dashboard 桥、model-fields 桥、编译产物桥与运行时索引桥；卸载顺序与安装顺序相反，临时资产随释放删除。
+- 真实 DeepSeek foreign 差分修复并转绿：AstrBot 4.27.3 的 Source 页模型列表预览用持久化源配置直接构造临时 Provider、不解析 `$VAR` 密钥引用（只有 `load_provider` 走 `_resolve_env_key_list`），原测试因此必 401。工作流预检改为直连 `/models` 只输出模型 ID 清单，浏览器测试经 AstrBot 自定义模型对话框加卡；并修复 source key 落盘形状断言（AstrBot 持久化为列表），同时新增"真实密钥永不落盘"硬断言。
+- 真实验证：AstrBot 4.27.3 上 Real Source-Type Video Differential（31852045657）、Real Cross-Provider Plugin Effect Matrix（31852045661）、Model-card Video Contract（31852048201）、Model-card Lifecycle Contract（31852048202）全部通过；DeepSeek 差分（31912600006）未保存/保存重开 foreign 卡均零插件痕迹、落盘无真实密钥、经 AstrBot 供应商测试端点真实请求通过；Runtime Distribution Gate（31852048206）与 0.1.19 Compatibility Baseline（31852048207）在候选树通过；十三个打包单元/合同脚本对真实 AstrBot 运行时全部通过。
+
+## 0.1.23（已发布到 runtime）
+
+- 在 0.1.22 精确 Source-scoped 模型卡 Video 路径之外，加入有标记、可逆、foreign 保存剥离的共享 schema Video 兜底，并给兼容 Dashboard bundle 加内容哈希查询参数，避免已缓存旧 JS 导致火山卡完全没有 Video。
+- 已知边界：精确前端桥未执行时，foreign 模型卡可能短暂显示一枚 Video，但保存边界会在持久化前剥离，不会形成 foreign 配置或请求行为。该兜底由 0.1.24 退役。
+- `runtime` 已由受控发布器晋升至 `b8d15630f0b97d2c4374d5f232fce4a9833e2925`（metadata 0.1.23），主仓 `main` 为 `699a52f36d140d2acecb79801c0071ce50ae8c4e`。
+
 ## 0.1.22（发布候选）
 
 - 恢复只作用于火山方舟普通 API 与 Agent Plan 模型卡私有 schema 的原生 `modalities` Video 能力选择项；外国 Provider 模型卡保持不变。

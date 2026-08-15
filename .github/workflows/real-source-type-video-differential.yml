@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - agent/robust-video-fallback-0.1.23
+      - fix/0.1.24-object-scope-ui
+      - test-install-0.1.24-object-scope-ui
     paths:
       - .github/workflows/real-source-type-video-differential.yml
       - tests/e2e/real_source_type_video_differential.py
@@ -20,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: real-source-type-video-differential
+  group: real-source-type-video-differential-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -79,6 +81,41 @@ jobs:
         working-directory: AstrBot/dashboard
         run: pnpm install --frozen-lockfile && pnpm run build
 
+      - name: Probe exact built ConfigItemRenderer label boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p e2e-artifacts
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          assets = Path('AstrBot/dashboard/dist/assets')
+          fingerprints = ('select_provider', 'dashboard_totp_manager', 'config-checkbox')
+          candidates = []
+          for path in sorted(assets.glob('*.js')):
+              text = path.read_text(encoding='utf-8', errors='replace')
+              hits = [fingerprint for fingerprint in fingerprints if fingerprint in text]
+              if len(hits) < 2:
+                  continue
+              snippets = []
+              for needle in ('config-checkbox', '.labels', 'labels===', 'Array.isArray'):
+                  pos = text.find(needle)
+                  if pos >= 0:
+                      start = max(0, pos - 1800)
+                      end = min(len(text), pos + 2600)
+                      snippets.append({'needle': needle, 'snippet': text[start:end]})
+              candidates.append({
+                  'asset': path.name,
+                  'fingerprints': hits,
+                  'snippets': snippets[:5],
+              })
+          payload = {'renderer_candidates': candidates}
+          target = Path('e2e-artifacts/config-item-renderer-boundary.json')
+          target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(json.dumps(payload, ensure_ascii=False, indent=2)[:24000])
+          PY
+
       - name: Install built Dashboard into AstrBot package
         shell: bash
         run: |
@@ -103,6 +140,77 @@ jobs:
             ./ "$target"/
           uv run --directory AstrBot astrbot conf set dashboard.username "$ASTRBOT_E2E_USERNAME"
           uv run --directory AstrBot astrbot conf set dashboard.password "$ASTRBOT_E2E_PASSWORD"
+
+      - name: Probe exact built Dashboard object boundaries before server start
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p e2e-artifacts
+          uv run --directory AstrBot python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str((Path.cwd() / 'data' / 'plugins').resolve()))
+          from astrbot_plugin_volcengine_provider.capabilities.dashboard_asset_bridge import (
+              _MODEL_BUILDER_BOUNDARY,
+              _MODEL_DIALOG_BOUNDARY,
+              _PATCH_MARKER,
+              _RENDERER_LABEL_BOUNDARY,
+              _adapt_static_asset,
+              _select_compatible_asset,
+              transform_dashboard_javascript,
+          )
+
+          static_root = (Path.cwd() / 'astrbot' / 'dashboard' / 'dist').resolve()
+          rows = []
+          for candidate in sorted((static_root / 'assets').glob('*.js')):
+              source = candidate.read_text(encoding='utf-8', errors='replace')
+              dialog_count = len(list(_MODEL_DIALOG_BOUNDARY.finditer(source)))
+              builder_count = len(list(_MODEL_BUILDER_BOUNDARY.finditer(source)))
+              renderer_count = len(list(_RENDERER_LABEL_BOUNDARY.finditer(source)))
+              transformed, status = transform_dashboard_javascript(source)
+              if dialog_count or builder_count or renderer_count or status:
+                  rows.append({
+                      'asset': candidate.name,
+                      'dialog_boundary_count': dialog_count,
+                      'builder_boundary_count': builder_count,
+                      'renderer_label_boundary_count': renderer_count,
+                      'compatibility_status': status,
+                      'transform_changed_source': transformed != source,
+                      'transform_contains_marker': _PATCH_MARKER in transformed,
+                  })
+
+          selected = _select_compatible_asset(static_root)
+          selected_name = selected.name if selected else None
+          adapted_name = None
+          adapted_contains_marker = False
+          if selected is not None:
+              adapted = _adapt_static_asset(selected, compatible_asset=selected)
+              adapted_name = adapted.name
+              adapted_contains_marker = _PATCH_MARKER in adapted.read_text(
+                  encoding='utf-8', errors='replace'
+              )
+
+          payload = {
+              'static_root': str(static_root),
+              'patch_marker': _PATCH_MARKER,
+              'required_boundary_contract': {
+                  'dialog_private_metadata_clone': 1,
+                  'new_card_concrete_data_builder': 1,
+                  'checkbox_label_renderer': 1,
+              },
+              'boundary_candidates': rows,
+              'selected_compatible_asset': selected_name,
+              'adapted_asset_name': adapted_name,
+              'adapted_asset_contains_marker': adapted_contains_marker,
+          }
+          target = Path(os.environ['ASTRBOT_E2E_ARTIFACT_DIR']) / 'delivery-probe-prestart.json'
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(json.dumps(payload, ensure_ascii=False, indent=2))
+          PY
 
       - name: Install Playwright Chromium
         run: |
@@ -131,7 +239,53 @@ jobs:
           test "$ready" = '1'
           grep -q 'Volcengine providers registered' /tmp/astrbot-real-differential.log
 
-      - name: Run same-endpoint same-key same-model differential
+      - name: Prove what the running HTTP server actually delivers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          root = Path(os.environ['ASTRBOT_E2E_ARTIFACT_DIR'])
+          pre = json.loads((root / 'delivery-probe-prestart.json').read_text(encoding='utf-8'))
+          selected = pre.get('selected_compatible_asset')
+          marker = str(pre.get('patch_marker') or '')
+          payload = {
+              'selected_compatible_asset': selected,
+              'patch_marker_checked': marker,
+              'http_target_requested': None,
+              'http_response_contains_current_marker': False,
+              'http_response_headers': {},
+              'index_directly_references_lazy_chunk': False,
+              'index_contains_cache_busted_selected_asset': False,
+          }
+          index_response = urllib.request.urlopen(os.environ['ASTRBOT_E2E_URL'] + '/', timeout=15)
+          index = index_response.read().decode('utf-8', 'replace')
+          if selected:
+              target = '/assets/' + selected
+              payload['http_target_requested'] = target
+              response = urllib.request.urlopen(os.environ['ASTRBOT_E2E_URL'] + target, timeout=15)
+              body = response.read().decode('utf-8', 'replace')
+              payload['http_response_contains_current_marker'] = bool(marker and marker in body)
+              payload['http_response_headers'] = {
+                  key: response.headers.get(key)
+                  for key in ('Cache-Control', 'ETag', 'Last-Modified', 'Expires')
+                  if response.headers.get(key) is not None
+              }
+              payload['index_directly_references_lazy_chunk'] = selected in index
+              payload['index_contains_cache_busted_selected_asset'] = (
+                  selected + '?astrbot_volcengine=' in index
+              )
+          (root / 'delivery-probe-http.json').write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8'
+          )
+          print(json.dumps(payload, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Run same-endpoint same-key same-model semantic DOM differential
         run: python tests/e2e/real_source_type_video_differential.py
 
       - name: Capture redacted startup diagnostics only

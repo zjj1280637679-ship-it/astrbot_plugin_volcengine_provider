@@ -1,9 +1,11 @@
 """Backend half of Volcengine-owned model-card rows.
 
-AstrBot exposes one shared schema, so this bridge adds the field definitions
-but never decides their frontend visibility. ``dashboard_asset_bridge`` makes
-that decision on each dialog's private schema clone using the selected Source
-type. This module projects saved values only onto owned cards, strips forged
+AstrBot exposes one shared schema, so this bridge contributes the definitions
+for the lower Volcengine-only per-model request rows but marks those definitions
+hidden in the shared schema by default. ``dashboard_asset_bridge`` may reveal
+those rows only after AstrBot has cloned the schema for one concrete model-card
+dialog and the selected Provider Source type is known to be owned by this plugin.
+This module separately projects saved values only onto owned cards, strips forged
 values from foreign cards, and normalizes create/update payloads.
 """
 
@@ -77,7 +79,7 @@ def _owned_source_type(service: Any, source_id: str) -> str:
 
 
 def _inject_owned_model_fields(service: Any, payload: dict[str, Any]) -> dict[str, Any]:
-    """Add field definitions globally but row values only to owned card copies."""
+    """Contribute hidden shared definitions and project values only to owned cards."""
 
     if not isinstance(payload, dict):
         return payload
@@ -89,8 +91,15 @@ def _inject_owned_model_fields(service: Any, payload: dict[str, Any]) -> dict[st
     if not isinstance(items, dict):
         return result
 
+    # These metadata objects describe the *lower plugin request rows*, not the
+    # native modalities checklist above them. Because this schema is shared by
+    # every Provider Source, foreign dialogs must inherit the safe hidden state.
+    # The frontend private-clone bridge is the only place allowed to reveal them
+    # after the concrete dialog's Source type has been established.
     for key, metadata in MODEL_FIELD_SCHEMA.items():
-        items[key] = copy.deepcopy(metadata)
+        field = copy.deepcopy(metadata)
+        field["invisible"] = True
+        items[key] = field
 
     sources = result.get("provider_sources", [])
     types = source_types({"provider_sources": sources if isinstance(sources, list) else []})
@@ -111,7 +120,7 @@ def _inject_owned_model_fields(service: Any, payload: dict[str, Any]) -> dict[st
         if types.get(source_id) in OWNED_SOURCE_TYPES:
             project_model_fields(provider, persisted_by_id.get(provider_id, provider))
         else:
-            # Defensively remove forged/stale Volcengine fields from foreign UI.
+            # Defensively remove forged/stale Volcengine values from foreign cards.
             strip_model_fields(provider)
     return result
 

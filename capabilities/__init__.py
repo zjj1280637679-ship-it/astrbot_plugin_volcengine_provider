@@ -32,6 +32,10 @@ from .dashboard_asset_bridge import (
     release_dashboard_asset_bridge,
     transform_dashboard_javascript,
 )
+from .dashboard_runtime_bridge import (
+    acquire_dashboard_runtime_bridge,
+    release_dashboard_runtime_bridge,
+)
 from .model_scope import (
     AGENT_PLAN_PROVIDER_TYPE,
     ARK_PROVIDER_TYPE,
@@ -83,6 +87,7 @@ __all__ = [
     "VIDEO_INPUT_MODE_UI_KEY",
     "VIDEO_INPUT_PROFILE_KEY",
     "acquire_dashboard_asset_bridge",
+    "acquire_dashboard_runtime_bridge",
     "acquire_model_fields_bridge",
     "apply_request_overrides",
     "cleanup_owned_settings_on_source_change",
@@ -96,6 +101,7 @@ __all__ = [
     "project_model_fields",
     "release_model_fields_bridge",
     "release_dashboard_asset_bridge",
+    "release_dashboard_runtime_bridge",
     "remember_source_model_hint",
     "source_scope_id",
     "source_types",

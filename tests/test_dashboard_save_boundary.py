@@ -110,7 +110,9 @@ async def exercise() -> None:
 
     try:
         # Match plugin startup order: compatibility/feedback bridge first, then
-        # the current per-card field bridge around it.
+        # the per-card value/persistence bridge around it.  The frontend asset
+        # bridge is intentionally not part of this save-boundary unit: it acts on
+        # a later private model-dialog clone and is a different concrete object.
         assert registry.acquire_owned_dashboard_bridge() is True
         assert acquire_model_fields_bridge() is True
         service = FakeService()
@@ -124,15 +126,29 @@ async def exercise() -> None:
             "tool_use",
         ]
         assert "video" not in items["modalities"]["options"]
-        for key, metadata in MODEL_FIELD_SCHEMA.items():
-            assert items[key] == metadata
 
+        # ``items`` here is still the host-shared metadata-definition object.  It
+        # must contain the complete 0.1.19 definitions so an owned private clone
+        # can later render them, but its safe visibility state is hidden because
+        # this shared object has no concrete model-card Source identity.  Do not
+        # equate this state with the later Ark/Plan private-clone visibility.
+        for key, metadata in MODEL_FIELD_SCHEMA.items():
+            actual = copy.deepcopy(items[key])
+            assert actual.pop("invisible") is True
+            assert actual == metadata, (key, actual, metadata)
+
+        # These are concrete existing model-card value copies.  The owned card
+        # gets its saved Volcengine values projected; the foreign card gets none.
         owned, foreign = projected["providers"]
         assert owned["modalities"] == ["text", "image", "video"]
         assert owned[VIDEO_INPUT_PROFILE_KEY] == "compressed"
         for key in MODEL_FIELD_SCHEMA:
             assert key not in foreign
 
+        # The create/save boundary is where the upper native model-card Video
+        # selection becomes normal persisted ``modalities`` state plus the
+        # runtime mirror.  This is independent from whether the frontend checkbox
+        # renderer was involved in constructing the test payload.
         await ProviderConfigService.create_provider(
             service,
             {
@@ -149,8 +165,8 @@ async def exercise() -> None:
         assert saved_owned[VIDEO_INPUT_PROFILE_KEY] == "original"
         assert VIDEO_INPUT_ENABLED_UI_KEY not in saved_owned
 
-        # A forged plugin checkbox on a foreign card is erased at both wrapper
-        # boundaries and cannot become persistent foreign state.
+        # A forged plugin UI/runtime state on a foreign card is erased at the
+        # save wrapper boundary and cannot become persistent foreign state.
         await ProviderConfigService.create_provider(
             service,
             {
