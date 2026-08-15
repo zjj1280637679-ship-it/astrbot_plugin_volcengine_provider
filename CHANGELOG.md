@@ -1,6 +1,15 @@
 # 更新记录
 
-## 0.1.24（发布候选）
+## 0.1.25（发布候选）
+
+- **视频压缩墙钟超时**：`Compressed` 转码由 `asyncio.wait_for` 绑定 300 秒上限；超时终止 ffmpeg 并以明确错误 fail closed，不再可能无限挂起整个聊天请求。音频归一化的 120 秒上限保持不变。
+- **火山方舟视频输入上限前置检查**：所有本地视频物化路径在 Base64 膨胀前强制 200 MB 上限（Original 与 Compressed 两条路径、输入与转码输出双向检查）；空文件同样被拒绝。Base64 data URL 用「ceil(bytes/3)×4」长度天花板做免解码检查；HTTP(S) 远端 URL 保持 0.1.18 直通形状（尺寸本地未知，由 Ark 服务端拉取）。
+- **取消/异常不再遗留 ffmpeg**：视频压缩与音频 WAV 归一化两条路径在请求取消时同步 `kill()` 转码子进程（音频路径原只在超时时清理）；`-nostdin` 一并补上，避免继承标准输入造成的意外交互。
+- Original 模式本地物化改为 `MediaResolver.as_path()` + stat + 读字节 + MIME 校验，语义与旧 `to_base64_data` 路径一致（mime 非 `video/*` 仍拒绝），但在读取前就能拒绝超大/空输入。
+- 新增 `tests/test_video_transport_guards.py` 并进入 Runtime Distribution Gate：data URL 天花板、超大/空本地输入拒绝、压缩超时杀进程、视频/音频取消杀进程，全部以 fake subprocess 确定性执行，不依赖付费 API；十四个打包单元/合同脚本全部通过。
+- 本版本不改任何 UI、模型卡、Provider 路由、请求覆盖或音频协议常量。
+
+## 0.1.24（已发布到 runtime）
 
 - **退役 0.1.23 的有标记共享 schema Video 兜底**：`video_modality_fallback` 桥不再被插件入口安装。该兜底在精确前端桥未执行时会让 OpenAI、xAI、Gemini 等 foreign 模型卡短暂多出一个 Video，本版本移除这条降级路径，恢复严格对象级隔离。
 - 共享 schema 中插件模型字段（视频质量、思考模式等）默认以 `invisible: true` 贡献；编译产物桥只对已知 Source 类型的**单模型卡私有 metadata clone** 解除隐藏，并只为 owned 新建卡数据对象注入默认字段值。
@@ -9,6 +18,7 @@
 - `main.py` 生命周期改为安装/释放四条桥：registry Dashboard 桥、model-fields 桥、编译产物桥与运行时索引桥；卸载顺序与安装顺序相反，临时资产随释放删除。
 - 真实 DeepSeek foreign 差分修复并转绿：AstrBot 4.27.3 的 Source 页模型列表预览用持久化源配置直接构造临时 Provider、不解析 `$VAR` 密钥引用（只有 `load_provider` 走 `_resolve_env_key_list`），原测试因此必 401。工作流预检改为直连 `/models` 只输出模型 ID 清单，浏览器测试经 AstrBot 自定义模型对话框加卡；并修复 source key 落盘形状断言（AstrBot 持久化为列表），同时新增"真实密钥永不落盘"硬断言。
 - 真实验证：AstrBot 4.27.3 上 Real Source-Type Video Differential（31852045657）、Real Cross-Provider Plugin Effect Matrix（31852045661）、Model-card Video Contract（31852048201）、Model-card Lifecycle Contract（31852048202）全部通过；DeepSeek 差分（31912600006）未保存/保存重开 foreign 卡均零插件痕迹、落盘无真实密钥、经 AstrBot 供应商测试端点真实请求通过；Runtime Distribution Gate（31852048206）与 0.1.19 Compatibility Baseline（31852048207）在候选树通过；十三个打包单元/合同脚本对真实 AstrBot 运行时全部通过。
+- `runtime` 已由受控发布器（run 31913489827，main gate 31913416300）晋升至 `c32214ee2af106b324b06595b978f3910ffddac0`（metadata 0.1.24），主仓 `main` 合并提交为 `8dfb158db1c31872e78e436d0e993d94392462ca`。
 
 ## 0.1.23（已发布到 runtime）
 
