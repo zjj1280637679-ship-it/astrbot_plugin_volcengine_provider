@@ -72,6 +72,7 @@ jobs:
                   and raw[0] in {"'", '"'}
               ),
               "raw_direct_models_http_status": None,
+              "live_model_ids": [],
           }
 
           request = urllib.request.Request(
@@ -82,17 +83,42 @@ jobs:
           try:
               with urllib.request.urlopen(request, timeout=30) as response:
                   result["raw_direct_models_http_status"] = int(response.status)
-                  response.read(1)
+                  body = response.read().decode("utf-8")
+                  try:
+                      payload = json.loads(body)
+                      entries = payload.get("data", []) if isinstance(payload, dict) else []
+                      ids = sorted(
+                          {
+                              str(item.get("id") or "").strip()
+                              for item in entries
+                              if isinstance(item, dict) and str(item.get("id") or "").strip()
+                          }
+                      )
+                      result["live_model_ids"] = ids
+                  except (json.JSONDecodeError, TypeError, ValueError):
+                      result["live_model_ids"] = []
           except urllib.error.HTTPError as exc:
               result["raw_direct_models_http_status"] = int(exc.code)
           except Exception as exc:
               result["transport_error_type"] = type(exc).__name__
 
-          path = Path(
-              "e2e-artifacts/deepseek-real-foreign-0.1.24/raw-secret-preflight.json"
+          artifact_dir = Path(
+              "e2e-artifacts/deepseek-real-foreign-0.1.24"
           )
-          path.write_text(
+          artifact_dir.mkdir(parents=True, exist_ok=True)
+          (artifact_dir / "raw-secret-preflight.json").write_text(
               json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True),
+              encoding="utf-8",
+          )
+          # Only the live model identifiers discovered by the direct API call are
+          # shared with the browser test; the raw secret never leaves this step.
+          (artifact_dir / "raw-secret-model-list.json").write_text(
+              json.dumps(
+                  {"provider": "deepseek", "model_ids": result["live_model_ids"]},
+                  ensure_ascii=False,
+                  indent=2,
+                  sort_keys=True,
+              ),
               encoding="utf-8",
           )
           print(json.dumps(result, ensure_ascii=False, sort_keys=True))

@@ -7,15 +7,20 @@ has no predeclared DeepSeek model identifier:
    type=openai_chat_completion).
 2. Store ``$DEEPSEEKAPI`` in the Source key field so the real secret stays in
    the process environment and never enters screenshots/artifacts.
-3. Press AstrBot's own "fetch model list" control and treat the model rows that
-   actually appear in the Dashboard as the only model-ID truth. The test does
-   not assume or remember any DeepSeek model name in advance.
-4. Select the first model in the live Dashboard return order, open that exact
-   fetched model card, and prove that neither its unsaved nor saved/reopened
-   foreign card receives ``video`` or any ``volcengine_*`` model field.
-5. Use AstrBot's own provider test endpoint for that same fetched model and
+3. Discover the live model identifiers with the workflow's direct preflight
+   call (same secret, same ``/models`` endpoint) and select the first one. The
+   AstrBot source-page "fetch model list" preview is deliberately not used
+   here: on v4.27.3 that endpoint builds a temporary Provider from the
+   persisted source config without resolving ``$VAR`` key references, so the
+   literal ``$DEEPSEEKAPI`` would be sent upstream (401). The selected model
+   card is instead added through AstrBot's own custom-model dialog, and the
+   real remote request through AstrBot is still asserted with the provider
+   test button, whose loaded instance does resolve the environment reference.
+4. Prove that neither the unsaved nor saved/reopened foreign card receives
+   ``video`` or any ``volcengine_*`` model field.
+5. Use AstrBot's own provider test endpoint for that same live model and
    require a real DeepSeek request to pass.
-6. Check persisted config semantics using the fetched model ID, without ever
+6. Check persisted config semantics using the live model ID, without ever
    serializing the secret value.
 
 A successful remote request cannot substitute for UI isolation, and UI
@@ -43,6 +48,7 @@ from browser_matrix import (
     dismiss_first_run_dialog,
     login,
     open_configured_model,
+    open_manual_model_add,
     open_providers,
     save_model_dialog,
     save_source,
@@ -172,76 +178,29 @@ async def close_validated_dialog(page: Page, dialog: Locator, *, stage: str) -> 
     raise AssertionError(f"{stage}: validated DeepSeek dialog could not be dismissed")
 
 
-async def fetched_available_rows(page: Page) -> Locator:
-    return page.locator(".provider-models-section--available .provider-model-row")
+def load_live_model_ids() -> tuple[list[str], str]:
+    """Return (all live IDs, selected live ID) from the workflow preflight.
 
-
-async def model_id_from_row(row: Locator) -> str:
-    title = row.locator(".provider-model-row__title").first
-    if not await title.count():
-        raise AssertionError("live fetched model row has no model title element")
-    return str(await title.inner_text() or "").strip()
-
-
-async def fetch_models_through_astrbot(page: Page) -> tuple[list[str], str]:
-    """Fetch through AstrBot and return (all live IDs, selected live ID).
-
-    No model identifier is supplied to this function.  The selected ID is
-    derived solely from the first non-empty model row that AstrBot renders
-    after the live fetch completes.
+    The workflow's direct authenticated ``/models`` call writes only the model
+    identifiers to ``raw-secret-model-list.json``; the raw secret never enters
+    this test process or the browser. No model identifier is hard-coded here:
+    the selected ID is derived solely from the live upstream response order.
     """
 
-    fetch_button = page.locator(
-        ".provider-models-toolbar__actions button:has(.mdi-download)"
-    ).first
-    await expect(fetch_button).to_be_visible(timeout=10_000)
-    await fetch_button.click()
-
-    rows = await fetched_available_rows(page)
-    await expect(rows.first).to_be_visible(timeout=45_000)
-
-    models: list[str] = []
-    seen: set[str] = set()
-    selected_model_id = ""
-    for index in range(await rows.count()):
-        row = rows.nth(index)
-        if not await row.is_visible():
-            continue
-        model_id = await model_id_from_row(row)
-        if not model_id:
-            continue
-        if not selected_model_id:
-            selected_model_id = model_id
-        if model_id not in seen:
-            seen.add(model_id)
-            models.append(model_id)
-
-    if not selected_model_id:
+    list_path = ARTIFACT_DIR / "raw-secret-model-list.json"
+    if not list_path.is_file():
         raise AssertionError(
-            "AstrBot DeepSeek Source fetch completed without any usable live model row"
+            "workflow preflight did not produce raw-secret-model-list.json; "
+            "the direct DeepSeek /models discovery step must run before this test"
         )
-    return models, selected_model_id
-
-
-async def exact_available_model_row(page: Page, model_id: str) -> Locator:
-    rows = await fetched_available_rows(page)
-    for index in range(await rows.count()):
-        row = rows.nth(index)
-        if not await row.is_visible():
-            continue
-        if await model_id_from_row(row) == model_id:
-            return row
-    raise AssertionError(
-        f"the model selected from the live fetch is no longer present: {model_id!r}"
-    )
-
-
-async def open_live_model_add_dialog(page: Page, model_id: str) -> Locator:
-    row = await exact_available_model_row(page, model_id)
-    await row.locator(".provider-model-row__main").click()
-    dialog = page.locator(".v-dialog:visible").last
-    await expect(dialog.locator(".config-row").first).to_be_visible(timeout=10_000)
-    return dialog
+    payload = json.loads(list_path.read_text(encoding="utf-8"))
+    model_ids = payload.get("model_ids") if isinstance(payload, dict) else None
+    if not isinstance(model_ids, list):
+        raise AssertionError("raw-secret-model-list.json has no model_ids list")
+    models = [str(value).strip() for value in model_ids if str(value).strip()]
+    if not models:
+        raise AssertionError("the direct DeepSeek /models response contained no model IDs")
+    return models, models[0]
 
 
 async def test_model_through_astrbot(
@@ -307,7 +266,7 @@ def persisted_evidence(source_id: str, model_id: str) -> dict[str, Any]:
         "source_provider": source.get("provider"),
         "source_api_base": source.get("api_base"),
         "source_key_is_environment_reference": source.get("key") == ENV_REFERENCE,
-        "selected_model_id_from_live_fetch": model_id,
+        "selected_model_id_from_live_discovery": model_id,
         "persisted_provider_id": provider_id,
         "model_modalities": model_modalities,
         "model_volcengine_keys": leaked_keys,
@@ -338,12 +297,15 @@ async def run() -> None:
             ).strip()
             await save_source(page)
 
-            models, selected_model_id = await fetch_models_through_astrbot(page)
-            result["astrbot_live_models"] = models
-            result["selected_model_id_from_live_fetch"] = selected_model_id
-            result["selected_model_origin"] = "AstrBot live DeepSeek fetch-models Dashboard row"
+            models, selected_model_id = load_live_model_ids()
+            result["deepseek_live_models"] = models
+            result["selected_model_id_from_live_discovery"] = selected_model_id
+            result["selected_model_origin"] = (
+                "workflow direct DeepSeek /models preflight; model card added "
+                "through AstrBot's custom-model dialog"
+            )
 
-            create_dialog = await open_live_model_add_dialog(page, selected_model_id)
+            create_dialog = await open_manual_model_add(page, selected_model_id)
             result["unsaved_model_card"] = await assert_foreign_model_dialog(
                 create_dialog,
                 stage="deepseek/unsaved-live-model-card",
