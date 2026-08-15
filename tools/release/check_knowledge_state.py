@@ -327,6 +327,14 @@ def main() -> int:
         action="store_true",
         help="also require a ready release candidate for publication",
     )
+    parser.add_argument(
+        "--allow-no-candidate",
+        action="store_true",
+        help=(
+            "treat an absent active release candidate as a verified "
+            "publication no-op (steady post-release state)"
+        ),
+    )
     args = parser.parse_args()
     version = metadata_version()
     state = read_json("docs/PROJECT_STATE.json")
@@ -429,6 +437,15 @@ def main() -> int:
     if args.require_releaseable:
         candidate = state["verdict"].get("active_release_candidate")
         if not isinstance(candidate, dict):
+            if args.allow_no_candidate:
+                # Steady post-release state: nothing to publish. All consistency
+                # checks above already passed; the publisher's tree comparison
+                # still rejects any changed runtime tree without a new candidate.
+                print(
+                    "KNOWLEDGE_STATE_OK no active release candidate; "
+                    "publication is a no-op for an unchanged runtime tree"
+                )
+                return 0
             fail("publication requires an active release candidate")
         if candidate.get("status") != "ready" or candidate.get("releaseable") is not True:
             fail("publication requires candidate status=ready and releaseable=true")

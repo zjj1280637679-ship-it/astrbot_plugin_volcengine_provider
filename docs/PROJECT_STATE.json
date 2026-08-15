@@ -1,72 +1,64 @@
 {
-  "schema_version": 17,
+  "schema_version": 18,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
-    "stable_release": "0.1.24",
-    "stable_status": "repository_main_and_runtime_published_0_1_24_object_scoped_model_card_video_ui",
-    "active_release_candidate": {
-      "version": "0.1.25",
-      "branch": "fix/0.1.25-transport-guards",
-      "pull_request": 17,
-      "status": "ready",
-      "releaseable": true,
-      "purpose": "Close the media transport robustness gaps: bound the video transcode wall-clock time, enforce Ark's documented video input ceiling on every local materialization path before base64-encoding, and always terminate a running ffmpeg when a chat request times out or is cancelled (video compressed path and audio WAV normalization)."
-    },
-    "safe_development_branch": "fix/0.1.25-transport-guards",
+    "stable_release": "0.1.25",
+    "stable_status": "repository_main_and_runtime_published_0_1_25_media_transport_guards",
+    "active_release_candidate": null,
+    "safe_development_branch": "main",
     "safe_install_branch": "runtime",
     "marketplace": {
       "listed_version": "0.1.22",
-      "status": "last_observed_listing_0_1_22_runtime_0_1_24_published_candidate_0_1_25_not_yet_published"
+      "status": "last_observed_listing_0_1_22_runtime_0_1_25_published_listing_refresh_unobserved"
     },
     "windows_marketplace_install": "0.1.25_unverified"
   },
   "active_experiment": null,
   "development": {
     "version": "0.1.25",
-    "branch": "fix/0.1.25-transport-guards",
-    "track": "release_candidate",
-    "status": "transport_guards_candidate_all_pr_gates_green",
-    "installable": false
+    "branch": "main",
+    "track": "stable",
+    "status": "stable_0_1_25_published_runtime_and_contract_verified",
+    "installable": true
   },
   "published_baseline": {
-    "version": "0.1.24",
-    "main_commit": "8dfb158db1c31872e78e436d0e993d94392462ca",
+    "version": "0.1.25",
+    "main_commit": "5ea2d3d91a4c51ddce606f6832fa25b457b8e5c4",
     "runtime_branch": "runtime",
-    "runtime_commit": "c32214ee2af106b324b06595b978f3910ffddac0",
+    "runtime_commit": "2cce38ffc389930854e5d7752cac67a441741318",
     "runtime_tree": null,
-    "dashboard_evidence_run": null,
-    "runtime_gate_run": 31913416300,
-    "publisher_run": 31913489827,
+    "dashboard_evidence_run": 31914581988,
+    "runtime_gate_run": 31914581993,
+    "publisher_run": 31914641554,
     "status": "repository_runtime_and_contract_verified"
   },
   "current_goal": {
-    "id": "publish-0.1.25-media-transport-guards",
-    "goal": "Harden the media transport path without changing any UI, model-card, provider routing or request-override semantics: video transcoding gets a wall-clock timeout and the subprocess is killed on timeout/cancellation; local video materialization enforces Ark's documented video input ceiling before base64-encoding (original and compressed paths, plus cheap data-URL ceiling checks); the audio WAV normalization path also kills its ffmpeg on cancellation.",
+    "id": "observe-0.1.25-external-publication",
+    "goal": "Complete the external-publication observations that CI cannot provide: confirm the AstrBot marketplace listing refresh and a real repository-name reinstall (and, where applicable, the Windows/Launcher install) of the published 0.1.25 runtime, and record the observations before preparing the next release.",
     "active_decision_ids": [],
     "non_goals": [
-      "Do not change the 0.1.24 object-scoped Video UI contract or any Dashboard bridge behavior.",
-      "Do not change Ark payload shapes, provider routing, key pools, retries, or the 0.1.19 request-override semantics.",
-      "Do not change the audio 25 MB protocol ceiling or the 120 s audio transcode timeout.",
-      "Do not download or probe remote http(s) video URLs locally; their size remains unknown and the 0.1.18 pass-through shape is preserved.",
-      "Do not add an ffprobe duration gate or a second compression pipeline.",
-      "Do not claim 0.1.25 runtime publication or a real user installation until the publisher and external reinstall are directly observed."
+      "Do not claim marketplace or Windows installation verification from CI success alone.",
+      "Do not start a new release candidate before the external 0.1.25 observations are recorded.",
+      "Do not change the published runtime tree without a strictly newer three-part version and a new ready candidate."
     ]
   },
   "active_validation_frontier": {
     "release": "0.1.25",
     "name": "media_transport_guards",
-    "current_stage": "candidate_ready_all_pr_gates_green_pending_main_merge_and_runtime_publish",
+    "current_stage": "published_runtime_verified_pending_external_observations",
     "next_actions": [
-      "Merge PR #17 into main, then require the main-branch Runtime Distribution Gate to pass.",
-      "Allow the guarded runtime publisher to promote the exact accepted 0.1.25 runtime artifact.",
-      "After runtime publication, verify by repository-name reinstall on the user's real AstrBot instance."
+      "Observe the AstrBot marketplace listing and the real repository-name reinstall/Windows install of the 0.1.25 runtime, then record both in the HOT state.",
+      "Triage the remaining draft PR #3 (runtime publication hardening) or close it when superseded.",
+      "Prepare the next release candidate only after the external observations are recorded."
     ],
     "observed": [
-      "All fourteen packaged unit/contract test scripts pass locally on the candidate tree against a real AstrBot runtime, including the new tests/test_video_transport_guards.py covering the data-URL ceiling, oversized/empty local input rejection before base64, the transcode timeout kill, and cancellation kill contracts for both the video compressed path and the audio normalization path.",
-      "PR #17 gates are green: Runtime Distribution Gate run 31914271175 (artifact boundary plus AstrBot 4.26.1 / 4.27.2 packaged loads, real ffmpeg compressed-video contract and the new guard script), Model-card Video Contract run 31914271290 on a real AstrBot 4.27.3 Dashboard, Model-card Lifecycle Contract run 31914271184, and the 0.1.19 evidence run 31914271182.",
-      "The 0.1.24 stable baseline is preserved: main is 8dfb158db1c31872e78e436d0e993d94392462ca and the published runtime branch is c32214ee2af106b324b06595b978f3910ffddac0, both carrying metadata 0.1.24 with the object-scoped model-card Video UI.",
-      "The candidate does not modify providers.py, registry.py, capabilities/*, main.py, or the audio 25 MB / 120 s constants; only adapters/video.py, adapters/audio.py and the gate test list changed."
+      "PR #17 gates were green: Runtime Distribution Gate run 31914271175, Model-card Video Contract run 31914271290 on a real AstrBot 4.27.3 Dashboard, Model-card Lifecycle Contract run 31914271184, and the 0.1.19 evidence run 31914271182.",
+      "Main-branch Runtime Distribution Gate run 31914581993 passed after the merge, including the knowledge-state guard, the fourteen packaged unit/contract scripts, the real ffmpeg compressed-video contract, and AstrBot 4.26.1 / 4.27.2 packaged loads.",
+      "The guarded publisher run 31914641554 completed: ready-candidate check, 4-cell pre-publish native-install matrix, runtime promotion, 4-cell post-publish native-install matrix, and candidate cleanup.",
+      "The published runtime branch is 2cce38ffc389930854e5d7752cac67a441741318 (metadata 0.1.25) and main is 5ea2d3d91a4c51ddce606f6832fa25b457b8e5c4.",
+      "Seven fully-merged stale branch refs were removed during repository housekeeping; main, runtime, the archive/model-card-video-known-good-0.1.22 anchor, and all history-bearing branches remain.",
+      "The knowledge-state machinery now tolerates the steady no-candidate state: the publisher's ready-candidate requirement accepts an explicit --allow-no-candidate no-op so a post-publication state commit no longer produces a red publisher run, while the strictly-newer-version guard still rejects any changed runtime tree without a new candidate."
     ]
   },
   "closed_experiments": [
@@ -111,5 +103,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. Since 0.1.24 the shared-schema Video fallback is retired: never re-add a global modalities injection. Since 0.1.25 every local video materialization enforces the Ark video input ceiling and every ffmpeg transcode is bounded and killed on timeout/cancellation; do not remove those guards to make a fixture pass."
+  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. The repository is in the post-publication steady state for stable 0.1.25: there is no active release candidate, the publisher treats a no-candidate main push as a verified no-op only when the runtime tree is unchanged, and any changed runtime tree still requires a strictly newer version plus a new ready candidate."
 }
