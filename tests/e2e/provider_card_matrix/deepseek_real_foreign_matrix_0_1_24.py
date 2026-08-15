@@ -250,8 +250,33 @@ def persisted_evidence(source_id: str, model_id: str) -> dict[str, Any]:
         raise AssertionError(f"DeepSeek Source type changed unexpectedly: {source.get('type')!r}")
     if source.get("provider") != "deepseek":
         raise AssertionError(f"DeepSeek Source provider changed unexpectedly: {source.get('provider')!r}")
-    if source.get("key") != ENV_REFERENCE:
-        raise AssertionError("DeepSeek Source did not persist the safe environment reference")
+
+    # AstrBot persists the multi-key field as a list even when the Dashboard
+    # shows a single input, so the safe environment reference may appear as a
+    # bare string or as the only list entry. The hard invariant is that the
+    # persisted value references the environment variable and never contains
+    # the real secret value.
+    raw_key = source.get("key")
+    if isinstance(raw_key, str):
+        key_is_reference = raw_key == ENV_REFERENCE
+    elif isinstance(raw_key, list) and all(isinstance(value, str) for value in raw_key):
+        key_is_reference = ENV_REFERENCE in raw_key
+    else:
+        raise AssertionError(
+            f"DeepSeek Source persisted key has unexpected shape: {type(raw_key).__name__}"
+        )
+    if not key_is_reference:
+        raise AssertionError(
+            "DeepSeek Source did not persist the safe environment reference"
+        )
+    real_secret = os.environ.get("DEEPSEEKAPI", "")
+    if real_secret:
+        if isinstance(raw_key, str):
+            secret_leaked = raw_key == real_secret
+        else:
+            secret_leaked = real_secret in raw_key
+        if secret_leaked:
+            raise AssertionError("DeepSeek Source persisted the real secret value")
 
     model_modalities = model.get("modalities") or []
     leaked_keys = sorted(key for key in model if str(key).startswith("volcengine_"))
@@ -265,7 +290,7 @@ def persisted_evidence(source_id: str, model_id: str) -> dict[str, Any]:
         "source_type": source.get("type"),
         "source_provider": source.get("provider"),
         "source_api_base": source.get("api_base"),
-        "source_key_is_environment_reference": source.get("key") == ENV_REFERENCE,
+        "source_key_is_environment_reference": key_is_reference,
         "selected_model_id_from_live_discovery": model_id,
         "persisted_provider_id": provider_id,
         "model_modalities": model_modalities,
