@@ -30,6 +30,10 @@ ROOT_FILES = (
     "registry.py",
     "logo.png",
     "LICENSE",
+    # AstrBot's plugin service renders the post-update changelog popup from a
+    # CHANGELOG.md shipped inside the installed plugin directory. Keep this the
+    # same file as the development changelog.
+    "CHANGELOG.md",
 )
 RUNTIME_PACKAGES = (
     "adapters",

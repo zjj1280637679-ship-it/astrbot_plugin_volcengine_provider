@@ -1,30 +1,37 @@
 {
-  "schema_version": 18,
+  "schema_version": 19,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
     "stable_release": "0.1.25",
     "stable_status": "repository_main_and_runtime_published_0_1_25_media_transport_guards",
-    "active_release_candidate": null,
-    "safe_development_branch": "main",
+    "active_release_candidate": {
+      "version": "0.1.26",
+      "branch": "fix/0.1.26-update-changelog",
+      "pull_request": null,
+      "status": "validating",
+      "releaseable": false,
+      "purpose": "Ship CHANGELOG.md inside the runtime package so AstrBot's post-update changelog popup renders. AstrBot's plugin service reads CHANGELOG.md from the installed plugin directory; the runtime allow-list previously excluded it, leaving the update dialog empty. The shipped file stays identical to the development changelog."
+    },
+    "safe_development_branch": "fix/0.1.26-update-changelog",
     "safe_install_branch": "runtime",
     "marketplace": {
       "listed_version": "0.1.22",
-      "status": "last_observed_listing_0_1_22_runtime_0_1_25_published_listing_refresh_unobserved"
+      "status": "last_observed_listing_0_1_22_runtime_0_1_25_published_candidate_0_1_26_not_yet_published"
     },
-    "windows_marketplace_install": "0.1.25_unverified"
+    "windows_marketplace_install": "0.1.26_unverified"
   },
   "active_experiment": null,
   "development": {
-    "version": "0.1.25",
-    "branch": "main",
-    "track": "stable",
-    "status": "stable_0_1_25_published_runtime_and_contract_verified",
-    "installable": true
+    "version": "0.1.26",
+    "branch": "fix/0.1.26-update-changelog",
+    "track": "release_candidate",
+    "status": "update_changelog_candidate_under_validation",
+    "installable": false
   },
   "published_baseline": {
     "version": "0.1.25",
-    "main_commit": "5ea2d3d91a4c51ddce606f6832fa25b457b8e5c4",
+    "main_commit": "8e87a7eae1356c2b257264d878c40d0805143464",
     "runtime_branch": "runtime",
     "runtime_commit": "2cce38ffc389930854e5d7752cac67a441741318",
     "runtime_tree": null,
@@ -34,31 +41,29 @@
     "status": "repository_runtime_and_contract_verified"
   },
   "current_goal": {
-    "id": "observe-0.1.25-external-publication",
-    "goal": "Complete the external-publication observations that CI cannot provide: confirm the AstrBot marketplace listing refresh and a real repository-name reinstall (and, where applicable, the Windows/Launcher install) of the published 0.1.25 runtime, and record the observations before preparing the next release.",
+    "id": "publish-0.1.26-update-changelog",
+    "goal": "Make the AstrBot post-update changelog popup render by shipping CHANGELOG.md in the runtime package. The runtime allow-list, the default-branch export hygiene, the publisher allow-list, and the release specification must all admit the same file, and the runtime tree change must ride a strictly newer version (0.1.26) through the normal gate and publisher flow.",
     "active_decision_ids": [],
     "non_goals": [
-      "Do not claim marketplace or Windows installation verification from CI success alone.",
-      "Do not start a new release candidate before the external 0.1.25 observations are recorded.",
-      "Do not change the published runtime tree without a strictly newer three-part version and a new ready candidate."
+      "Do not ship README.md, docs/ or any other development-only material with it.",
+      "Do not split the shipped changelog from the development changelog; they must remain one file.",
+      "Do not change any plugin runtime behavior, UI bridge, or request semantics.",
+      "Do not claim 0.1.26 runtime publication or a real user installation until the publisher and external reinstall are directly observed."
     ]
   },
   "active_validation_frontier": {
-    "release": "0.1.25",
-    "name": "media_transport_guards",
-    "current_stage": "published_runtime_verified_pending_external_observations",
+    "release": "0.1.26",
+    "name": "update_changelog_distribution",
+    "current_stage": "candidate_validating_pending_branch_and_pr_gates",
     "next_actions": [
-      "Observe the AstrBot marketplace listing and the real repository-name reinstall/Windows install of the 0.1.25 runtime, then record both in the HOT state.",
-      "Triage the remaining draft PR #3 (runtime publication hardening) or close it when superseded.",
-      "Prepare the next release candidate only after the external observations are recorded."
+      "Open the pull request from fix/0.1.26-update-changelog to main and require the Runtime Distribution Gate (including default-archive equivalence and the knowledge-state guard) to pass.",
+      "Mark the candidate ready in the HOT state once the gates are green, then merge and let the guarded runtime publisher promote the exact accepted 0.1.26 artifact.",
+      "After runtime publication, verify by repository-name reinstall that the post-update changelog popup renders."
     ],
     "observed": [
-      "PR #17 gates were green: Runtime Distribution Gate run 31914271175, Model-card Video Contract run 31914271290 on a real AstrBot 4.27.3 Dashboard, Model-card Lifecycle Contract run 31914271184, and the 0.1.19 evidence run 31914271182.",
-      "Main-branch Runtime Distribution Gate run 31914581993 passed after the merge, including the knowledge-state guard, the fourteen packaged unit/contract scripts, the real ffmpeg compressed-video contract, and AstrBot 4.26.1 / 4.27.2 packaged loads.",
-      "The guarded publisher run 31914641554 completed: ready-candidate check, 4-cell pre-publish native-install matrix, runtime promotion, 4-cell post-publish native-install matrix, and candidate cleanup.",
-      "The published runtime branch is 2cce38ffc389930854e5d7752cac67a441741318 (metadata 0.1.25) and main is 5ea2d3d91a4c51ddce606f6832fa25b457b8e5c4.",
-      "Seven fully-merged stale branch refs were removed during repository housekeeping; main, runtime, the archive/model-card-video-known-good-0.1.22 anchor, and all history-bearing branches remain.",
-      "The knowledge-state machinery now tolerates the steady no-candidate state: the publisher's ready-candidate requirement accepts an explicit --allow-no-candidate no-op so a post-publication state commit no longer produces a red publisher run, while the strictly-newer-version guard still rejects any changed runtime tree without a new candidate."
+      "AstrBot's PluginService.get_plugin_changelog reads CHANGELOG.md (or changelog.md/CHANGELOG/changelog) from the installed plugin directory; the current runtime allow-list excludes it, so the update dialog has no content.",
+      "Locally, the updated allow-list builder packages CHANGELOG.md and the default-branch archive equivalence check passes with the export-ignore rule removed.",
+      "The knowledge-state guard passes with development=0.1.26 and the validating candidate."
     ]
   },
   "closed_experiments": [
@@ -81,7 +86,7 @@
       ],
       "final_failed_run": 31719539311,
       "archive": "docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md",
-      "resume_condition": "Satisfied by the 0.1.22 recovery, the 0.1.23 robust delivery layer, the 0.1.24 object-scoped UI, and the 0.1.25 transport guards."
+      "resume_condition": "Satisfied by the 0.1.22 recovery, the 0.1.23 robust delivery layer, the 0.1.24 object-scoped UI, the 0.1.25 transport guards, and the 0.1.26 update-changelog distribution."
     }
   ],
   "stable_boundaries": [
@@ -92,6 +97,7 @@
     "Future AstrBot-native Video support is host-owned and must not be deleted by plugin cleanup.",
     "Request transport settings are not permanent model-capability facts.",
     "Local video materialization must reject empty and oversized input before base64-encoding and bound any ffmpeg work with a timeout plus kill-on-cancel; remote http(s) URLs remain pass-through because their size is unknown locally.",
+    "CHANGELOG.md ships with the runtime package because AstrBot renders the post-update changelog popup from it; it stays byte-identical to the development changelog and must not carry secrets.",
     "The 0.1.19+ rich per-model request fields, audio path, video quality modes, Agent Plan routing, migrations, and request override semantics are compatibility baseline behavior unless a separate validated change explicitly replaces them.",
     "Development documentation, tests, evidence, and experiments stay outside the allow-list runtime package.",
     "A passing gate proves only the object and layer named by that gate; real source-type differential, persistence, runtime behavior, and unload/release evidence remain distinct checks."
@@ -103,5 +109,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. The repository is in the post-publication steady state for stable 0.1.25: there is no active release candidate, the publisher treats a no-candidate main push as a verified no-op only when the runtime tree is unchanged, and any changed runtime tree still requires a strictly newer version plus a new ready candidate."
+  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. 0.1.26 is a distribution-only candidate: it changes the runtime package contents (adds CHANGELOG.md for AstrBot's update-log popup) without touching plugin behavior. A changed runtime tree requires the strictly newer version plus a new ready candidate before the publisher promotes it."
 }

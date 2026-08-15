@@ -41,13 +41,14 @@ providers.py
 registry.py
 logo.png
 LICENSE
+CHANGELOG.md
 adapters/*.py
 capabilities/*.py
 compatibility/*.py
 metadata/*.py
 ```
 
-Only files required by Python imports, AstrBot plugin discovery/configuration, runtime UI identity, or licensing belong here.
+Only files required by Python imports, AstrBot plugin discovery/configuration, runtime UI identity, licensing, or the post-update changelog display belong here. `CHANGELOG.md` is a runtime necessity because AstrBot's plugin service reads it from the installed plugin directory to render the update-log popup; it must remain the same file as the development changelog.
 
 The manifest version is derived from the packaged `metadata.yaml`. Active
 build, candidate, and native-install workflows must compare against that
@@ -72,7 +73,6 @@ model_cards/**
 assets/** test/experiment media
 AGENTS.md
 ARCHITECTURE.md
-CHANGELOG.md
 README.md
 .gitignore
 ```
