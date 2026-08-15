@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>让 AstrBot 的同一个主模型真正听懂 QQ 语音、看懂视频，同时把普通 API 与 Agent Plan 的计费通道彻底分开。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.24_candidate-d69e2e)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.25_candidate-d69e2e)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,14 +10,14 @@
 
 | 对象 | 当前结论 |
 |---|---|
-| 你可以安装的稳定版 | **0.1.23**；`runtime` 已由受控发布器晋升到 0.1.23（`b8d1563`），主仓 `main` 与 `runtime` 版本一致 |
-| 活跃发布候选 | **0.1.24**；把 0.1.23 的有标记共享 schema Video 兜底**整体退役**，改为严格对象级隔离：共享 schema 行默认隐藏、编译产物三边界私有 clone 补丁、以及注入式运行时组件桥。真实同源差分、跨供应商矩阵、模型卡 Video 合同、Runtime Distribution Gate、0.1.19 回归与真实 DeepSeek 差分全部通过，待合并 main 并由受控发布器晋升 `runtime` |
-| 0.1.24 主要变化 | 火山 Ark / Agent Plan 模型卡仍有原生 `视频 / Video`；OpenAI、xAI、Gemini、DeepSeek 等 foreign 卡在共享 schema、served 资产、活动对话框、保存边界与落盘配置五个层面都不出现插件 Video 或 `volcengine_*` 行。0.1.23 的"foreign 卡可能短暂看到 Video"降级副作用被移除 |
-| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.24 未经发布器和真实重装前，不把商场/Windows/Launcher 视为已验证 |
+| 你可以安装的稳定版 | **0.1.24**；`runtime` 已由受控发布器晋升到 0.1.24（`c32214e`），主仓 `main` 与 `runtime` 版本一致 |
+| 活跃发布候选 | **0.1.25**；只加固媒体传输路径、不改任何 UI/路由语义：视频压缩有 300 秒墙钟超时、所有本地视频物化路径在 Base64 膨胀前强制火山方舟 200 MB 输入上限、超时或取消时必杀 ffmpeg（视频压缩与音频 WAV 归一化两条路径），并补 `-nostdin` |
+| 0.1.25 主要变化 | 修复鲁棒性缺口：视频压缩不再可能无限挂起；超大/空视频在进内存前被拒绝；请求被取消不再遗留僵尸 ffmpeg 进程。新增 `tests/test_video_transport_guards.py` 固化这些合同并进入 Runtime Distribution Gate |
+| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.25 未经发布器和真实重装前，不把商场/Windows/Launcher 视为已验证 |
 
 机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。任何涉及 Video、`modalities`、Provider Source 或模型卡 UI 的修改，都必须同时遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
 
-> **0.1.24 的关键边界：Video / 视频仍属于单个模型卡的原生“模型能力”选择区，不属于 Provider Source 页面；而且只属于火山方舟普通 API / Agent Plan 这两类 Source 的模型卡。**
+> **0.1.25 的关键边界：Video / 视频仍属于单个模型卡的原生“模型能力”选择区，不属于 Provider Source 页面；而且只属于火山方舟普通 API / Agent Plan 这两类 Source 的模型卡。**
 >
 > 首选路径是编译产物桥：只有当同一个 served bundle 同时暴露三个已知结构边界（模型卡私有 metadata clone、新建卡数据对象构造器、宿主复选框标签渲染器）时，才在已知 `selectedProviderSource.type` 的**单模型卡私有 clone**上补 Video、显示插件行并注入新建卡默认值。新增的运行时组件桥是第二路径：它在具体 AstrBotConfig 模型卡组件出现后，只依据 `provider_source_id → Source type` 判定所有权，仅改写火山卡的普通响应式数据。两个桥都不存在时，插件宁可让火山卡暂时没有 Video，也不会碰任何 foreign 卡。
 
@@ -54,7 +54,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-当前可安装稳定 `runtime` 为 0.1.23；**0.1.24 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会再更新为 0.1.24 stable。
+当前可安装稳定 `runtime` 为 0.1.24；**0.1.25 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会再更新为 0.1.25 stable。
 
 稳定运行包的明确安装来源始终是 `runtime`：
 
@@ -159,16 +159,13 @@ archive/model-card-video-known-good-0.1.22
 
 ## 真实验证边界
 
-0.1.24 候选不是只靠源码推理确认：
+0.1.25 候选不是只靠源码推理确认：
 
-- **真实同源差分**：AstrBot `4.27.3` 中，AstrBot 原生 OpenAI Source 与插件 Ark Source 使用同一个 `https://ark.cn-beijing.volces.com/api/v3`、同一个真实非空 Key 和同一个真实模型 `deepseek-r1-250120`；OpenAI 模型卡 DOM 只有 Text/Image/Audio/Tool use，插件 Ark 则额外有 Video；Ark 勾选保存重开后仍为 true，OpenAI 落盘没有插件 Video 状态。
-- **真实跨供应商效果矩阵**：OpenAI / xAI / Gemini 等 foreign 卡在创建与编辑对话框中都不出现插件 Video 与 `volcengine_*` 行。
-- **真实 DeepSeek 差分**：真实 DeepSeek 源经预检直连发现模型，未保存与保存重开的 DeepSeek 模型卡都只有四个原生模态、无 Video、无插件行；落盘配置保持 `$DEEPSEEKAPI` 环境引用且不含真实密钥；经 AstrBot 供应商测试端点的真实远程请求通过。
-- **0.1.19 Compatibility Baseline**：真实 AstrBot `4.27.2` Dashboard 回归仍通过，保护视频质量、思考与采样等丰富模型字段不被本次 UI 修复删除。
-- **Model-card Video Contract**：真实 AstrBot `4.27.3` Dashboard 通过对象级合同、运行开关、卸载恢复和五条件浏览器矩阵。
-- **Runtime Distribution Gate**：AstrBot `4.26.1` / `4.27.2` 最小运行包加载与现有 Provider/媒体/Dashboard 合同全部通过。
+- **传输守卫合同**：新增 `tests/test_video_transport_guards.py` 进入 Runtime Distribution Gate，覆盖 Base64 data URL 上限、超大/空本地视频在 Base64 膨胀前被拒绝、压缩转码超时杀进程、视频/音频两条转码路径取消杀进程；全部十四个打包单元/合同脚本在真实 AstrBot 运行时通过。
+- **真实 ffmpeg 压缩正/反向合同**：Gate 内使用系统 ffmpeg 现场生成测试视频、走 `Compressed` 转码、再由 ffmpeg 完整解码生成结果，验证守卫没有破坏压缩输出。
+- **0.1.24 基线（稳定版）**：真实同源差分证明 AstrBot 原生 OpenAI Source 与插件 Ark Source 同端点同模型时，OpenAI 模型卡只有 Text/Image/Audio/Tool use，插件 Ark 额外有 Video；foreign 卡（含真实 DeepSeek 差分）在五个层面零插件痕迹。
 
-这些证据证明的是候选仓库与对应 AstrBot 版本下的功能边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.24 发布后仍需要真实仓库名重装观察。
+这些证据证明的是候选仓库与对应 AstrBot 版本下的功能边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.25 发布后仍需要真实仓库名重装观察。
 
 ## 历史方案说明
 
@@ -229,8 +226,8 @@ providers.py
   └─ 调用 audio / video adapter 与逐模型请求覆盖
 
 adapters/
-  ├─ audio.py                  Ark 最终 WAV + input_audio
-  ├─ video.py                  本轮可信视频 + video_url / off
+  ├─ audio.py                  Ark 最终 WAV + input_audio（25 MB 上限、120 s 超时、取消杀进程）
+  ├─ video.py                  本轮可信视频 + video_url / off（200 MB 上限、300 s 超时、取消杀进程）
   └─ logging.py                音视频敏感请求日志脱敏
 
 capabilities/

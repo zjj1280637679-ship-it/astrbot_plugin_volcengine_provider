@@ -1,77 +1,72 @@
 {
-  "schema_version": 16,
+  "schema_version": 17,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
-    "stable_release": "0.1.23",
-    "stable_status": "repository_main_and_runtime_published_0_1_23_robust_video_fallback_baseline",
+    "stable_release": "0.1.24",
+    "stable_status": "repository_main_and_runtime_published_0_1_24_object_scoped_model_card_video_ui",
     "active_release_candidate": {
-      "version": "0.1.24",
-      "branch": "fix/0.1.24-object-scope-ui",
-      "pull_request": null,
+      "version": "0.1.25",
+      "branch": "fix/0.1.25-transport-guards",
+      "pull_request": 17,
       "status": "ready",
       "releaseable": true,
-      "purpose": "Retire the 0.1.23 marked shared-schema Video fallback that could briefly show a Video checkbox on foreign model cards, and replace it with strict object-scoped delivery: plugin rows hidden by default in the shared schema, a three-boundary compiled-asset patch, and a runtime component bridge that adapts only the concrete model-card objects of the two plugin-owned Source types."
+      "purpose": "Close the media transport robustness gaps: bound the video transcode wall-clock time, enforce Ark's documented video input ceiling on every local materialization path before base64-encoding, and always terminate a running ffmpeg when a chat request times out or is cancelled (video compressed path and audio WAV normalization)."
     },
-    "safe_development_branch": "fix/0.1.24-object-scope-ui",
+    "safe_development_branch": "fix/0.1.25-transport-guards",
     "safe_install_branch": "runtime",
     "marketplace": {
       "listed_version": "0.1.22",
-      "status": "last_observed_listing_0_1_22_runtime_0_1_23_published_candidate_0_1_24_not_yet_published"
+      "status": "last_observed_listing_0_1_22_runtime_0_1_24_published_candidate_0_1_25_not_yet_published"
     },
-    "windows_marketplace_install": "0.1.24_unverified"
+    "windows_marketplace_install": "0.1.25_unverified"
   },
   "active_experiment": null,
   "development": {
-    "version": "0.1.24",
-    "branch": "fix/0.1.24-object-scope-ui",
+    "version": "0.1.25",
+    "branch": "fix/0.1.25-transport-guards",
     "track": "release_candidate",
-    "status": "object_scoped_model_card_video_candidate_all_branch_gates_green",
+    "status": "transport_guards_candidate_all_pr_gates_green",
     "installable": false
   },
   "published_baseline": {
-    "version": "0.1.23",
-    "main_commit": "699a52f36d140d2acecb79801c0071ce50ae8c4e",
+    "version": "0.1.24",
+    "main_commit": "8dfb158db1c31872e78e436d0e993d94392462ca",
     "runtime_branch": "runtime",
-    "runtime_commit": "b8d15630f0b97d2c4374d5f232fce4a9833e2925",
+    "runtime_commit": "c32214ee2af106b324b06595b978f3910ffddac0",
     "runtime_tree": null,
     "dashboard_evidence_run": null,
-    "runtime_gate_run": null,
-    "publisher_run": null,
+    "runtime_gate_run": 31913416300,
+    "publisher_run": 31913489827,
     "status": "repository_runtime_and_contract_verified"
   },
   "current_goal": {
-    "id": "publish-0.1.24-object-scoped-model-card-video-ui",
-    "goal": "Keep the native per-model-card Video capability on the two plugin-owned Source types while making foreign model cards untouched at every layer: shared schema, served Dashboard assets, live dialog components, save boundary, and persisted config. Prefer the compiled-asset private-clone bridge when all three structural boundaries match; the injected runtime component bridge adapts concrete owned dialog objects when the bundle differs. The 0.1.23 shared-schema fallback is retired.",
+    "id": "publish-0.1.25-media-transport-guards",
+    "goal": "Harden the media transport path without changing any UI, model-card, provider routing or request-override semantics: video transcoding gets a wall-clock timeout and the subprocess is killed on timeout/cancellation; local video materialization enforces Ark's documented video input ceiling before base64-encoding (original and compressed paths, plus cheap data-URL ceiling checks); the audio WAV normalization path also kills its ffmpeg on cancellation.",
     "active_decision_ids": [],
     "non_goals": [
-      "Do not restore the 0.1.23 marked shared-schema Video fallback or any global modalities injection.",
-      "Do not restore the retired Provider Source master switch or Source model selector.",
-      "Do not replace the native model-card modalities Video selection with a custom request field or hidden Boolean.",
-      "Do not delete or simplify the 0.1.19+ per-model request fields, audio path, compressed/original video quality, Agent Plan channel, migration logic, or request overrides while fixing UI delivery.",
-      "Do not let a foreign Provider card display, persist, or act on a plugin Video option or any volcengine_* field.",
-      "Do not remove a future AstrBot-native Video modality merely because the plugin adds the same option value to owned cards.",
-      "Do not claim 0.1.24 runtime publication or a real user installation until the publisher and external reinstall are directly observed."
+      "Do not change the 0.1.24 object-scoped Video UI contract or any Dashboard bridge behavior.",
+      "Do not change Ark payload shapes, provider routing, key pools, retries, or the 0.1.19 request-override semantics.",
+      "Do not change the audio 25 MB protocol ceiling or the 120 s audio transcode timeout.",
+      "Do not download or probe remote http(s) video URLs locally; their size remains unknown and the 0.1.18 pass-through shape is preserved.",
+      "Do not add an ffprobe duration gate or a second compression pipeline.",
+      "Do not claim 0.1.25 runtime publication or a real user installation until the publisher and external reinstall are directly observed."
     ]
   },
   "active_validation_frontier": {
-    "release": "0.1.24",
-    "name": "object_scoped_model_card_video_ui",
-    "current_stage": "candidate_ready_all_branch_gates_green_pending_main_merge_and_runtime_publish",
+    "release": "0.1.25",
+    "name": "media_transport_guards",
+    "current_stage": "candidate_ready_all_pr_gates_green_pending_main_merge_and_runtime_publish",
     "next_actions": [
-      "Open the pull request from fix/0.1.24-object-scope-ui to main and require the main-targeted Runtime Distribution Gate (including the knowledge-state guard) to pass.",
-      "Merge the PR, then allow the guarded runtime publisher to promote the exact accepted 0.1.24 runtime artifact.",
-      "After runtime publication, verify by repository-name reinstall on the user's real AstrBot instance and record whether the Video checkbox appears only on Ark / Agent Plan model cards."
+      "Merge PR #17 into main, then require the main-branch Runtime Distribution Gate to pass.",
+      "Allow the guarded runtime publisher to promote the exact accepted 0.1.25 runtime artifact.",
+      "After runtime publication, verify by repository-name reinstall on the user's real AstrBot instance."
     ],
     "observed": [
-      "The 0.1.24 candidate removes the marked shared-schema Video fallback added by 0.1.23. Plugin model-field rows are contributed hidden in the shared schema and revealed only on owned private dialog clones or owned live component instances.",
-      "The compiled-asset bridge now requires three structural boundaries in the same served bundle (private model-card metadata clone, concrete new-card data builder, host checkbox-label renderer) and adds the native video option, default field values, and a localized fifth label only for owned Source types.",
-      "The new dashboard runtime bridge injects a small script through the host index resolver. It waits for one concrete AstrBotConfig model-card component, resolves ownership only through iterable.provider_source_id -> Provider Source type from the authenticated /api/v1/providers/schema response, and mutates only that card's ordinary reactive data/private metadata. Foreign dialogs are never selected or mutated.",
-      "Real Source-Type Video Differential run 31852045657 and Real Cross-Provider Plugin Effect Matrix run 31852045661 passed on AstrBot 4.27.3 with real credentials: owned Ark cards gain Video while foreign OpenAI/xAI/Gemini cards keep their four native modalities and no plugin rows.",
-      "Model-card Video Contract run 31852048201, Model-card Lifecycle Contract run 31852048202, Runtime Distribution Gate run 31852048206, and 0.1.19 Compatibility Baseline Dashboard Regression run 31852048207 all passed on the candidate branch.",
-      "Real DeepSeek Foreign Differential run 31912600006 passed on the candidate tree: a real DeepSeek Source fetched through the workflow preflight, its unsaved and saved/reopened model cards showed only the four native modalities with no Video and no volcengine_* rows, the persisted config kept the $DEEPSEEKAPI environment reference with no secret value, and AstrBot's provider test endpoint completed a real remote request (867 ms).",
-      "The 0.1.23 stable baseline is preserved: main is 699a52f36d140d2acecb79801c0071ce50ae8c4e and the published runtime branch is b8d15630f0b97d2c4374d5f232fce4a9833e2925, both carrying metadata 0.1.23.",
-      "All thirteen packaged unit/contract test scripts pass on the candidate tree against a real AstrBot runtime."
+      "All fourteen packaged unit/contract test scripts pass locally on the candidate tree against a real AstrBot runtime, including the new tests/test_video_transport_guards.py covering the data-URL ceiling, oversized/empty local input rejection before base64, the transcode timeout kill, and cancellation kill contracts for both the video compressed path and the audio normalization path.",
+      "PR #17 gates are green: Runtime Distribution Gate run 31914271175 (artifact boundary plus AstrBot 4.26.1 / 4.27.2 packaged loads, real ffmpeg compressed-video contract and the new guard script), Model-card Video Contract run 31914271290 on a real AstrBot 4.27.3 Dashboard, Model-card Lifecycle Contract run 31914271184, and the 0.1.19 evidence run 31914271182.",
+      "The 0.1.24 stable baseline is preserved: main is 8dfb158db1c31872e78e436d0e993d94392462ca and the published runtime branch is c32214ee2af106b324b06595b978f3910ffddac0, both carrying metadata 0.1.24 with the object-scoped model-card Video UI.",
+      "The candidate does not modify providers.py, registry.py, capabilities/*, main.py, or the audio 25 MB / 120 s constants; only adapters/video.py, adapters/audio.py and the gate test list changed."
     ]
   },
   "closed_experiments": [
@@ -94,7 +89,7 @@
       ],
       "final_failed_run": 31719539311,
       "archive": "docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md",
-      "resume_condition": "Satisfied by the 0.1.22 recovery, the 0.1.23 robust delivery layer, and the 0.1.24 object-scoped UI."
+      "resume_condition": "Satisfied by the 0.1.22 recovery, the 0.1.23 robust delivery layer, the 0.1.24 object-scoped UI, and the 0.1.25 transport guards."
     }
   ],
   "stable_boundaries": [
@@ -104,6 +99,7 @@
     "No shared-schema Video injection exists anymore. The native video option may only be added on concrete model-card objects of the two plugin-owned Source types, via the private dialog clone (asset bridge) or the live component instance (runtime bridge). Foreign dialogs must never receive it, and the create/update save boundary strips any forged value.",
     "Future AstrBot-native Video support is host-owned and must not be deleted by plugin cleanup.",
     "Request transport settings are not permanent model-capability facts.",
+    "Local video materialization must reject empty and oversized input before base64-encoding and bound any ffmpeg work with a timeout plus kill-on-cancel; remote http(s) URLs remain pass-through because their size is unknown locally.",
     "The 0.1.19+ rich per-model request fields, audio path, video quality modes, Agent Plan routing, migrations, and request override semantics are compatibility baseline behavior unless a separate validated change explicitly replaces them.",
     "Development documentation, tests, evidence, and experiments stay outside the allow-list runtime package.",
     "A passing gate proves only the object and layer named by that gate; real source-type differential, persistence, runtime behavior, and unload/release evidence remain distinct checks."
@@ -115,5 +111,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. Since 0.1.24 the shared-schema Video fallback is retired: never re-add a global modalities injection. Video may only be adapted on concrete owned model-card objects, and foreign cards must remain untouched at the shared schema, served asset, live component, save-boundary, and persisted-config layers."
+  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. Since 0.1.24 the shared-schema Video fallback is retired: never re-add a global modalities injection. Since 0.1.25 every local video materialization enforces the Ark video input ceiling and every ffmpeg transcode is bounded and killed on timeout/cancellation; do not remove those guards to make a fixture pass."
 }

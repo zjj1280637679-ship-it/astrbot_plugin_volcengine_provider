@@ -156,6 +156,7 @@ jobs:
             tests/test_dashboard_save_boundary.py \
             tests/test_live_feedback_presence.py \
             tests/test_model_card_ui_scope.py \
+            tests/test_video_transport_guards.py \
             tests/e2e/provider_card_matrix/service_matrix.py
           do
             uv run --directory AstrBot python "../${test_file}"

@@ -97,6 +97,15 @@ async def _ffmpeg_to_ark_chat_wav(source_path: Path, output_path: Path) -> None:
         process.kill()
         await process.communicate()
         raise ValueError("音频附件转换超时，未向火山方舟发送请求。") from exc
+    except asyncio.CancelledError:
+        # A cancelled chat request must not strand the transcoding subprocess.
+        # kill() is synchronous so it completes even in an already-cancelled
+        # task; the subprocess transport reaps the child afterwards.
+        try:
+            process.kill()
+        except (OSError, ProcessLookupError):
+            pass
+        raise
 
     if process.returncode != 0:
         # Do not expose a signed source URL, local path or raw ffmpeg command in

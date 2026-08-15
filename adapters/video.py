@@ -4,6 +4,11 @@ AstrBot currently exposes video attachments to Chat providers as trusted TextPar
 envelopes rather than a native video_urls field. This module recognizes only
 those current-request envelopes, resolves their media references through
 AstrBot MediaResolver, and emits Ark ``video_url`` blocks.
+
+Every local materialization path enforces Ark's documented video input ceiling
+*before* base64-encoding, and the compressed path additionally bounds
+transcoding wall-clock time. A timed-out or cancelled ffmpeg is always
+terminated so a chat request can neither hang forever nor strand subprocesses.
 """
 
 from __future__ import annotations
@@ -35,6 +40,16 @@ VIDEO_ATTACHMENT_PATTERN = re.compile(
 
 VIDEO_MODE_ORIGINAL = "original"
 VIDEO_MODE_COMPRESSED = "compressed"
+
+# Ark Chat video understanding ceiling documented for doubao vision models.
+# Local media is rejected before reading/base64-encoding when it exceeds this
+# bound, and the compressed output is checked again before serialization.
+ARK_CHAT_VIDEO_MAX_MB = 200
+ARK_CHAT_VIDEO_MAX_BYTES = ARK_CHAT_VIDEO_MAX_MB * 1024 * 1024
+# Audio transcoding is bounded at 120 s. Video re-encoding legitimately takes
+# longer, but must still be bounded so a stuck ffmpeg cannot hang the whole
+# chat request indefinitely.
+ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS = 300
 
 
 def _video_attachments_from_current_request(
@@ -82,8 +97,51 @@ def _replace_last_text_block(
     return False
 
 
+def _data_url_payload_within_limit(data_url: str, *, max_bytes: int) -> bool:
+    """Cheap ceiling check for a base64 data URL without decoding it.
+
+    ``ceil(max_bytes / 3) * 4`` is the length of the longest base64 payload that
+    can still decode to at most ``max_bytes`` bytes.
+    """
+
+    payload = data_url.rsplit(",", 1)[-1]
+    if not payload:
+        return True
+    return len(payload) <= ((max_bytes + 2) // 3) * 4
+
+
+async def _terminate_transcode_process(
+    process: asyncio.subprocess.Process | None,
+    *,
+    reap: bool = False,
+) -> None:
+    """Kill a transcoding subprocess left running by timeout or cancellation.
+
+    ``kill()`` runs synchronously first so even a re-cancelled task has already
+    terminated the child. ``reap`` additionally waits for process exit; it is
+    only used on the timeout path where the task is still healthy.
+    """
+
+    if process is None or process.returncode is not None:
+        return
+    try:
+        process.kill()
+    except (OSError, ProcessLookupError):
+        pass
+    if reap:
+        try:
+            await process.wait()
+        except Exception:
+            pass
+
+
 async def _compress_video_reference(media_ref: str) -> str:
-    """Resolve and compress one trusted video to a compact H.264 MP4 data URL."""
+    """Resolve and compress one trusted video to a compact H.264 MP4 data URL.
+
+    The transcoding subprocess is bounded by a wall-clock timeout and is killed
+    on timeout or cancellation. Input and output are checked against Ark's
+    documented video ceiling before any base64 expansion happens.
+    """
 
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -101,16 +159,34 @@ async def _compress_video_reference(media_ref: str) -> str:
     fd, output_name = tempfile.mkstemp(prefix="volcengine_video_", suffix=".mp4")
     os.close(fd)
     output_path = Path(output_name)
+    process: asyncio.subprocess.Process | None = None
     try:
         async with resolver.as_path() as resolved:
+            source_path = resolved.path
+            source_stat = await asyncio.to_thread(source_path.stat)
+            if source_stat.st_size <= 0:
+                raise AdapterInputTransportError(
+                    "视频附件为空文件，未向火山方舟发送请求。",
+                    media_type="video",
+                    stage="validate_media",
+                )
+            if source_stat.st_size > ARK_CHAT_VIDEO_MAX_BYTES:
+                raise AdapterInputTransportError(
+                    f"视频附件超过火山方舟 {ARK_CHAT_VIDEO_MAX_MB} MB 输入上限，"
+                    "未向火山方舟发送请求。",
+                    media_type="video",
+                    stage="validate_media",
+                )
+
             process = await asyncio.create_subprocess_exec(
                 ffmpeg,
+                "-nostdin",
                 "-hide_banner",
                 "-loglevel",
                 "error",
                 "-y",
                 "-i",
-                str(resolved.path),
+                str(source_path),
                 "-map",
                 "0:v:0",
                 "-map",
@@ -135,7 +211,23 @@ async def _compress_video_reference(media_ref: str) -> str:
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
             )
-            _, stderr = await process.communicate()
+            try:
+                _, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS,
+                )
+            except TimeoutError as exc:
+                await _terminate_transcode_process(process, reap=True)
+                raise AdapterInputTransportError(
+                    f"视频压缩超时（{ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS} 秒），"
+                    "未向火山方舟发送请求。",
+                    media_type="video",
+                    stage="compress_media",
+                ) from exc
+            except asyncio.CancelledError:
+                await _terminate_transcode_process(process, reap=False)
+                raise
+
         if process.returncode != 0:
             detail = stderr.decode("utf-8", errors="replace").strip()
             if len(detail) > 400:
@@ -146,16 +238,35 @@ async def _compress_video_reference(media_ref: str) -> str:
                 media_type="video",
                 stage="compress_media",
             )
-        if not output_path.exists() or output_path.stat().st_size <= 0:
+        if not output_path.exists():
+            raise AdapterInputTransportError(
+                "视频压缩结果缺失，未向火山方舟发送请求。",
+                media_type="video",
+                stage="compress_media",
+            )
+        output_stat = await asyncio.to_thread(output_path.stat)
+        if output_stat.st_size <= 0:
             raise AdapterInputTransportError(
                 "视频压缩结果为空，未向火山方舟发送请求。",
                 media_type="video",
                 stage="compress_media",
             )
+        if output_stat.st_size > ARK_CHAT_VIDEO_MAX_BYTES:
+            raise AdapterInputTransportError(
+                f"视频压缩结果仍超过火山方舟 {ARK_CHAT_VIDEO_MAX_MB} MB 输入上限，"
+                "未向火山方舟发送请求。",
+                media_type="video",
+                stage="validate_media",
+            )
         data = await asyncio.to_thread(output_path.read_bytes)
         encoded = base64.b64encode(data).decode("utf-8")
         return f"data:video/mp4;base64,{encoded}"
     except AdapterInputTransportError:
+        raise
+    except asyncio.CancelledError:
+        # Defensive: a cancellation landing outside the communicate window must
+        # not strand an already-started ffmpeg.
+        await _terminate_transcode_process(process, reap=False)
         raise
     except Exception as exc:
         raise AdapterInputTransportError(
@@ -176,6 +287,9 @@ async def resolve_video_reference(media_ref: str, *, mode: str = VIDEO_MODE_ORIG
     ``original`` preserves the exact 0.1.18 behavior: remote/data URLs pass
     through, while local references are materialized to a data URL. ``compressed``
     explicitly downloads/materializes then transcodes to a compact MP4 first.
+    Both local materialization paths now enforce Ark's documented video input
+    ceiling before base64-encoding, so oversized media fails closed instead of
+    spiking memory or being rejected upstream.
 
     Failures here are transport evidence only: no valid Ark request has reached
     the model, so model capability remains unknown.
@@ -184,18 +298,53 @@ async def resolve_video_reference(media_ref: str, *, mode: str = VIDEO_MODE_ORIG
     normalized = media_ref.strip()
     if mode == VIDEO_MODE_COMPRESSED:
         return await _compress_video_reference(normalized)
-    if normalized.startswith(("http://", "https://", "data:video/")):
+    if normalized.startswith(("http://", "https://")):
+        # Ark fetches remote URLs server-side; their size is unknown locally and
+        # the 0.1.18 pass-through shape is preserved.
+        return normalized
+    if normalized.startswith("data:video/"):
+        if not _data_url_payload_within_limit(
+            normalized,
+            max_bytes=ARK_CHAT_VIDEO_MAX_BYTES,
+        ):
+            raise AdapterInputTransportError(
+                f"视频附件超过火山方舟 {ARK_CHAT_VIDEO_MAX_MB} MB 输入上限，"
+                "未向火山方舟发送请求。",
+                media_type="video",
+                stage="validate_media",
+            )
         return normalized
 
     try:
-        media = await MediaResolver(
+        async with MediaResolver(
             normalized,
             media_type="video",
             default_suffix=".mp4",
-        ).to_base64_data(
-            strict=True,
-            default_mime_type="video/mp4",
-        )
+        ).as_path() as resolved:
+            source_stat = await asyncio.to_thread(resolved.path.stat)
+            if source_stat.st_size <= 0:
+                raise AdapterInputTransportError(
+                    "视频附件为空文件，未向火山方舟发送请求。",
+                    media_type="video",
+                    stage="validate_media",
+                )
+            if source_stat.st_size > ARK_CHAT_VIDEO_MAX_BYTES:
+                raise AdapterInputTransportError(
+                    f"视频附件超过火山方舟 {ARK_CHAT_VIDEO_MAX_MB} MB 输入上限，"
+                    "未向火山方舟发送请求。",
+                    media_type="video",
+                    stage="validate_media",
+                )
+            mime_type = str(getattr(resolved, "mime_type", "") or "video/mp4").strip()
+            if not mime_type.startswith("video/"):
+                raise AdapterInputTransportError(
+                    "视频附件没有可识别的视频 MIME 类型，未向火山方舟发送请求。",
+                    media_type="video",
+                    stage="validate_media",
+                )
+            data = await asyncio.to_thread(resolved.read_bytes)
+    except AdapterInputTransportError:
+        raise
     except Exception as exc:
         raise AdapterInputTransportError(
             "无法读取本次视频附件，未向火山方舟发送请求。",
@@ -203,13 +352,8 @@ async def resolve_video_reference(media_ref: str, *, mode: str = VIDEO_MODE_ORIG
             stage="resolve_media",
         ) from exc
 
-    if media is None or not media.mime_type.startswith("video/"):
-        raise AdapterInputTransportError(
-            "视频附件没有可识别的视频 MIME 类型，未向火山方舟发送请求。",
-            media_type="video",
-            stage="validate_media",
-        )
-    return media.to_data_url()
+    encoded = base64.b64encode(data).decode("utf-8")
+    return f"data:{mime_type};base64,{encoded}"
 
 
 async def inject_current_request_videos(
