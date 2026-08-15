@@ -8,9 +8,9 @@
     "active_release_candidate": {
       "version": "0.1.25",
       "branch": "fix/0.1.25-transport-guards",
-      "pull_request": null,
-      "status": "validating",
-      "releaseable": false,
+      "pull_request": 17,
+      "status": "ready",
+      "releaseable": true,
       "purpose": "Close the media transport robustness gaps: bound the video transcode wall-clock time, enforce Ark's documented video input ceiling on every local materialization path before base64-encoding, and always terminate a running ffmpeg when a chat request times out or is cancelled (video compressed path and audio WAV normalization)."
     },
     "safe_development_branch": "fix/0.1.25-transport-guards",
@@ -26,7 +26,7 @@
     "version": "0.1.25",
     "branch": "fix/0.1.25-transport-guards",
     "track": "release_candidate",
-    "status": "transport_guards_candidate_under_validation",
+    "status": "transport_guards_candidate_all_pr_gates_green",
     "installable": false
   },
   "published_baseline": {
@@ -56,14 +56,15 @@
   "active_validation_frontier": {
     "release": "0.1.25",
     "name": "media_transport_guards",
-    "current_stage": "candidate_validating_pending_branch_and_pr_gates",
+    "current_stage": "candidate_ready_all_pr_gates_green_pending_main_merge_and_runtime_publish",
     "next_actions": [
-      "Open the pull request from fix/0.1.25-transport-guards to main and require the Runtime Distribution Gate (including the knowledge-state guard and the new transport-guard test script) to pass.",
-      "Mark the candidate ready in the HOT state once all branch/PR gates are green, then merge and let the guarded runtime publisher promote the exact accepted 0.1.25 artifact.",
+      "Merge PR #17 into main, then require the main-branch Runtime Distribution Gate to pass.",
+      "Allow the guarded runtime publisher to promote the exact accepted 0.1.25 runtime artifact.",
       "After runtime publication, verify by repository-name reinstall on the user's real AstrBot instance."
     ],
     "observed": [
       "All fourteen packaged unit/contract test scripts pass locally on the candidate tree against a real AstrBot runtime, including the new tests/test_video_transport_guards.py covering the data-URL ceiling, oversized/empty local input rejection before base64, the transcode timeout kill, and cancellation kill contracts for both the video compressed path and the audio normalization path.",
+      "PR #17 gates are green: Runtime Distribution Gate run 31914271175 (artifact boundary plus AstrBot 4.26.1 / 4.27.2 packaged loads, real ffmpeg compressed-video contract and the new guard script), Model-card Video Contract run 31914271290 on a real AstrBot 4.27.3 Dashboard, Model-card Lifecycle Contract run 31914271184, and the 0.1.19 evidence run 31914271182.",
       "The 0.1.24 stable baseline is preserved: main is 8dfb158db1c31872e78e436d0e993d94392462ca and the published runtime branch is c32214ee2af106b324b06595b978f3910ffddac0, both carrying metadata 0.1.24 with the object-scoped model-card Video UI.",
       "The candidate does not modify providers.py, registry.py, capabilities/*, main.py, or the audio 25 MB / 120 s constants; only adapters/video.py, adapters/audio.py and the gate test list changed."
     ]
