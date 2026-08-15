@@ -1,6 +1,6 @@
 # 更新记录
 
-## 0.1.25（发布候选）
+## 0.1.25（已发布到 runtime）
 
 - **视频压缩墙钟超时**：`Compressed` 转码由 `asyncio.wait_for` 绑定 300 秒上限；超时终止 ffmpeg 并以明确错误 fail closed，不再可能无限挂起整个聊天请求。音频归一化的 120 秒上限保持不变。
 - **火山方舟视频输入上限前置检查**：所有本地视频物化路径在 Base64 膨胀前强制 200 MB 上限（Original 与 Compressed 两条路径、输入与转码输出双向检查）；空文件同样被拒绝。Base64 data URL 用「ceil(bytes/3)×4」长度天花板做免解码检查；HTTP(S) 远端 URL 保持 0.1.18 直通形状（尺寸本地未知，由 Ark 服务端拉取）。
@@ -8,6 +8,7 @@
 - Original 模式本地物化改为 `MediaResolver.as_path()` + stat + 读字节 + MIME 校验，语义与旧 `to_base64_data` 路径一致（mime 非 `video/*` 仍拒绝），但在读取前就能拒绝超大/空输入。
 - 新增 `tests/test_video_transport_guards.py` 并进入 Runtime Distribution Gate：data URL 天花板、超大/空本地输入拒绝、压缩超时杀进程、视频/音频取消杀进程，全部以 fake subprocess 确定性执行，不依赖付费 API；十四个打包单元/合同脚本全部通过。
 - 本版本不改任何 UI、模型卡、Provider 路由、请求覆盖或音频协议常量。
+- `runtime` 已由受控发布器（run 31914641554，main gate 31914581993）晋升至 `2cce38ffc389930854e5d7752cac67a441741318`（metadata 0.1.25），主仓 `main` 合并提交为 `5ea2d3d91a4c51ddce606f6832fa25b457b8e5c4`。
 
 ## 0.1.24（已发布到 runtime）
 

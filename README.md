@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>让 AstrBot 的同一个主模型真正听懂 QQ 语音、看懂视频，同时把普通 API 与 Agent Plan 的计费通道彻底分开。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.25_candidate-d69e2e)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.25_stable-2ea44f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,10 +10,10 @@
 
 | 对象 | 当前结论 |
 |---|---|
-| 你可以安装的稳定版 | **0.1.24**；`runtime` 已由受控发布器晋升到 0.1.24（`c32214e`），主仓 `main` 与 `runtime` 版本一致 |
-| 活跃发布候选 | **0.1.25**；只加固媒体传输路径、不改任何 UI/路由语义：视频压缩有 300 秒墙钟超时、所有本地视频物化路径在 Base64 膨胀前强制火山方舟 200 MB 输入上限、超时或取消时必杀 ffmpeg（视频压缩与音频 WAV 归一化两条路径），并补 `-nostdin` |
-| 0.1.25 主要变化 | 修复鲁棒性缺口：视频压缩不再可能无限挂起；超大/空视频在进内存前被拒绝；请求被取消不再遗留僵尸 ffmpeg 进程。新增 `tests/test_video_transport_guards.py` 固化这些合同并进入 Runtime Distribution Gate |
-| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.25 未经发布器和真实重装前，不把商场/Windows/Launcher 视为已验证 |
+| 你可以安装的稳定版 | **0.1.25**；`runtime` 已由受控发布器晋升到 0.1.25（`2cce38f`），主仓 `main` 与 `runtime` 版本一致 |
+| 活跃发布候选 | **无**；仓库处于稳定发布后的外部观察期（商场列表刷新、真实仓库名重装/Windows 安装待观察并记录） |
+| 0.1.25 主要变化 | 修复鲁棒性缺口：视频压缩有 300 秒墙钟超时、所有本地视频物化路径在 Base64 膨胀前强制火山方舟 200 MB 输入上限、超时或取消时必杀 ffmpeg（视频压缩与音频 WAV 归一化两条路径），并补 `-nostdin`；新增 `tests/test_video_transport_guards.py` 固化合同并进入 Runtime Distribution Gate |
+| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.25 已由发布器与原生安装矩阵验证，但商场刷新与真实 Windows/Launcher 重装仍是尚未观察的外部状态 |
 
 机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。任何涉及 Video、`modalities`、Provider Source 或模型卡 UI 的修改，都必须同时遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
 
@@ -54,7 +54,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-当前可安装稳定 `runtime` 为 0.1.24；**0.1.25 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会再更新为 0.1.25 stable。
+当前可安装稳定 `runtime` 为 0.1.25（已由受控发布器晋升，`2cce38f`）。后续版本发布时，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会同步更新。
 
 稳定运行包的明确安装来源始终是 `runtime`：
 
@@ -159,13 +159,13 @@ archive/model-card-video-known-good-0.1.22
 
 ## 真实验证边界
 
-0.1.25 候选不是只靠源码推理确认：
+0.1.25 稳定版不是只靠源码推理确认：
 
 - **传输守卫合同**：新增 `tests/test_video_transport_guards.py` 进入 Runtime Distribution Gate，覆盖 Base64 data URL 上限、超大/空本地视频在 Base64 膨胀前被拒绝、压缩转码超时杀进程、视频/音频两条转码路径取消杀进程；全部十四个打包单元/合同脚本在真实 AstrBot 运行时通过。
 - **真实 ffmpeg 压缩正/反向合同**：Gate 内使用系统 ffmpeg 现场生成测试视频、走 `Compressed` 转码、再由 ffmpeg 完整解码生成结果，验证守卫没有破坏压缩输出。
 - **0.1.24 基线（稳定版）**：真实同源差分证明 AstrBot 原生 OpenAI Source 与插件 Ark Source 同端点同模型时，OpenAI 模型卡只有 Text/Image/Audio/Tool use，插件 Ark 额外有 Video；foreign 卡（含真实 DeepSeek 差分）在五个层面零插件痕迹。
 
-这些证据证明的是候选仓库与对应 AstrBot 版本下的功能边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.25 发布后仍需要真实仓库名重装观察。
+这些证据证明的是仓库与对应 AstrBot 版本下的功能边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.25 已发布，仍需真实仓库名重装观察并在 `docs/PROJECT_STATE.json` 记录。
 
 ## 历史方案说明
 
