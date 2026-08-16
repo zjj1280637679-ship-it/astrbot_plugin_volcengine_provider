@@ -1,7 +1,12 @@
 # 更新记录
 
-## 0.1.26（发布候选）
+## 0.1.27
 
+- **发布状态归位**：0.1.26 已通过主分支 Runtime Distribution Gate 并由受控发布器晋升到 `runtime`；本版本把上一条更新记录从“发布候选”改为“已发布到 runtime”，避免 AstrBot 更新弹窗把已安装版本误标为候选。
+- 0.1.27 只修正版本元数据、更新记录与发布账本，不改插件行为、UI、模型卡、Provider 路由、音视频协议或请求语义。
+- `CHANGELOG.md` 已属于运行包；即使只修改更新文字，也必须随严格更新的版本号走完整门禁与发布器，不能在 0.1.26 运行包上原地改写。
+
+## 0.1.26（已发布到 runtime）
 - **更新日志随包分发**：AstrBot 插件更新后的"更新日志"弹窗读取插件安装目录里的 `CHANGELOG.md`（`PluginService.get_plugin_changelog`），此前运行时白名单没有打包该文件导致弹窗为空。本版本把 `CHANGELOG.md` 加入运行时包，与开发仓库保持同一个文件、同一份内容。
 - 同步四处分发定义：`tools/release/build_runtime_package.py` 的 `ROOT_FILES`、`.gitattributes` 的 export-ignore（默认分支归档与运行时包逐字节等价校验）、发布器 `allowed_root`、`docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md` 的运行时清单。
 - 本版本不改任何插件行为、UI、模型卡、路由或请求语义；运行时树变化按仓库规则随严格更新的版本号 0.1.26 走正常门禁与发布器。
