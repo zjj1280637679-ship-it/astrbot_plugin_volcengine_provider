@@ -8,9 +8,9 @@
     "active_release_candidate": {
       "version": "0.1.27",
       "branch": "chore/0.1.27-release-state",
-      "pull_request": null,
-      "status": "validating",
-      "releaseable": false,
+      "pull_request": 20,
+      "status": "ready",
+      "releaseable": true,
       "purpose": "Correct the shipped release-note status after 0.1.26 publication. CHANGELOG.md is now part of the runtime package, so changing its 0.1.26 heading from candidate to published must ride a strictly newer 0.1.27 artifact through the normal gate and publisher."
     },
     "safe_development_branch": "chore/0.1.27-release-state",
@@ -26,7 +26,7 @@
     "version": "0.1.27",
     "branch": "chore/0.1.27-release-state",
     "track": "release_candidate",
-    "status": "release_state_normalization_candidate_under_validation",
+    "status": "release_state_normalization_candidate_all_pr_gates_green",
     "installable": false
   },
   "published_baseline": {
@@ -54,17 +54,18 @@
   "active_validation_frontier": {
     "release": "0.1.27",
     "name": "release_state_normalization",
-    "current_stage": "candidate_validating_pending_branch_and_pr_gates",
+    "current_stage": "candidate_ready_all_pr_gates_green_pending_main_merge_and_runtime_publish",
     "next_actions": [
-      "Open the pull request from chore/0.1.27-release-state to main and require the Runtime Distribution Gate, default-archive equivalence and knowledge-state guard to pass.",
-      "After all PR gates are green, mark the candidate ready in the HOT state, merge it, and let the guarded publisher promote the exact accepted 0.1.27 runtime artifact.",
+      "Merge PR #20 into main, then require the main-branch Runtime Distribution Gate to pass for the exact merge commit.",
+      "Allow the guarded runtime publisher to promote the exact accepted 0.1.27 artifact and verify runtime metadata plus the shipped changelog.",
       "After runtime publication, record 0.1.27 as the stable no-candidate baseline in README and PROJECT_STATE without changing the runtime tree again."
     ],
     "observed": [
       "0.1.26 merged to main at 5e0410e405cf755b4573d6a15d1aa968e3523d16; main Runtime Distribution Gate run 31916300295 succeeded.",
       "The guarded publisher run 31916358927 promoted runtime commit e5fb7e3d8283cbe01b442ab2bf79b957ac4cc32a with metadata 0.1.26 and CHANGELOG.md included.",
       "The published 0.1.26 CHANGELOG heading still says release candidate; because CHANGELOG.md ships in runtime, correcting it changes the runtime tree and requires version 0.1.27.",
-      "PR #3 was closed as superseded; its useful release-hardening ideas are already represented in the current mainline."
+      "PR #3 was closed as superseded; its useful release-hardening ideas are already represented in the current mainline.",
+      "PR #20 Runtime Distribution Gate run 31924034199 passed: artifact boundary, default-archive equivalence, knowledge-state guard, packaged contracts and clean plugin loads on AstrBot 4.26.1 and 4.27.2 all succeeded."
     ]
   },
   "closed_experiments": [
