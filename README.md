@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>让 AstrBot 的同一个主模型真正听懂 QQ 语音、看懂视频，同时把普通 API 与 Agent Plan 的计费通道彻底分开。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.26_candidate-d69e2e)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.27_candidate-d69e2e)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,14 +10,14 @@
 
 | 对象 | 当前结论 |
 |---|---|
-| 你可以安装的稳定版 | **0.1.25**；`runtime` 已由受控发布器晋升到 0.1.25（`2cce38f`），主仓 `main` 与 `runtime` 版本一致 |
-| 活跃发布候选 | **0.1.26**；纯分发修复：把 `CHANGELOG.md` 加入运行时包，AstrBot 更新后弹出的"更新日志"从此有内容（此前白名单漏打包导致弹窗为空），文件与开发文档保持同一个 |
-| 0.1.26 主要变化 | 运行时包新增 `CHANGELOG.md`（更新日志随包分发）；默认分支归档 hygiene、构建白名单、发布器白名单与发行规范同步；不改任何插件行为 |
-| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.26 未经发布器和真实重装前，不把商场/Windows/Launcher 视为已验证 |
+| 你可以安装的稳定版 | **0.1.26**；`runtime` 已由受控发布器晋升到 0.1.26（`e5fb7e3`），对应主仓合并提交为 `5e0410e` |
+| 活跃发布候选 | **0.1.27**；纯发布状态修正：把 0.1.26 的更新记录从“发布候选”归位为“已发布到 runtime”，并以新版本发布这份已经属于运行包的文字变化 |
+| 0.1.27 主要变化 | 只修改版本元数据、更新记录与发布账本；不改插件行为、UI、模型卡、Provider 路由、音视频协议或请求语义 |
+| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；仓库 `runtime` 的 0.1.26 已发布，但 0.1.27 尚未经过发布器和真实重装，不把商场/Windows/Launcher 视为已验证 |
 
 机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。任何涉及 Video、`modalities`、Provider Source 或模型卡 UI 的修改，都必须同时遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
 
-> **0.1.25 的关键边界：Video / 视频仍属于单个模型卡的原生“模型能力”选择区，不属于 Provider Source 页面；而且只属于火山方舟普通 API / Agent Plan 这两类 Source 的模型卡。**
+> **0.1.26 的功能边界继承 0.1.25：Video / 视频仍属于单个模型卡的原生“模型能力”选择区，不属于 Provider Source 页面；而且只属于火山方舟普通 API / Agent Plan 这两类 Source 的模型卡。**
 >
 > 首选路径是编译产物桥：只有当同一个 served bundle 同时暴露三个已知结构边界（模型卡私有 metadata clone、新建卡数据对象构造器、宿主复选框标签渲染器）时，才在已知 `selectedProviderSource.type` 的**单模型卡私有 clone**上补 Video、显示插件行并注入新建卡默认值。新增的运行时组件桥是第二路径：它在具体 AstrBotConfig 模型卡组件出现后，只依据 `provider_source_id → Source type` 判定所有权，仅改写火山卡的普通响应式数据。两个桥都不存在时，插件宁可让火山卡暂时没有 Video，也不会碰任何 foreign 卡。
 
@@ -54,7 +54,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-当前可安装稳定 `runtime` 为 0.1.25（已由受控发布器晋升，`2cce38f`）；**0.1.26 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会同步更新。
+当前可安装稳定 `runtime` 为 0.1.26（已由受控发布器晋升，`e5fb7e3`）；**0.1.27 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会同步更新。
 
 稳定运行包的明确安装来源始终是 `runtime`：
 
@@ -159,13 +159,14 @@ archive/model-card-video-known-good-0.1.22
 
 ## 真实验证边界
 
-0.1.25 稳定版不是只靠源码推理确认：
+0.1.26 稳定版的功能边界不是只靠源码推理确认：
 
 - **传输守卫合同**：新增 `tests/test_video_transport_guards.py` 进入 Runtime Distribution Gate，覆盖 Base64 data URL 上限、超大/空本地视频在 Base64 膨胀前被拒绝、压缩转码超时杀进程、视频/音频两条转码路径取消杀进程；全部十四个打包单元/合同脚本在真实 AstrBot 运行时通过。
 - **真实 ffmpeg 压缩正/反向合同**：Gate 内使用系统 ffmpeg 现场生成测试视频、走 `Compressed` 转码、再由 ffmpeg 完整解码生成结果，验证守卫没有破坏压缩输出。
-- **0.1.24 基线（稳定版）**：真实同源差分证明 AstrBot 原生 OpenAI Source 与插件 Ark Source 同端点同模型时，OpenAI 模型卡只有 Text/Image/Audio/Tool use，插件 Ark 额外有 Video；foreign 卡（含真实 DeepSeek 差分）在五个层面零插件痕迹。
+- **0.1.24 基线（稳定功能边界）**：真实同源差分证明 AstrBot 原生 OpenAI Source 与插件 Ark Source 同端点同模型时，OpenAI 模型卡只有 Text/Image/Audio/Tool use，插件 Ark 额外有 Video；foreign 卡（含真实 DeepSeek 差分）在五个层面零插件痕迹。
+- **0.1.26 分发证据**：主分支 Runtime Distribution Gate `31916300295` 成功，受控发布器 `31916358927` 把同一份 0.1.26 运行包晋升为 `runtime@e5fb7e3`，并把 `CHANGELOG.md` 纳入安装包。
 
-这些证据证明的是仓库与对应 AstrBot 版本下的功能边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.25 已发布，仍需真实仓库名重装观察并在 `docs/PROJECT_STATE.json` 记录。
+这些证据证明的是仓库与对应 AstrBot 版本下的功能和分发边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.26 已发布到仓库 `runtime`，外部真实重装结果仍需单独观察并在 `docs/PROJECT_STATE.json` 记录。
 
 ## 历史方案说明
 
