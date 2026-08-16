@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>让 AstrBot 的同一个主模型真正听懂 QQ 语音、看懂视频，同时把普通 API 与 Agent Plan 的计费通道彻底分开。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.25_stable-2ea44f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.26_candidate-d69e2e)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -11,9 +11,9 @@
 | 对象 | 当前结论 |
 |---|---|
 | 你可以安装的稳定版 | **0.1.25**；`runtime` 已由受控发布器晋升到 0.1.25（`2cce38f`），主仓 `main` 与 `runtime` 版本一致 |
-| 活跃发布候选 | **无**；仓库处于稳定发布后的外部观察期（商场列表刷新、真实仓库名重装/Windows 安装待观察并记录） |
-| 0.1.25 主要变化 | 修复鲁棒性缺口：视频压缩有 300 秒墙钟超时、所有本地视频物化路径在 Base64 膨胀前强制火山方舟 200 MB 输入上限、超时或取消时必杀 ffmpeg（视频压缩与音频 WAV 归一化两条路径），并补 `-nostdin`；新增 `tests/test_video_transport_guards.py` 固化合同并进入 Runtime Distribution Gate |
-| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.25 已由发布器与原生安装矩阵验证，但商场刷新与真实 Windows/Launcher 重装仍是尚未观察的外部状态 |
+| 活跃发布候选 | **0.1.26**；纯分发修复：把 `CHANGELOG.md` 加入运行时包，AstrBot 更新后弹出的"更新日志"从此有内容（此前白名单漏打包导致弹窗为空），文件与开发文档保持同一个 |
+| 0.1.26 主要变化 | 运行时包新增 `CHANGELOG.md`（更新日志随包分发）；默认分支归档 hygiene、构建白名单、发布器白名单与发行规范同步；不改任何插件行为 |
+| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.26 未经发布器和真实重装前，不把商场/Windows/Launcher 视为已验证 |
 
 机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。任何涉及 Video、`modalities`、Provider Source 或模型卡 UI 的修改，都必须同时遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
 
@@ -54,7 +54,7 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 
 ## 安装
 
-当前可安装稳定 `runtime` 为 0.1.25（已由受控发布器晋升，`2cce38f`）。后续版本发布时，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会同步更新。
+当前可安装稳定 `runtime` 为 0.1.25（已由受控发布器晋升，`2cce38f`）；**0.1.26 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会同步更新。
 
 稳定运行包的明确安装来源始终是 `runtime`：
 

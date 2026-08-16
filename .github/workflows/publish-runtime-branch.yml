@@ -127,7 +127,7 @@ jobs:
               raise SystemExit('duplicate path in runtime manifest')
           allowed_root = {
               'metadata.yaml', '__init__.py', 'main.py', 'providers.py',
-              'registry.py', 'logo.png', 'LICENSE',
+              'registry.py', 'logo.png', 'LICENSE', 'CHANGELOG.md',
           }
           allowed_packages = {
               'adapters', 'capabilities', 'compatibility', 'metadata',

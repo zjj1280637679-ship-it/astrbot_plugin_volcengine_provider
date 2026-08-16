@@ -14,7 +14,6 @@ assets/ export-ignore
 tools/ export-ignore
 AGENTS.md export-ignore
 ARCHITECTURE.md export-ignore
-CHANGELOG.md export-ignore
 README.md export-ignore
 .gitignore export-ignore
 .gitattributes export-ignore
