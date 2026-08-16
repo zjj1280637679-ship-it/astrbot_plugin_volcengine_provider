@@ -8,9 +8,9 @@
     "active_release_candidate": {
       "version": "0.1.26",
       "branch": "fix/0.1.26-update-changelog",
-      "pull_request": null,
-      "status": "validating",
-      "releaseable": false,
+      "pull_request": 19,
+      "status": "ready",
+      "releaseable": true,
       "purpose": "Ship CHANGELOG.md inside the runtime package so AstrBot's post-update changelog popup renders. AstrBot's plugin service reads CHANGELOG.md from the installed plugin directory; the runtime allow-list previously excluded it, leaving the update dialog empty. The shipped file stays identical to the development changelog."
     },
     "safe_development_branch": "fix/0.1.26-update-changelog",
@@ -26,7 +26,7 @@
     "version": "0.1.26",
     "branch": "fix/0.1.26-update-changelog",
     "track": "release_candidate",
-    "status": "update_changelog_candidate_under_validation",
+    "status": "update_changelog_candidate_all_pr_gates_green",
     "installable": false
   },
   "published_baseline": {
@@ -54,16 +54,17 @@
   "active_validation_frontier": {
     "release": "0.1.26",
     "name": "update_changelog_distribution",
-    "current_stage": "candidate_validating_pending_branch_and_pr_gates",
+    "current_stage": "candidate_ready_all_pr_gates_green_pending_main_merge_and_runtime_publish",
     "next_actions": [
-      "Open the pull request from fix/0.1.26-update-changelog to main and require the Runtime Distribution Gate (including default-archive equivalence and the knowledge-state guard) to pass.",
-      "Mark the candidate ready in the HOT state once the gates are green, then merge and let the guarded runtime publisher promote the exact accepted 0.1.26 artifact.",
+      "Merge PR #19 into main, then require the main-branch Runtime Distribution Gate to pass.",
+      "Allow the guarded runtime publisher to promote the exact accepted 0.1.26 runtime artifact (this promotion changes the runtime tree by adding CHANGELOG.md).",
       "After runtime publication, verify by repository-name reinstall that the post-update changelog popup renders."
     ],
     "observed": [
-      "AstrBot's PluginService.get_plugin_changelog reads CHANGELOG.md (or changelog.md/CHANGELOG/changelog) from the installed plugin directory; the current runtime allow-list excludes it, so the update dialog has no content.",
-      "Locally, the updated allow-list builder packages CHANGELOG.md and the default-branch archive equivalence check passes with the export-ignore rule removed.",
-      "The knowledge-state guard passes with development=0.1.26 and the validating candidate."
+      "AstrBot's PluginService.get_plugin_changelog reads CHANGELOG.md (or changelog.md/CHANGELOG/changelog) from the installed plugin directory; the 0.1.25 runtime allow-list excludes it, so the update dialog has no content.",
+      "PR #19 gates are green: Runtime Distribution Gate run 31916099001 (artifact boundary including default-archive equivalence with 27 files, AstrBot 4.26.1 / 4.27.2 packaged loads and the fourteen contract scripts).",
+      "Locally, the updated allow-list builder packages CHANGELOG.md (zip 628 KB within budget) and the default-branch archive equivalence check passes.",
+      "The knowledge-state guard passes with development=0.1.26 and the ready candidate."
     ]
   },
   "closed_experiments": [
