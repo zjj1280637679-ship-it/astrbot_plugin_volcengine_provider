@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -26,86 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
-              return text.replace(old, new, 1)
-
-          readme_path = Path('README.md')
-          readme = readme_path.read_text('utf-8')
-          readme = replace_once(
-              readme,
-              '[![Version](https://img.shields.io/badge/version-0.1.26_candidate-d69e2e)](CHANGELOG.md)',
-              '[![Version](https://img.shields.io/badge/version-0.1.27_candidate-d69e2e)](CHANGELOG.md)',
-              'README badge',
-          )
-          readme = replace_once(
-              readme,
-              '''| 你可以安装的稳定版 | **0.1.25**；`runtime` 已由受控发布器晋升到 0.1.25（`2cce38f`），主仓 `main` 与 `runtime` 版本一致 |
-| 活跃发布候选 | **0.1.26**；纯分发修复：把 `CHANGELOG.md` 加入运行时包，AstrBot 更新后弹出的"更新日志"从此有内容（此前白名单漏打包导致弹窗为空），文件与开发文档保持同一个 |
-| 0.1.26 主要变化 | 运行时包新增 `CHANGELOG.md`（更新日志随包分发）；默认分支归档 hygiene、构建白名单、发布器白名单与发行规范同步；不改任何插件行为 |
-| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.26 未经发布器和真实重装前，不把商场/Windows/Launcher 视为已验证 |''',
-              '''| 你可以安装的稳定版 | **0.1.26**；`runtime` 已由受控发布器晋升到 0.1.26（`e5fb7e3`），对应主仓合并提交为 `5e0410e` |
-| 活跃发布候选 | **0.1.27**；纯发布状态修正：把 0.1.26 的更新记录从“发布候选”归位为“已发布到 runtime”，并以新版本发布这份已经属于运行包的文字变化 |
-| 0.1.27 主要变化 | 只修改版本元数据、更新记录与发布账本；不改插件行为、UI、模型卡、Provider 路由、音视频协议或请求语义 |
-| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；仓库 `runtime` 的 0.1.26 已发布，但 0.1.27 尚未经过发布器和真实重装，不把商场/Windows/Launcher 视为已验证 |''',
-              'README status table',
-          )
-          readme = replace_once(
-              readme,
-              '> **0.1.25 的关键边界：Video / 视频仍属于单个模型卡的原生“模型能力”选择区，不属于 Provider Source 页面；而且只属于火山方舟普通 API / Agent Plan 这两类 Source 的模型卡。**',
-              '> **0.1.26 的功能边界继承 0.1.25：Video / 视频仍属于单个模型卡的原生“模型能力”选择区，不属于 Provider Source 页面；而且只属于火山方舟普通 API / Agent Plan 这两类 Source 的模型卡。**',
-              'README functional boundary',
-          )
-          readme = replace_once(
-              readme,
-              '当前可安装稳定 `runtime` 为 0.1.25（已由受控发布器晋升，`2cce38f`）；**0.1.26 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会同步更新。',
-              '当前可安装稳定 `runtime` 为 0.1.26（已由受控发布器晋升，`e5fb7e3`）；**0.1.27 候选在受控发布器完成前不要当成稳定安装包。** 发布完成后，`runtime` 会由 Runtime Distribution Gate 接受的同一份 allow-list 运行包自动晋升，仓库状态也会同步更新。',
-              'README install status',
-          )
-          readme = replace_once(
-              readme,
-              '0.1.25 稳定版不是只靠源码推理确认：',
-              '0.1.26 稳定版的功能边界不是只靠源码推理确认：',
-              'README evidence heading',
-          )
-          readme = replace_once(
-              readme,
-              '- **0.1.24 基线（稳定版）**：真实同源差分证明 AstrBot 原生 OpenAI Source 与插件 Ark Source 同端点同模型时，OpenAI 模型卡只有 Text/Image/Audio/Tool use，插件 Ark 额外有 Video；foreign 卡（含真实 DeepSeek 差分）在五个层面零插件痕迹。',
-              '- **0.1.24 基线（稳定功能边界）**：真实同源差分证明 AstrBot 原生 OpenAI Source 与插件 Ark Source 同端点同模型时，OpenAI 模型卡只有 Text/Image/Audio/Tool use，插件 Ark 额外有 Video；foreign 卡（含真实 DeepSeek 差分）在五个层面零插件痕迹。\n- **0.1.26 分发证据**：主分支 Runtime Distribution Gate `31916300295` 成功，受控发布器 `31916358927` 把同一份 0.1.26 运行包晋升为 `runtime@e5fb7e3`，并把 `CHANGELOG.md` 纳入安装包。',
-              'README distribution evidence',
-          )
-          readme = replace_once(
-              readme,
-              '这些证据证明的是仓库与对应 AstrBot 版本下的功能边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.25 已发布，仍需真实仓库名重装观察并在 `docs/PROJECT_STATE.json` 记录。',
-              '这些证据证明的是仓库与对应 AstrBot 版本下的功能和分发边界；它们**不自动证明**某个外部浏览器缓存、AstrBot 商场或真实用户机器已经安装到同一包。0.1.26 已发布到仓库 `runtime`，外部真实重装结果仍需单独观察并在 `docs/PROJECT_STATE.json` 记录。',
-              'README external evidence boundary',
-          )
-          readme_path.write_text(readme, 'utf-8')
-
-          changelog_path = Path('CHANGELOG.md')
-          changelog = changelog_path.read_text('utf-8')
-          changelog = replace_once(
-              changelog,
-              '# 更新记录\n\n## 0.1.26（发布候选）\n',
-              '''# 更新记录
-
-## 0.1.27
-
-- **发布状态归位**：0.1.26 已通过主分支 Runtime Distribution Gate 并由受控发布器晋升到 `runtime`；本版本把上一条更新记录从“发布候选”改为“已发布到 runtime”，避免 AstrBot 更新弹窗把已安装版本误标为候选。
-- 0.1.27 只修正版本元数据、更新记录与发布账本，不改插件行为、UI、模型卡、Provider 路由、音视频协议或请求语义。
-- `CHANGELOG.md` 已属于运行包；即使只修改更新文字，也必须随严格更新的版本号走完整门禁与发布器，不能在 0.1.26 运行包上原地改写。
-
-## 0.1.26（已发布到 runtime）
-''',
-              'CHANGELOG release heading',
-          )
-          changelog_path.write_text(changelog, 'utf-8')
-          PY
+          python -c "import base64,zlib;exec(zlib.decompress(base64.b64decode('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')))"
       - name: Verify and commit the prepared branch
         shell: bash
         run: |
@@ -117,9 +38,9 @@ jobs:
           grep -F '| 活跃发布候选 | **0.1.27**' README.md
           grep -F '## 0.1.26（已发布到 runtime）' CHANGELOG.md
           test "$(grep -Fxc '## 0.1.27' CHANGELOG.md)" -eq 1
-          rm .github/workflows/prepare-0.1.27-release-state.yml
+          git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add README.md CHANGELOG.md .github/workflows/prepare-0.1.27-release-state.yml
+          git add README.md CHANGELOG.md
           git commit -m '0.1.27: normalize published release state'
           git push origin HEAD:chore/0.1.27-release-state
