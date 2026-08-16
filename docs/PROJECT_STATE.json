@@ -3,69 +3,63 @@
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
-    "stable_release": "0.1.26",
-    "stable_status": "repository_main_and_runtime_published_0_1_26_update_changelog_distribution",
-    "active_release_candidate": {
-      "version": "0.1.27",
-      "branch": "chore/0.1.27-release-state",
-      "pull_request": 20,
-      "status": "ready",
-      "releaseable": true,
-      "purpose": "Correct the shipped release-note status after 0.1.26 publication. CHANGELOG.md is now part of the runtime package, so changing its 0.1.26 heading from candidate to published must ride a strictly newer 0.1.27 artifact through the normal gate and publisher."
-    },
-    "safe_development_branch": "chore/0.1.27-release-state",
+    "stable_release": "0.1.27",
+    "stable_status": "repository_main_and_runtime_published_0_1_27_release_state_normalization",
+    "active_release_candidate": null,
+    "safe_development_branch": "main",
     "safe_install_branch": "runtime",
     "marketplace": {
       "listed_version": "0.1.22",
-      "status": "last_observed_listing_0_1_22_runtime_0_1_26_published_candidate_0_1_27_not_yet_published"
+      "status": "last_observed_listing_0_1_22_runtime_0_1_27_published_listing_refresh_unobserved"
     },
     "windows_marketplace_install": "0.1.27_unverified"
   },
   "active_experiment": null,
   "development": {
     "version": "0.1.27",
-    "branch": "chore/0.1.27-release-state",
-    "track": "release_candidate",
-    "status": "release_state_normalization_candidate_all_pr_gates_green",
-    "installable": false
+    "branch": "main",
+    "track": "stable",
+    "status": "stable_0_1_27_published_runtime_and_contract_verified",
+    "installable": true
   },
   "published_baseline": {
-    "version": "0.1.26",
-    "main_commit": "5e0410e405cf755b4573d6a15d1aa968e3523d16",
+    "version": "0.1.27",
+    "main_commit": "76f7af1abe44f49a4a3f92c027cd5eb322f269a1",
     "runtime_branch": "runtime",
-    "runtime_commit": "e5fb7e3d8283cbe01b442ab2bf79b957ac4cc32a",
-    "runtime_tree": "1a4c3667a345cc1bdc37da3195a57a2ab2a53354",
+    "runtime_commit": "877865675ea2b05ad30891774f85f455e48247fa",
+    "runtime_tree": "976ad7df9d9f1bb88eeb13e8063fd6fcdf3480d8",
     "dashboard_evidence_run": 31914581988,
-    "runtime_gate_run": 31916300295,
-    "publisher_run": 31916358927,
+    "runtime_gate_run": 31924210745,
+    "publisher_run": 31924267237,
     "status": "repository_runtime_and_contract_verified"
   },
   "current_goal": {
-    "id": "publish-0.1.27-release-state-normalization",
-    "goal": "Make the installed update log accurately describe 0.1.26 as published without mutating the already-published 0.1.26 artifact in place. Publish the changelog correction and version metadata as 0.1.27, then return the repository to a no-candidate stable state.",
+    "id": "observe-0.1.27-external-publication",
+    "goal": "Complete the external-publication observations that repository CI cannot provide: confirm the AstrBot marketplace listing refresh and a real repository-name reinstall (and, where applicable, the Windows/Launcher install) of the published 0.1.27 runtime, then record those observations before preparing the next release.",
     "active_decision_ids": [],
     "non_goals": [
-      "Do not change Provider behavior, Dashboard bridges, model-card semantics, routing, audio/video adapters or request payloads.",
-      "Do not rewrite the published 0.1.26 runtime ref in place or reuse version 0.1.26 for a changed runtime tree.",
-      "Do not claim AstrBot marketplace, Windows or Launcher installation until directly observed.",
-      "Do not use the retired PR #3 or any old repository as a merge source."
+      "Do not claim marketplace or Windows installation verification from CI success alone.",
+      "Do not create another release candidate merely to change development-only status prose.",
+      "Do not change the published runtime tree without a strictly newer three-part version and a new ready candidate.",
+      "Do not restore the superseded PR #3 or use an old repository as a merge source."
     ]
   },
   "active_validation_frontier": {
     "release": "0.1.27",
     "name": "release_state_normalization",
-    "current_stage": "candidate_ready_all_pr_gates_green_pending_main_merge_and_runtime_publish",
+    "current_stage": "published_runtime_verified_pending_external_observations",
     "next_actions": [
-      "Merge PR #20 into main, then require the main-branch Runtime Distribution Gate to pass for the exact merge commit.",
-      "Allow the guarded runtime publisher to promote the exact accepted 0.1.27 artifact and verify runtime metadata plus the shipped changelog.",
-      "After runtime publication, record 0.1.27 as the stable no-candidate baseline in README and PROJECT_STATE without changing the runtime tree again."
+      "Observe the AstrBot marketplace listing and perform a real repository-name reinstall/Windows or Launcher installation of the 0.1.27 runtime, then record the results in the HOT state.",
+      "Configure repository branch protection or rulesets for main and runtime through GitHub settings while preserving the guarded publisher's ability to update runtime.",
+      "Prepare the next release candidate only when a new runtime-tree change is intentional and versioned."
     ],
     "observed": [
-      "0.1.26 merged to main at 5e0410e405cf755b4573d6a15d1aa968e3523d16; main Runtime Distribution Gate run 31916300295 succeeded.",
-      "The guarded publisher run 31916358927 promoted runtime commit e5fb7e3d8283cbe01b442ab2bf79b957ac4cc32a with metadata 0.1.26 and CHANGELOG.md included.",
-      "The published 0.1.26 CHANGELOG heading still says release candidate; because CHANGELOG.md ships in runtime, correcting it changes the runtime tree and requires version 0.1.27.",
+      "PR #20 was merged to main as 76f7af1abe44f49a4a3f92c027cd5eb322f269a1 after two green candidate gates: Runtime Distribution Gate runs 31924034199 and 31924131043.",
+      "Main-branch Runtime Distribution Gate run 31924210745 passed after the merge, including the knowledge-state guard, minimal artifact boundary, default-archive equivalence, packaged contracts and clean AstrBot 4.26.1 / 4.27.2 plugin loads.",
+      "Guarded publisher run 31924267237 completed successfully: ready-candidate validation, four-cell pre-publish native-install matrix, exact leased runtime promotion, four-cell post-publish native-install matrix and source-identity checks.",
+      "The published runtime branch is 877865675ea2b05ad30891774f85f455e48247fa with tree 976ad7df9d9f1bb88eeb13e8063fd6fcdf3480d8, metadata 0.1.27 and the corrected shipped CHANGELOG; corresponding main is 76f7af1abe44f49a4a3f92c027cd5eb322f269a1.",
       "PR #3 was closed as superseded; its useful release-hardening ideas are already represented in the current mainline.",
-      "PR #20 Runtime Distribution Gate run 31924034199 passed: artifact boundary, default-archive equivalence, knowledge-state guard, packaged contracts and clean plugin loads on AstrBot 4.26.1 and 4.27.2 all succeeded."
+      "No Provider, Dashboard bridge, model-card, routing, audio/video adapter or request-semantic code changed in 0.1.27."
     ]
   },
   "closed_experiments": [
@@ -103,7 +97,7 @@
     "A changed shipped CHANGELOG.md is a changed runtime tree and therefore requires a strictly newer metadata version plus a validated release candidate; published runtime artifacts are never edited in place.",
     "The 0.1.19+ rich per-model request fields, audio path, video quality modes, Agent Plan routing, migrations, and request override semantics are compatibility baseline behavior unless a separate validated change explicitly replaces them.",
     "Development documentation, tests, evidence, and experiments stay outside the allow-list runtime package.",
-    "A passing gate proves only the object and layer named by that gate; real source-type differential, persistence, runtime behavior, and unload/release evidence remain distinct checks."
+    "A passing gate proves only the object and layer named by that gate; real source-type differential, persistence, runtime behavior and unload/release evidence remain distinct checks."
   ],
   "knowledge_lifecycle": {
     "policy": "docs/KNOWLEDGE_LIFECYCLE.md",
@@ -112,5 +106,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. 0.1.27 is a release-state-only candidate: it corrects the shipped changelog and version metadata without changing plugin behavior. Because CHANGELOG.md is in the runtime package, the correction must be published as a strictly newer artifact rather than patched onto 0.1.26."
+  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. The repository is in the post-publication steady state for stable 0.1.27: there is no active release candidate, the publisher treats a no-candidate main push as a verified no-op only when the runtime tree is unchanged, and any changed runtime tree still requires a strictly newer version plus a new ready candidate."
 }
