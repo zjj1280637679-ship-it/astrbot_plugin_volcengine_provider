@@ -17,6 +17,7 @@ from astrbot.core.provider.sources.request_retry import retry_provider_request
 from openai._exceptions import NotFoundError
 
 from .adapters.audio import build_ark_input_audio
+from .adapters.image import enforce_image_limits
 from .adapters.video import inject_current_request_videos
 from .compatibility.astrbot import _ApiKeyLogView
 from .capabilities import (
@@ -156,6 +157,7 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
             *args,
             **kwargs,
         )
+        await enforce_image_limits(payloads)
         mode = video_input_mode(self.provider_config)
         await inject_current_request_videos(
             context_query,

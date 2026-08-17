@@ -1,0 +1,50 @@
+{
+  "audio_max_mb": {
+    "description": "音频输入上限（MB）",
+    "type": "int",
+    "default": 25,
+    "hint": "归一化后的 WAV 超过该值会拒绝发送。范围 1-100。"
+  },
+  "audio_transcode_timeout_seconds": {
+    "description": "音频转码超时（秒）",
+    "type": "int",
+    "default": 120,
+    "hint": "ffmpeg 音频转换的墙钟上限。范围 10-3600。"
+  },
+  "video_max_mb": {
+    "description": "视频输入上限（MB）",
+    "type": "int",
+    "default": 200,
+    "hint": "超过该值的视频附件会被拒绝。范围 1-4096。"
+  },
+  "video_transcode_timeout_seconds": {
+    "description": "视频转码超时（秒）",
+    "type": "int",
+    "default": 300,
+    "hint": "压缩模式下 ffmpeg 视频转码的墙钟上限。范围 30-7200。"
+  },
+  "image_compress_enabled": {
+    "description": "超限图片自动压缩",
+    "type": "bool",
+    "default": true,
+    "hint": "超过 image_max_mb 的本地/data 图片会在发送前自动降分辨率压缩到上限以内（火山方舟单图约 5MB 上限）。"
+  },
+  "image_max_mb": {
+    "description": "图片输入上限（MB）",
+    "type": "int",
+    "default": 5,
+    "hint": "超过该值的图片触发压缩。范围 1-100。"
+  },
+  "image_compress_max_size": {
+    "description": "压缩后最长边（像素）",
+    "type": "int",
+    "default": 1280,
+    "hint": "压缩目标长边。范围 256-8192。"
+  },
+  "image_compress_quality": {
+    "description": "压缩 JPEG 质量",
+    "type": "int",
+    "default": 85,
+    "hint": "范围 30-100；仍超限时会逐级降质重试。"
+  }
+}

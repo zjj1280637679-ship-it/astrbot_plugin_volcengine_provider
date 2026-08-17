@@ -20,6 +20,7 @@ from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 from astrbot.core.utils.media_utils import MediaResolver, describe_media_ref
 
 from .errors import AdapterInputTransportError
+from .limits import get_limits
 
 ARK_CHAT_AUDIO_MAX_BYTES = 25 * 1024 * 1024
 ARK_CHAT_AUDIO_SAMPLE_RATE = 16_000
@@ -31,9 +32,10 @@ ARK_CHAT_AUDIO_TRANSCODE_TIMEOUT_SECONDS = 120
 def _validate_ark_chat_wav(wav_data: bytes) -> None:
     """Enforce the exact audio invariant sent to Ark Chat Completions."""
 
-    if len(wav_data) > ARK_CHAT_AUDIO_MAX_BYTES:
+    max_bytes = get_limits().audio_max_bytes
+    if len(wav_data) > max_bytes:
         raise ValueError(
-            "音频归一化后超过火山方舟 Base64 音频输入的 25 MB 上限，未发送请求。"
+            f"音频归一化后超过火山方舟 Base64 音频输入的 {max_bytes // (1024 * 1024)} MB 上限，未发送请求。"
         )
     if not wav_data.startswith(b"RIFF") or wav_data[8:12] != b"WAVE":
         raise ValueError("音频归一化结果不是有效的 RIFF/WAVE 文件，未发送请求。")
@@ -91,7 +93,7 @@ async def _ffmpeg_to_ark_chat_wav(source_path: Path, output_path: Path) -> None:
     try:
         _, stderr = await asyncio.wait_for(
             process.communicate(),
-            timeout=ARK_CHAT_AUDIO_TRANSCODE_TIMEOUT_SECONDS,
+            timeout=get_limits().audio_transcode_timeout_seconds,
         )
     except TimeoutError as exc:
         process.kill()
@@ -134,7 +136,7 @@ async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
 
             wav_data: bytes | None = None
             source_stat = await asyncio.to_thread(source_path.stat)
-            if source_stat.st_size <= ARK_CHAT_AUDIO_MAX_BYTES:
+            if source_stat.st_size <= get_limits().audio_max_bytes:
                 candidate = await asyncio.to_thread(source_path.read_bytes)
                 try:
                     _validate_ark_chat_wav(candidate)

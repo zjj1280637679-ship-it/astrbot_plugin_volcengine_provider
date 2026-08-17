@@ -26,6 +26,7 @@ from astrbot.core.agent.message import ContentPart, TextPart
 from astrbot.core.utils.media_utils import MediaResolver
 
 from .errors import AdapterInputTransportError
+from .limits import get_limits
 
 # AstrBot currently represents an incoming video as a framework-generated
 # TextPart because ProviderRequest has no video_urls field. Match only the
@@ -50,6 +51,14 @@ ARK_CHAT_VIDEO_MAX_BYTES = ARK_CHAT_VIDEO_MAX_MB * 1024 * 1024
 # longer, but must still be bounded so a stuck ffmpeg cannot hang the whole
 # chat request indefinitely.
 ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS = 300
+
+
+def _video_max_bytes() -> int:
+    return get_limits().video_max_bytes
+
+
+def _video_max_mb() -> int:
+    return _video_max_bytes() // (1024 * 1024)
 
 
 def _video_attachments_from_current_request(
@@ -170,9 +179,9 @@ async def _compress_video_reference(media_ref: str) -> str:
                     media_type="video",
                     stage="validate_media",
                 )
-            if source_stat.st_size > ARK_CHAT_VIDEO_MAX_BYTES:
+            if source_stat.st_size > _video_max_bytes():
                 raise AdapterInputTransportError(
-                    f"视频附件超过火山方舟 {ARK_CHAT_VIDEO_MAX_MB} MB 输入上限，"
+                    f"视频附件超过火山方舟 {_video_max_mb()} MB 输入上限，"
                     "未向火山方舟发送请求。",
                     media_type="video",
                     stage="validate_media",
@@ -214,12 +223,12 @@ async def _compress_video_reference(media_ref: str) -> str:
             try:
                 _, stderr = await asyncio.wait_for(
                     process.communicate(),
-                    timeout=ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS,
+                    timeout=get_limits().video_transcode_timeout_seconds,
                 )
             except TimeoutError as exc:
                 await _terminate_transcode_process(process, reap=True)
                 raise AdapterInputTransportError(
-                    f"视频压缩超时（{ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS} 秒），"
+                    f"视频压缩超时（{get_limits().video_transcode_timeout_seconds} 秒），"
                     "未向火山方舟发送请求。",
                     media_type="video",
                     stage="compress_media",
@@ -251,9 +260,9 @@ async def _compress_video_reference(media_ref: str) -> str:
                 media_type="video",
                 stage="compress_media",
             )
-        if output_stat.st_size > ARK_CHAT_VIDEO_MAX_BYTES:
+        if output_stat.st_size > _video_max_bytes():
             raise AdapterInputTransportError(
-                f"视频压缩结果仍超过火山方舟 {ARK_CHAT_VIDEO_MAX_MB} MB 输入上限，"
+                f"视频压缩结果仍超过火山方舟 {_video_max_mb()} MB 输入上限，"
                 "未向火山方舟发送请求。",
                 media_type="video",
                 stage="validate_media",
@@ -305,10 +314,10 @@ async def resolve_video_reference(media_ref: str, *, mode: str = VIDEO_MODE_ORIG
     if normalized.startswith("data:video/"):
         if not _data_url_payload_within_limit(
             normalized,
-            max_bytes=ARK_CHAT_VIDEO_MAX_BYTES,
+            max_bytes=_video_max_bytes(),
         ):
             raise AdapterInputTransportError(
-                f"视频附件超过火山方舟 {ARK_CHAT_VIDEO_MAX_MB} MB 输入上限，"
+                f"视频附件超过火山方舟 {_video_max_mb()} MB 输入上限，"
                 "未向火山方舟发送请求。",
                 media_type="video",
                 stage="validate_media",
@@ -328,9 +337,9 @@ async def resolve_video_reference(media_ref: str, *, mode: str = VIDEO_MODE_ORIG
                     media_type="video",
                     stage="validate_media",
                 )
-            if source_stat.st_size > ARK_CHAT_VIDEO_MAX_BYTES:
+            if source_stat.st_size > _video_max_bytes():
                 raise AdapterInputTransportError(
-                    f"视频附件超过火山方舟 {ARK_CHAT_VIDEO_MAX_MB} MB 输入上限，"
+                    f"视频附件超过火山方舟 {_video_max_mb()} MB 输入上限，"
                     "未向火山方舟发送请求。",
                     media_type="video",
                     stage="validate_media",
