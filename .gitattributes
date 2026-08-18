@@ -1,7 +1,8 @@
 # Development repository export hygiene.
 # The authoritative AstrBot distribution is the generated `runtime` branch.
-# These rules are a defense-in-depth fallback for tools that honor git archive
-# export-ignore; they are not a substitute for the runtime allow-list builder.
+# Runtime user files such as README.md and _conf_schema.json are intentionally
+# NOT export-ignored because the default-archive/runtime equivalence gate must
+# see exactly what users receive.
 
 .github/ export-ignore
 tests/ export-ignore
@@ -14,7 +15,6 @@ assets/ export-ignore
 tools/ export-ignore
 AGENTS.md export-ignore
 ARCHITECTURE.md export-ignore
-README.md export-ignore
 .gitignore export-ignore
 .gitattributes export-ignore
 

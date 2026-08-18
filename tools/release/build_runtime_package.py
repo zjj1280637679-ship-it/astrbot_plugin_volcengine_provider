@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Build and verify the minimal AstrBot runtime distribution.
-
-This script is development tooling. It is intentionally excluded from the
-runtime branch/package it produces.
-"""
+"""Build and verify the minimal AstrBot runtime distribution."""
 
 from __future__ import annotations
 
@@ -28,11 +24,10 @@ ROOT_FILES = (
     "main.py",
     "providers.py",
     "registry.py",
+    "_conf_schema.json",
+    "README.md",
     "logo.png",
     "LICENSE",
-    # AstrBot's plugin service renders the post-update changelog popup from a
-    # CHANGELOG.md shipped inside the installed plugin directory. Keep this the
-    # same file as the development changelog.
     "CHANGELOG.md",
 )
 RUNTIME_PACKAGES = (
@@ -42,9 +37,6 @@ RUNTIME_PACKAGES = (
     "metadata",
 )
 
-# This plugin's runtime is small Python source + logo. AstrBot's public market
-# maximum is higher; this tighter project budget catches accidental repository
-# packaging before it reaches users.
 MAX_RUNTIME_BYTES = 2 * 1024 * 1024
 EXPECTED_REPO_SUFFIX = "/tree/runtime"
 RELEASE_VERSION_PATTERN = re.compile(
@@ -70,14 +62,13 @@ FORBIDDEN_FILENAMES = {
     "secrets.json",
     "credentials.json",
 }
-
-# High-confidence patterns only. Generic words such as "api_key" are legitimate
-# source identifiers and are not themselves secrets.
 SECRET_PATTERNS = {
     "aws_access_key": re.compile(rb"AKIA[0-9A-Z]{16}"),
     "openai_style_key": re.compile(rb"\bsk-[A-Za-z0-9_-]{20,}\b"),
     "bearer_literal": re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{24,}={0,2}"),
-    "private_key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    "private_key": re.compile(
+        rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
+    ),
 }
 
 
@@ -129,7 +120,8 @@ def verify_inventory() -> tuple[list[Path], str]:
     total_bytes = sum(path.stat().st_size for path in files)
     if total_bytes > MAX_RUNTIME_BYTES:
         raise RuntimeError(
-            f"runtime package unexpectedly large: {total_bytes} > {MAX_RUNTIME_BYTES} bytes"
+            f"runtime package unexpectedly large: {total_bytes} > "
+            f"{MAX_RUNTIME_BYTES} bytes"
         )
 
     metadata_text = (PACKAGE_DIR / "metadata.yaml").read_text(encoding="utf-8")
@@ -141,7 +133,15 @@ def verify_inventory() -> tuple[list[Path], str]:
             f"version, got {version!r}"
         )
     if not repo.endswith(EXPECTED_REPO_SUFFIX):
-        raise RuntimeError(f"metadata repo must point at runtime branch, got {repo!r}")
+        raise RuntimeError(
+            f"metadata repo must point at runtime branch, got {repo!r}"
+        )
+
+    required_runtime_files = {"_conf_schema.json", "README.md", "CHANGELOG.md"}
+    runtime_paths = {path.relative_to(PACKAGE_DIR).as_posix() for path in files}
+    missing = sorted(required_runtime_files - runtime_paths)
+    if missing:
+        raise RuntimeError(f"required user-facing runtime files missing: {missing}")
 
     return files, version
 
@@ -149,20 +149,23 @@ def verify_inventory() -> tuple[list[Path], str]:
 def scan_secrets(files: list[Path]) -> None:
     findings: list[str] = []
     for path in files:
-        # Binary runtime assets are allowed but private-key signatures are still
-        # checked in their bytes. Other textual key formats are intentionally
-        # high-confidence to avoid false positives on source identifiers.
         data = path.read_bytes()
         for label, pattern in SECRET_PATTERNS.items():
             if pattern.search(data):
                 findings.append(f"{path.relative_to(PACKAGE_DIR)}:{label}")
     if findings:
-        raise RuntimeError("possible secret material in runtime artifact: " + ", ".join(findings))
+        raise RuntimeError(
+            "possible secret material in runtime artifact: " + ", ".join(findings)
+        )
 
 
 def build_zip(files: list[Path]) -> None:
     ZIP_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(ZIP_PATH, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(
+        ZIP_PATH,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
         for path in files:
             relative = path.relative_to(PACKAGE_DIR)
             archive.write(path, Path(PACKAGE_NAME) / relative)

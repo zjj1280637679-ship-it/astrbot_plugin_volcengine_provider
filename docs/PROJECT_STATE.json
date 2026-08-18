@@ -1,103 +1,76 @@
 {
-  "schema_version": 19,
+  "schema_version": 20,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
-    "stable_release": "0.1.27",
-    "stable_status": "repository_main_and_runtime_published_0_1_27_release_state_normalization",
-    "active_release_candidate": null,
-    "safe_development_branch": "main",
-    "safe_install_branch": "runtime",
+    "stable_release": "0.1.30",
+    "stable_status": "runtime_0_1_30_observed_reconciliation_required",
+    "active_release_candidate": {
+      "version": "0.1.31",
+      "branch": "agent/0.1.31-reconcile-runtime",
+      "status": "validating",
+      "releaseable": false,
+      "purpose": "reconcile runtime-only 0.1.28-0.1.30 work into main and repair confirmed regressions"
+    },
     "marketplace": {
       "listed_version": "0.1.22",
-      "status": "last_observed_listing_0_1_22_runtime_0_1_27_published_listing_refresh_unobserved"
+      "status": "last_observed_listing_0_1_22_external_refresh_unobserved"
     },
-    "windows_marketplace_install": "0.1.27_unverified"
+    "windows_marketplace_install": "0.1.30_unverified"
   },
   "active_experiment": null,
   "development": {
-    "version": "0.1.27",
-    "branch": "main",
-    "track": "stable",
-    "status": "stable_0_1_27_published_runtime_and_contract_verified",
-    "installable": true
+    "version": "0.1.31",
+    "branch": "agent/0.1.31-reconcile-runtime",
+    "track": "release_candidate",
+    "status": "validating_reconciliation_and_regression_fix",
+    "installable": false
   },
   "published_baseline": {
-    "version": "0.1.27",
-    "main_commit": "76f7af1abe44f49a4a3f92c027cd5eb322f269a1",
+    "version": "0.1.30",
     "runtime_branch": "runtime",
-    "runtime_commit": "877865675ea2b05ad30891774f85f455e48247fa",
-    "runtime_tree": "976ad7df9d9f1bb88eeb13e8063fd6fcdf3480d8",
-    "dashboard_evidence_run": 31914581988,
-    "runtime_gate_run": 31924210745,
-    "publisher_run": 31924267237,
-    "status": "repository_runtime_and_contract_verified"
+    "runtime_commit": "1d0bb487b1559d0afbd3c226f1a21e07b0522427",
+    "runtime_tree": "781f303feaa9a106127c88d95640a7db00f9c194",
+    "main_projection_commit": "7d864252a25dfa368d4b6c4f1d4c558b6ced8cc4",
+    "status": "runtime_contains_features_not_yet_present_in_main"
   },
   "current_goal": {
-    "id": "observe-0.1.27-external-publication",
-    "goal": "Complete the external-publication observations that repository CI cannot provide: confirm the AstrBot marketplace listing refresh and a real repository-name reinstall (and, where applicable, the Windows/Launcher install) of the published 0.1.27 runtime, then record those observations before preparing the next release.",
+    "id": "release-0.1.31-reconcile-main-runtime",
+    "goal": "Restore main as the only development truth, repair confirmed 0.1.28-0.1.30 regressions, and return runtime to generated-only status.",
     "active_decision_ids": [],
     "non_goals": [
-      "Do not claim marketplace or Windows installation verification from CI success alone.",
-      "Do not create another release candidate merely to change development-only status prose.",
-      "Do not change the published runtime tree without a strictly newer three-part version and a new ready candidate.",
-      "Do not restore the superseded PR #3 or use an old repository as a merge source."
+      "Do not change the model-card Video ownership contract.",
+      "Do not introduce cross-channel fallback between Ark and Agent Plan.",
+      "Do not claim marketplace or Windows verification from repository CI."
     ]
   },
   "active_validation_frontier": {
-    "release": "0.1.27",
-    "name": "release_state_normalization",
-    "current_stage": "published_runtime_verified_pending_external_observations",
+    "release": "0.1.31",
+    "name": "runtime_reconciliation_and_regression_fix",
+    "current_stage": "candidate_open_before_full_gate",
     "next_actions": [
-      "Observe the AstrBot marketplace listing and perform a real repository-name reinstall/Windows or Launcher installation of the 0.1.27 runtime, then record the results in the HOT state.",
-      "Configure repository branch protection or rulesets for main and runtime through GitHub settings while preserving the guarded publisher's ability to update runtime.",
-      "Prepare the next release candidate only when a new runtime-tree change is intentional and versioned."
+      "Run Runtime Distribution Gate on the candidate.",
+      "Verify media/cache/context regression contracts on AstrBot 4.26.1 and 4.27.2.",
+      "After all blocking gates are green, change candidate status to ready/releaseable before merge and publication."
     ],
     "observed": [
-      "PR #20 was merged to main as 76f7af1abe44f49a4a3f92c027cd5eb322f269a1 after two green candidate gates: Runtime Distribution Gate runs 31924034199 and 31924131043.",
-      "Main-branch Runtime Distribution Gate run 31924210745 passed after the merge, including the knowledge-state guard, minimal artifact boundary, default-archive equivalence, packaged contracts and clean AstrBot 4.26.1 / 4.27.2 plugin loads.",
-      "Guarded publisher run 31924267237 completed successfully: ready-candidate validation, four-cell pre-publish native-install matrix, exact leased runtime promotion, four-cell post-publish native-install matrix and source-identity checks.",
-      "The published runtime branch is 877865675ea2b05ad30891774f85f455e48247fa with tree 976ad7df9d9f1bb88eeb13e8063fd6fcdf3480d8, metadata 0.1.27 and the corrected shipped CHANGELOG; corresponding main is 76f7af1abe44f49a4a3f92c027cd5eb322f269a1.",
-      "PR #3 was closed as superseded; its useful release-hardening ideas are already represented in the current mainline.",
-      "No Provider, Dashboard bridge, model-card, routing, audio/video adapter or request-semantic code changed in 0.1.27."
+      "runtime 0.1.30 contains media-limit, image-compression and cache-insight code missing from main 0.1.30.",
+      "main metadata 0.1.30 drifted from PROJECT_STATE development/stable 0.1.27, which makes the knowledge-state gate fail.",
+      "0.1.30 context-limit code resolved values but did not write max_context_tokens used by AstrBot.",
+      "0.1.30 cache ms timing started inside completion parsing rather than around the request.",
+      "0.1.28 image compression accepted max_size but did not use it and could return a still-oversized terminal result.",
+      "runtime packager/publisher allow-lists omitted _conf_schema.json and README.md."
     ]
   },
-  "closed_experiments": [
-    {
-      "id": "0.1.20-source-scoped-video-modality",
-      "version": "0.1.20",
-      "branch": "fix/source-scoped-video-0.1.20",
-      "pull_request": 10,
-      "status": "superseded",
-      "releaseable": false,
-      "merged": false,
-      "passed": [
-        "minimal runtime artifact boundary",
-        "AstrBot 4.26.1 and 4.27.2 plugin loading",
-        "Video visible on Ark and Agent Plan create dialogs",
-        "Video absent from the foreign OpenAI create dialog"
-      ],
-      "failed": [
-        "The historical final test incorrectly required the retired _volcengine_video_input_mode_ui row after the native Video modality assertion had already passed."
-      ],
-      "final_failed_run": 31719539311,
-      "archive": "docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md",
-      "resume_condition": "Satisfied by the 0.1.22 recovery, the 0.1.23 robust delivery layer, the 0.1.24 object-scoped UI, the 0.1.25 transport guards, the 0.1.26 changelog distribution and the 0.1.27 release-state normalization."
-    }
-  ],
+  "closed_experiments": [],
   "stable_boundaries": [
-    "AstrBot owns provider lifecycle, routing, fallback, retry, model-card management, and the base shared Dashboard schema.",
-    "The plugin adapts Volcengine request and media protocols; it does not maintain a second global model-capability database.",
-    "The user-facing Video truth remains the native per-model-card modalities selection. The precise UI path scopes it to the two plugin-owned Source types after a private dialog clone exists.",
-    "No shared-schema Video injection exists anymore. The native video option may only be added on concrete model-card objects of the two plugin-owned Source types, via the private dialog clone (asset bridge) or the live component instance (runtime bridge). Foreign dialogs must never receive it, and the create/update save boundary strips any forged value.",
-    "Future AstrBot-native Video support is host-owned and must not be deleted by plugin cleanup.",
-    "Request transport settings are not permanent model-capability facts.",
-    "Local video materialization must reject empty and oversized input before base64-encoding and bound any ffmpeg work with a timeout plus kill-on-cancel; remote http(s) URLs remain pass-through because their size is unknown locally.",
-    "CHANGELOG.md ships with the runtime package because AstrBot renders the post-update changelog popup from it; it stays byte-identical to the development changelog and must not carry secrets.",
-    "A changed shipped CHANGELOG.md is a changed runtime tree and therefore requires a strictly newer metadata version plus a validated release candidate; published runtime artifacts are never edited in place.",
-    "The 0.1.19+ rich per-model request fields, audio path, video quality modes, Agent Plan routing, migrations, and request override semantics are compatibility baseline behavior unless a separate validated change explicitly replaces them.",
-    "Development documentation, tests, evidence, and experiments stay outside the allow-list runtime package.",
-    "A passing gate proves only the object and layer named by that gate; real source-type differential, persistence, runtime behavior and unload/release evidence remain distinct checks."
+    "AstrBot owns provider lifecycle, fallback, retry, model-card management and shared Dashboard schema.",
+    "The plugin owns Volcengine protocol adaptation and must not maintain a second global capability database.",
+    "Video remains a native per-model-card modalities choice scoped only to Ark and Agent Plan Source types.",
+    "Ordinary Ark and Agent Plan keep separate fixed endpoints and credentials; the plugin never silently crosses channels.",
+    "Explicit positive max_context_tokens values win over plugin model-family hints.",
+    "Unknown model context limits are not guessed.",
+    "Runtime is generated from main; direct runtime development is not an accepted steady state."
   ],
   "knowledge_lifecycle": {
     "policy": "docs/KNOWLEDGE_LIFECYCLE.md",
@@ -106,5 +79,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. The repository is in the post-publication steady state for stable 0.1.27: there is no active release candidate, the publisher treats a no-candidate main push as a verified no-op only when the runtime tree is unchanged, and any changed runtime tree still requires a strictly newer version plus a new ready candidate."
+  "warning": "0.1.31 is validating, not installable. Stable user installations remain on runtime 0.1.30 until all gates are green and the guarded publisher promotes a ready candidate."
 }

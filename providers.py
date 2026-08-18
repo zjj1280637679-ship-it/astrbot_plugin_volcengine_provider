@@ -1,14 +1,18 @@
 """Two isolated Volcengine Ark chat providers built on AstrBot.
 
 Both upstreams implement the OpenAI Chat Completions protocol, so this plugin
-inherits AstrBot's native OpenAI adapter.  That keeps streaming, multimodal
-message assembly, function calling, retries and response normalization on the
-framework's normal path.
+inherits AstrBot's native OpenAI adapter. Streaming, multimodal assembly,
+function calling, retries and response normalization stay on the host path.
+
+The plugin adds only Volcengine-specific last-mile media handling, cache
+observability and model-family context hints.
 """
 
 from __future__ import annotations
 
 import copy
+import time
+from contextvars import ContextVar
 
 from astrbot import logger
 from astrbot.core.provider.entities import ProviderType
@@ -17,12 +21,18 @@ from astrbot.core.provider.sources.request_retry import retry_provider_request
 from openai._exceptions import NotFoundError
 
 from .adapters.audio import build_ark_input_audio
+from .adapters.image import enforce_image_limits
 from .adapters.video import inject_current_request_videos
 from .compatibility.astrbot import _ApiKeyLogView
 from .capabilities import (
+    apply_context_limit_hint,
     apply_request_overrides,
+    channel_name,
     clear_source_model_hints,
+    is_context_length_error,
+    log_cache_usage,
     remember_source_model_hint,
+    resolve_context_limit,
     source_scope_id,
     video_input_mode,
 )
@@ -42,6 +52,10 @@ AGENT_PLAN_PREFIX = "agentplan/"
 ARK_DEFAULT_MODEL = "doubao-seed-2-1-pro-260628"
 AGENT_PLAN_DEFAULT_MODEL = "doubao-seed-2.1-turbo"
 
+_REQUEST_STARTED_AT: ContextVar[float | None] = ContextVar(
+    "volcengine_request_started_at",
+    default=None,
+)
 
 AZURE_ONLY_CONFIG_KEYS = frozenset(
     {
@@ -57,8 +71,6 @@ AZURE_ONLY_CONFIG_KEYS = frozenset(
 
 ARK_DEFAULT_CONFIG = {
     "id": "volcengine-ark",
-    # AstrBot's WebUI resolves company logos from this brand key.  Channel
-    # identity belongs to ``type``/``id``/``api_base`` instead.
     "provider": VOLCENGINE_BRAND_KEY,
     "type": ARK_PROVIDER_TYPE,
     "provider_type": "chat_completion",
@@ -97,8 +109,6 @@ def _dedupe_nonempty(values) -> list[str]:
 
 
 def to_agent_plan_public_model(model: object) -> str:
-    """Return the AstrBot-facing Agent Plan model identifier."""
-
     value = str(model or "").strip()
     if not value:
         raise ValueError("Agent Plan model name cannot be empty")
@@ -111,8 +121,6 @@ def to_agent_plan_public_model(model: object) -> str:
 
 
 def to_agent_plan_upstream_model(model: object) -> str:
-    """Strip the local namespace before a request reaches Volcengine."""
-
     public = to_agent_plan_public_model(model)
     return public[len(AGENT_PLAN_PREFIX) :]
 
@@ -125,10 +133,9 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
 
     def __init__(self, provider_config: dict, provider_settings: dict) -> None:
         config = copy.deepcopy(provider_config)
-        # These cards always use the ordinary OpenAI client. Ignore stale
-        # Azure-only fields instead of inventing a second validation policy.
         for name in AZURE_ONLY_CONFIG_KEYS:
             config.pop(name, None)
+
         configured_base = str(config.get("api_base") or "").rstrip("/")
         fixed_base = self._fixed_api_base.rstrip("/")
         if configured_base and configured_base != fixed_base:
@@ -138,24 +145,21 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
                 fixed_base,
             )
         config["api_base"] = fixed_base
+
+        apply_context_limit_hint(config)
         super().__init__(config, provider_settings)
 
     async def _resolve_audio_part(self, audio_ref: str) -> dict:
-        """Serialize AstrBot-resolved audio using Ark's final input_audio contract."""
-
         return await build_ark_input_audio(audio_ref)
 
     async def _prepare_chat_payload(self, *args, **kwargs):
-        """Extend AstrBot's native Chat payload with Ark's video_url block."""
-
         extra_user_content_parts = kwargs.get("extra_user_content_parts")
         if extra_user_content_parts is None and len(args) >= 8:
             extra_user_content_parts = args[7]
 
-        payloads, context_query = await super()._prepare_chat_payload(
-            *args,
-            **kwargs,
-        )
+        payloads, context_query = await super()._prepare_chat_payload(*args, **kwargs)
+        await enforce_image_limits(payloads)
+
         mode = video_input_mode(self.provider_config)
         await inject_current_request_videos(
             context_query,
@@ -165,12 +169,74 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         )
         return payloads, context_query
 
-    def _apply_provider_specific_extra_body_overrides(
+    async def _query(
         self,
-        extra_body: dict,
-    ) -> None:
-        """AstrBot 4.26.x hook: apply 0.1.19 rows after custom_extra_body."""
+        payloads: dict,
+        tools,
+        *,
+        request_max_retries: int | None = None,
+    ):
+        token = _REQUEST_STARTED_AT.set(time.perf_counter())
+        try:
+            return await super()._query(
+                payloads,
+                tools,
+                request_max_retries=request_max_retries,
+            )
+        finally:
+            _REQUEST_STARTED_AT.reset(token)
 
+    async def _query_stream(
+        self,
+        payloads: dict,
+        tools,
+        *,
+        request_max_retries: int | None = None,
+    ):
+        token = _REQUEST_STARTED_AT.set(time.perf_counter())
+        try:
+            async for item in super()._query_stream(
+                payloads,
+                tools,
+                request_max_retries=request_max_retries,
+            ):
+                yield item
+        finally:
+            _REQUEST_STARTED_AT.reset(token)
+
+    async def _parse_openai_completion(self, completion, tools):
+        llm_response = await super()._parse_openai_completion(completion, tools)
+
+        usage = getattr(completion, "usage", None)
+        if usage is None:
+            return llm_response
+
+        started = _REQUEST_STARTED_AT.get()
+        elapsed_ms = (
+            max(0, int((time.perf_counter() - started) * 1000))
+            if started is not None
+            else 0
+        )
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        ptd = getattr(usage, "prompt_tokens_details", None)
+        cached = int(getattr(ptd, "cached_tokens", 0) or 0) if ptd else 0
+        ctd = getattr(usage, "completion_tokens_details", None)
+        reasoning = int(getattr(ctd, "reasoning_tokens", 0) or 0) if ctd else 0
+
+        resolved_model = str(getattr(completion, "model", "") or "")
+        log_cache_usage(
+            channel=channel_name(self._fixed_api_base),
+            model=resolved_model or str(self.get_model() or ""),
+            prompt_tokens=prompt_tokens,
+            cached_tokens=cached,
+            completion_tokens=completion_tokens,
+            reasoning_tokens=reasoning,
+            ms=elapsed_ms,
+        )
+        return llm_response
+
+    def _apply_provider_specific_extra_body_overrides(self, extra_body: dict) -> None:
         parent = getattr(super(), "_apply_provider_specific_extra_body_overrides", None)
         if callable(parent):
             parent(extra_body)
@@ -181,8 +247,6 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         payloads: dict,
         extra_body: dict,
     ) -> None:
-        """AstrBot 4.27.x+ hook: apply 0.1.19 rows after custom_extra_body."""
-
         parent = getattr(super(), "_apply_provider_specific_request_overrides", None)
         if callable(parent):
             parent(payloads, extra_body)
@@ -200,7 +264,23 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         max_retries: int,
         image_fallback_used: bool = False,
     ) -> tuple:
-        """Delegate recovery to AstrBot while keeping its key-prefix log redacted."""
+        if is_context_length_error(error):
+            resolved = str(payloads.get("model", "") or self.get_model() or "")
+            known_limit = resolve_context_limit(resolved)
+            if known_limit is None:
+                logger.warning(
+                    "[VolcengineCache] context-length error for model=%s; "
+                    "no plugin-owned context hint is known, delegating to AstrBot retry",
+                    resolved,
+                )
+            else:
+                logger.warning(
+                    "[VolcengineCache] context-length error for model=%s; "
+                    "configured max_context_tokens=%d; upstream still rejected, "
+                    "delegating history reduction/retry to AstrBot",
+                    resolved,
+                    known_limit,
+                )
 
         result = await super()._handle_api_error(
             error,
@@ -232,8 +312,6 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
     provider_display_name="火山方舟普通 API",
 )
 class ProviderVolcengineArk(_FixedArkEndpointProvider):
-    """Ordinary pay-as-you-go/free-quota Volcengine Ark chat provider."""
-
     _fixed_api_base = ARK_API_BASE
     _volcengine_provider_plugin_owned = True
 
@@ -248,11 +326,7 @@ class ProviderVolcengineArk(_FixedArkEndpointProvider):
         super().__init__(config, provider_settings)
 
     async def get_models(self) -> list[str]:
-        """Enumerate visible Ark models and hand off only this live receipt."""
-
         scope = source_scope_id(self.provider_config)
-        # Erase the previous receipt *before* network I/O.  A failed refresh must
-        # not leave yesterday's feedback available for a later Dashboard call.
         clear_source_model_hints(scope)
         try:
             response = await retry_provider_request(
@@ -283,8 +357,6 @@ class ProviderVolcengineArk(_FixedArkEndpointProvider):
     provider_display_name="火山方舟 Agent Plan API",
 )
 class ProviderVolcengineAgentPlan(_FixedArkEndpointProvider):
-    """Agent Plan provider with a local-only ``agentplan/`` namespace."""
-
     _fixed_api_base = AGENT_PLAN_API_BASE
     _volcengine_provider_plugin_owned = True
 
@@ -296,13 +368,10 @@ class ProviderVolcengineAgentPlan(_FixedArkEndpointProvider):
         super().__init__(config, provider_settings)
 
     async def get_models(self) -> list[str]:
-        # Do not probe an undocumented /models route with the Plan inference key.
         models = (self.get_model(), *KNOWN_AGENT_PLAN_MODELS)
         return _dedupe_nonempty(to_agent_plan_public_model(model) for model in models)
 
     async def _prepare_chat_payload(self, *args, **kwargs):
-        """Normalize only the request model; keep meta/config names prefixed."""
-
         positional = list(args)
         if "model" in kwargs:
             selected = kwargs.get("model") or self.get_model()

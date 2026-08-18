@@ -106,31 +106,42 @@ jobs:
           import zipfile
           from pathlib import Path, PurePosixPath
 
-          work = Path(os.environ['WORK'])
-          archive = Path(os.environ['ARCHIVE'])
-          manifest_path = Path(os.environ['MANIFEST'])
-          manifest = json.loads(manifest_path.read_text('utf-8'))
-          if manifest['package'] != 'astrbot_plugin_volcengine_provider':
-              raise SystemExit('unexpected runtime package name')
-          version = manifest.get('version')
-          if not isinstance(version, str) or not version.strip():
-              raise SystemExit('runtime manifest version is missing')
-          version = version.strip()
+          work = Path(os.environ["WORK"])
+          archive = Path(os.environ["ARCHIVE"])
+          manifest_path = Path(os.environ["MANIFEST"])
+          manifest = json.loads(manifest_path.read_text("utf-8"))
+
+          if manifest["package"] != "astrbot_plugin_volcengine_provider":
+              raise SystemExit("unexpected runtime package name")
+
+          version = str(manifest.get("version") or "").strip()
           if re.fullmatch(
-              r'(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
+              r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)",
               version,
           ) is None:
-              raise SystemExit(f'invalid runtime release version: {version!r}')
+              raise SystemExit(f"invalid runtime release version: {version!r}")
 
-          expected = {item['path']: item for item in manifest['files']}
-          if len(expected) != len(manifest['files']):
-              raise SystemExit('duplicate path in runtime manifest')
+          expected = {item["path"]: item for item in manifest["files"]}
+          if len(expected) != len(manifest["files"]):
+              raise SystemExit("duplicate path in runtime manifest")
+
           allowed_root = {
-              'metadata.yaml', '__init__.py', 'main.py', 'providers.py',
-              'registry.py', 'logo.png', 'LICENSE', 'CHANGELOG.md',
+              "metadata.yaml",
+              "__init__.py",
+              "main.py",
+              "providers.py",
+              "registry.py",
+              "_conf_schema.json",
+              "README.md",
+              "logo.png",
+              "LICENSE",
+              "CHANGELOG.md",
           }
           allowed_packages = {
-              'adapters', 'capabilities', 'compatibility', 'metadata',
+              "adapters",
+              "capabilities",
+              "compatibility",
+              "metadata",
           }
           for relative in expected:
               path = PurePosixPath(relative)
@@ -139,12 +150,17 @@ jobs:
               ) or (
                   len(path.parts) == 2
                   and path.parts[0] in allowed_packages
-                  and path.suffix == '.py'
+                  and path.suffix == ".py"
               )
               if not allowed:
-                  raise SystemExit(f'path outside publisher allow-list: {relative}')
-          if manifest['uncompressed_bytes'] > 2 * 1024 * 1024:
-              raise SystemExit('runtime exceeds publisher size policy')
+                  raise SystemExit(f"path outside publisher allow-list: {relative}")
+
+          for required in ("_conf_schema.json", "README.md", "CHANGELOG.md"):
+              if required not in expected:
+                  raise SystemExit(f"required runtime file missing: {required}")
+
+          if manifest["uncompressed_bytes"] > 2 * 1024 * 1024:
+              raise SystemExit("runtime exceeds publisher size policy")
 
           members = {}
           with zipfile.ZipFile(archive) as package:
@@ -152,38 +168,40 @@ jobs:
                   path = PurePosixPath(info.filename)
                   if info.is_dir():
                       continue
-                  if path.is_absolute() or '..' in path.parts or len(path.parts) < 2:
-                      raise SystemExit(f'unsafe archive member: {path}')
-                  if path.parts[0] != manifest['package']:
-                      raise SystemExit(f'unexpected archive root: {path}')
+                  if path.is_absolute() or ".." in path.parts or len(path.parts) < 2:
+                      raise SystemExit(f"unsafe archive member: {path}")
+                  if path.parts[0] != manifest["package"]:
+                      raise SystemExit(f"unexpected archive root: {path}")
                   relative = PurePosixPath(*path.parts[1:]).as_posix()
                   if relative in members:
-                      raise SystemExit(f'duplicate archive member: {relative}')
+                      raise SystemExit(f"duplicate archive member: {relative}")
                   members[relative] = info
 
               if set(members) != set(expected):
                   raise SystemExit({
-                      'missing': sorted(set(expected) - set(members)),
-                      'unexpected': sorted(set(members) - set(expected)),
+                      "missing": sorted(set(expected) - set(members)),
+                      "unexpected": sorted(set(members) - set(expected)),
                   })
 
               for relative, item in expected.items():
                   data = package.read(members[relative])
-                  if len(data) != item['bytes']:
-                      raise SystemExit(f'byte count mismatch: {relative}')
-                  if hashlib.sha256(data).hexdigest() != item['sha256']:
-                      raise SystemExit(f'sha256 mismatch: {relative}')
+                  if len(data) != item["bytes"]:
+                      raise SystemExit(f"byte count mismatch: {relative}")
+                  if hashlib.sha256(data).hexdigest() != item["sha256"]:
+                      raise SystemExit(f"sha256 mismatch: {relative}")
                   target = work.joinpath(*PurePosixPath(relative).parts)
                   target.parent.mkdir(parents=True, exist_ok=True)
                   target.write_bytes(data)
 
-          metadata = (work / 'metadata.yaml').read_text('utf-8')
+          metadata = (work / "metadata.yaml").read_text("utf-8")
           match = re.search(
-              r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', metadata
+              r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)',
+              metadata,
           )
           if match is None or match.group(1).strip() != version:
-              raise SystemExit('runtime metadata/manifest version mismatch')
-          Path(os.environ['VERSION_FILE']).write_text(version, encoding='utf-8')
+              raise SystemExit("runtime metadata/manifest version mismatch")
+
+          Path(os.environ["VERSION_FILE"]).write_text(version, encoding="utf-8")
           PY
 
           runtime_version=$(cat "$RUNNER_TEMP/runtime-candidate-version")
@@ -201,6 +219,7 @@ jobs:
           candidate_tree=$(git rev-parse 'HEAD^{tree}')
           old_runtime_sha=$(git ls-remote origin refs/heads/runtime | awk '{print $1}')
           publish_needed=true
+
           if [ -n "$old_runtime_sha" ]; then
             git fetch --no-tags --depth=1 origin \
               "+refs/heads/runtime:refs/remotes/origin/runtime"
@@ -219,24 +238,25 @@ jobs:
           from pathlib import Path
 
           pattern = re.compile(
-              r'(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\Z'
+              r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\Z"
           )
-          candidate = os.environ['CANDIDATE_VERSION']
-          metadata = Path(os.environ['OLD_RUNTIME_METADATA']).read_text('utf-8')
+          candidate = os.environ["CANDIDATE_VERSION"]
+          metadata = Path(os.environ["OLD_RUNTIME_METADATA"]).read_text("utf-8")
           match = re.search(
-              r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)', metadata
+              r'(?m)^version:\s*["\x27]?([^"\x27\r\n#]+)',
+              metadata,
           )
-          current = match.group(1).strip() if match is not None else ''
+          current = match.group(1).strip() if match is not None else ""
           if pattern.fullmatch(current) is None:
               raise SystemExit(
-                  f'current runtime has invalid release version: {current!r}'
+                  f"current runtime has invalid release version: {current!r}"
               )
-          if tuple(map(int, candidate.split('.'))) <= tuple(
-              map(int, current.split('.'))
+          if tuple(map(int, candidate.split("."))) <= tuple(
+              map(int, current.split("."))
           ):
               raise SystemExit(
-                  'changed runtime tree requires a strictly newer version: '
-                  f'candidate={candidate} current={current}'
+                  "changed runtime tree requires a strictly newer version: "
+                  f"candidate={candidate} current={current}"
               )
           PY
             fi
@@ -261,6 +281,7 @@ jobs:
             push origin \
             "HEAD:refs/heads/${candidate}" \
             "--force-with-lease=refs/heads/${candidate}:"
+
           actual=$(git ls-remote origin "refs/heads/${candidate}" | awk '{print $1}')
           test "$actual" = "$candidate_sha"
           echo "RUNTIME_CANDIDATE=CREATED branch=${candidate} sha=${candidate_sha}"
@@ -314,15 +335,14 @@ jobs:
 
           test "$(git rev-parse refs/remotes/origin/main)" = "$SOURCE_SHA"
           test "$(git rev-parse "refs/remotes/origin/${CANDIDATE_BRANCH}")" = "$CANDIDATE_SHA"
+
           runtime_tip=$(git ls-remote origin refs/heads/runtime | awk '{print $1}')
           test "$runtime_tip" = "$OLD_RUNTIME_SHA"
 
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
-          # Git cannot express a read-only compare-and-swap for an unchanged
-          # main ref. Keep this check immediately adjacent to the leased
-          # runtime update; every later main push gets its own gate/publisher.
           main_tip=$(git ls-remote origin refs/heads/main | awk '{print $1}')
           test "$main_tip" = "$SOURCE_SHA"
+
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             push origin \
             "${CANDIDATE_SHA}:refs/heads/runtime" \
@@ -330,10 +350,6 @@ jobs:
 
           promoted=$(git ls-remote origin refs/heads/runtime | awk '{print $1}')
           test "$promoted" = "$CANDIDATE_SHA"
-          main_after=$(git ls-remote origin refs/heads/main | awk '{print $1}')
-          if test "$main_after" != "$SOURCE_SHA"; then
-            echo "::warning title=Main advanced during runtime promotion::The promoted candidate is validated; the newer main push will run its own gate and publisher."
-          fi
           echo "RUNTIME_PROMOTION=OK source=${SOURCE_SHA} runtime=${promoted}"
 
   postpublish-native-install:
@@ -422,6 +438,7 @@ jobs:
           remote="https://github.com/${GITHUB_REPOSITORY}.git"
           git init "$work"
           cd "$work"
+
           candidate_file="$RUNNER_TEMP/current-candidate-ref"
           git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" \
             > "$candidate_file"
@@ -431,11 +448,13 @@ jobs:
             exit 0
           fi
           test "$actual" = "$CANDIDATE_SHA"
+
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             push "$remote" \
             ":refs/heads/${CANDIDATE_BRANCH}" \
             "--force-with-lease=refs/heads/${CANDIDATE_BRANCH}:${CANDIDATE_SHA}"
+
           verification_file="$RUNNER_TEMP/current-candidate-ref-after-cleanup"
           git ls-remote "$remote" "refs/heads/${CANDIDATE_BRANCH}" \
             > "$verification_file"
