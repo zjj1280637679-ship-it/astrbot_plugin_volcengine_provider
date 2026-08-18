@@ -1,5 +1,5 @@
 {
-  "schema_version": 22,
+  "schema_version": 23,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
@@ -8,8 +8,8 @@
     "active_release_candidate": {
       "version": "0.1.31",
       "branch": "agent/0.1.31-reconcile-runtime",
-      "status": "validating",
-      "releaseable": false,
+      "status": "ready",
+      "releaseable": true,
       "purpose": "reconcile runtime-only 0.1.28-0.1.30 work into main, repair confirmed regressions, replace model-name context guesses with pre/post model feedback, and re-prove invariants after every invalidating lifecycle transition"
     },
     "marketplace": {
@@ -23,7 +23,7 @@
     "version": "0.1.31",
     "branch": "agent/0.1.31-reconcile-runtime",
     "track": "release_candidate",
-    "status": "validating_final_feedback_lifecycle_head",
+    "status": "ready_after_identical_head_blocking_matrix",
     "installable": false
   },
   "published_baseline": {
@@ -49,28 +49,27 @@
   "active_validation_frontier": {
     "release": "0.1.31",
     "name": "feedback_and_lifecycle_closure",
-    "current_stage": "final_head_revalidation_after_feedback_loop_and_hot_reload_fix",
+    "current_stage": "ready_state_runtime_boundary_revalidation",
     "next_actions": [
-      "Run Runtime Distribution Gate on the final documentation/code head with preserved 0.1.25 negative transport contracts, 0.1.31 negative media/cache contracts, and the dedicated pre/post context-feedback loop contract on AstrBot 4.26.1 and 4.27.2.",
-      "Run the real AstrBot 4.27.3 lifecycle matrix again on the final head: Dashboard refresh, plugin-config hot reload, live Provider rebind, process restart, same-version replacement and uninstall.",
-      "Run model-card Video and 0.1.19 compatibility workflows on that same final head.",
-      "Only after every blocking workflow for one identical current head is green may the candidate move to ready/releaseable."
+      "Re-run the Runtime Distribution Gate for this ready-state HOT-only commit and require the generated runtime artifact to remain valid and equivalent.",
+      "Do not publish or merge solely because the candidate is ready; promotion remains a separate explicit release action.",
+      "If runtime-affecting code, tests, packaging, README or CHANGELOG change again, demote to validating and re-run the affected evidence matrix."
     ],
     "observed": [
       "The first 0.1.31 candidate reached all-green Runtime Distribution, Video, Lifecycle and 0.1.19 workflows, but that evidence did not cover newly identified lifecycle counterexamples.",
       "A real AstrBot 4.27.3 plugin-config hot reload later exposed a genuine state bug: the new plugin instance loaded the new media/cache policy while the already-live Ark Provider was not rebuilt, producing provider_reloads=0.",
       "The hot-reload rebind now selects targets from live instances carrying the plugin-owned marker, obtains their current AstrBot config, and asks ProviderManager.reload() to terminate/load them under the newly imported class; foreign Provider instances are not selected.",
-      "After that fix, the real AstrBot 4.27.3 lifecycle workflow completed every stage successfully: initial create/save, Dashboard refresh, plugin-config hot reload, provider_reloads=1 confirmation, process restart, same-version plugin replacement, uninstall and restart without plugin.",
-      "The original model-family context mapping was rejected: ark-code-latest and other routing aliases demonstrate that model identity is not a stable capability proof.",
-      "The replacement context design is feedback-driven: pre-feedback comes from current explicit host/model-card evidence such as live Ark /models translation; model names are diagnostic labels only.",
-      "Successful upstream requests are post-feedback lower bounds only and never prove the maximum context window.",
-      "A context rejection changes the next guard only when upstream explicitly reports a context ceiling; requested-token counts, status codes and unrelated numeric fields are insufficient evidence.",
-      "Explicit upstream context-ceiling post-feedback can correct a stale guard upward or downward; an explicit output-token reservation is subtracted when known so the derived history guard leaves room for output.",
-      "Learned post-feedback is scoped to the current Provider instance. Provider reload, plugin replacement or AstrBot restart starts again from then-current pre-feedback instead of inheriting the old observation as permanent truth.",
-      "The dedicated context-feedback contract has already passed in packaged runtime environments for AstrBot 4.26.1 and 4.27.2 together with the preserved 0.1.25 transport negatives; the latest small feedback-hook/documentation changes still require one identical-head re-run before readiness.",
+      "The original model-family context mapping was rejected: model identity is not a stable capability proof. The final context design uses current explicit pre-feedback and actual upstream post-feedback; model names are diagnostic labels only.",
+      "Successful upstream requests establish accepted lower bounds only. A context rejection revises the next guard only when upstream explicitly reports a context ceiling; unrelated numbers are insufficient evidence.",
+      "Explicit output-token reservations are kept outside the derived input-history guard when a reported total context ceiling is translated into AstrBot max_context_tokens.",
+      "Learned post-feedback is scoped to the current Provider instance. Provider reload, plugin replacement or AstrBot restart starts again from then-current pre-feedback instead of inheriting old observations as permanent truth.",
+      "Final runtime/documentation/code head f3f57271bb6b53d6862831660585912005b2360c passed Runtime Distribution Gate run 32104474290 on both AstrBot 4.26.1 and 4.27.2, including packaged pre/post context-feedback tests, preserved 0.1.25 transport negatives, new 0.1.31 negatives, clean install and real startup.",
+      "The same head f3f57271bb6b53d6862831660585912005b2360c passed Model-card Lifecycle Contract run 32104474326: initial create/save, Dashboard refresh, real plugin-config hot reload, provider_reloads=1 confirmation, process restart, same-version plugin replacement, uninstall and restart without plugin all succeeded.",
+      "The same head f3f57271bb6b53d6862831660585912005b2360c passed Model-card Video Contract run 32104474292, including object-scoped owned behavior and xAI/Gemini foreign isolation.",
+      "The same head f3f57271bb6b53d6862831660585912005b2360c passed 0.1.19 Compatibility Baseline Dashboard Regression run 32104474318.",
       "The first 0.1.31 image guard ran after AstrBot native image Base64 materialization; it has been moved to the image materialization boundary so oversized images are compressed/rejected before Base64 expansion.",
-      "Audio transcode output is now stat-checked against the configured ceiling before the file is read/Base64 encoded.",
-      "The first 0.1.31 test rewrite had replaced several 0.1.25 video negative paths; those historical contracts are now kept in an independent blocking test file so new tests cannot erase old evidence."
+      "Audio transcode output is stat-checked against the configured ceiling before the file is read/Base64 encoded.",
+      "Historical 0.1.25 video negative paths remain in an independent blocking test file so new tests cannot erase old evidence."
     ]
   },
   "closed_experiments": [],
@@ -84,6 +83,7 @@
     "Successful post-feedback establishes only an accepted lower bound; an explicit upstream ceiling is required to revise a context ceiling/guard.",
     "Post-feedback may constrain the next request inside the same Provider lifecycle but does not become permanent global model truth.",
     "A confirmation is valid only for its object/state/lifecycle node; transitions that can invalidate it require a new confirmation.",
+    "A proven HOT-only state transition may inherit runtime/UI evidence only when the Runtime Distribution Gate proves the generated runtime artifact is unchanged in semantics and remains valid; any runtime-affecting change reopens validation.",
     "Older negative-path contracts remain independently executable when later releases add new tests.",
     "Runtime is generated from main; direct runtime development is not an accepted steady state."
   ],
@@ -94,5 +94,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "0.1.31 remains validating and is not installable. Stable user installations remain on runtime 0.1.30 until every blocking workflow is green for one identical final head and the guarded publisher later promotes a ready candidate."
+  "warning": "0.1.31 is ready as a release candidate but is not yet published or user-installable. Stable user installations remain on runtime 0.1.30 until an explicit guarded promotion updates runtime."
 }
