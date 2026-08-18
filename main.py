@@ -1,10 +1,10 @@
 """AstrBot plugin entrypoint.
 
-Importing providers registers both Provider types before AstrBot creates
-configured instances.  Runtime policy (media limits/cache logging) is owned by
-plugin configuration; after every plugin initialization the currently loaded
-Volcengine Provider instances are rebound so a Dashboard config hot-reload
-cannot leave old module globals serving new settings.
+Importing providers registers both Provider types before AstrBot creates configured
+instances. Runtime media/cache policy is owned by plugin configuration. A plugin
+configuration hot reload and a Provider instance have separate lifecycles, so every
+plugin initialization explicitly rebinds any *currently live* plugin-owned Provider
+instance to the newly imported module and policy.
 """
 
 from astrbot.api import logger, star
@@ -70,30 +70,64 @@ def _media_limits_from_config(config: dict | None) -> MediaLimits:
     )
 
 
-async def _reload_owned_provider_instances(context: star.Context) -> list[str]:
-    """Rebuild live owned Provider objects after a plugin-policy transition.
-
-    AstrBot reloads plugin configuration by unloading/reimporting the plugin, but
-    Provider instances have their own lifecycle.  Without this explicit rebind,
-    an already-created Provider can keep calling functions from the old purged
-    module and therefore keep the previous media/cache policy.
-    """
+def _fallback_provider_config(context: star.Context, provider_id: str) -> dict | None:
     config = context.astrbot_config_mgr.default_conf
-    manager = context.provider_manager
-    inst_map = getattr(manager, "inst_map", {})
-    if not isinstance(inst_map, dict):
-        inst_map = {}
-
-    reloaded: list[str] = []
     for provider in list(config.get("provider", [])):
         if not isinstance(provider, dict):
             continue
-        if str(provider.get("type") or "") not in _OWNED_PROVIDER_TYPES:
+        if str(provider.get("id") or "") == provider_id:
+            return dict(provider)
+    return None
+
+
+async def _reload_owned_provider_instances(context: star.Context) -> list[str]:
+    """Rebuild every live plugin-owned Provider after a plugin-policy transition.
+
+    The old implementation iterated persisted configs and selected them by their
+    ``type``. That failed during a real Dashboard plugin-config hot reload even
+    though the old Ark instance was still live. The strongest evidence of which
+    object needs rebinding is the live object itself: old plugin instances retain
+    ``_volcengine_provider_plugin_owned = True`` even after their defining module
+    has been purged.
+
+    We therefore snapshot ``ProviderManager.inst_map``, select only live objects
+    bearing that marker, fetch each exact current provider config from AstrBot,
+    and ask the host manager to terminate/load it under the newly registered class.
+    Foreign providers are never selected.
+    """
+    manager = context.provider_manager
+    inst_map = getattr(manager, "inst_map", {})
+    if not isinstance(inst_map, dict):
+        return []
+
+    getter = getattr(manager, "get_provider_config_by_id", None)
+    reloaded: list[str] = []
+    live_snapshot = list(inst_map.items())
+    for provider_id_raw, instance in live_snapshot:
+        if not getattr(instance, "_volcengine_provider_plugin_owned", False):
             continue
-        provider_id = str(provider.get("id") or "").strip()
-        if not provider_id or provider_id not in inst_map:
+        provider_id = str(provider_id_raw or "").strip()
+        if not provider_id:
             continue
-        await manager.reload(provider)
+
+        provider_config = None
+        if callable(getter):
+            try:
+                provider_config = getter(provider_id)
+            except TypeError:
+                # Compatibility with a host whose getter signature differs.
+                provider_config = None
+        if not isinstance(provider_config, dict):
+            provider_config = _fallback_provider_config(context, provider_id)
+        if not isinstance(provider_config, dict):
+            logger.warning(
+                "[VolcenginePolicy] live owned provider has no current config; "
+                "cannot rebind id=%s",
+                provider_id,
+            )
+            continue
+
+        await manager.reload(provider_config)
         reloaded.append(provider_id)
     return reloaded
 
