@@ -149,6 +149,7 @@ jobs:
           set -euo pipefail
           for test_file in \
             tests/test_0_1_15_feedback_boundary.py \
+            tests/test_context_feedback_loop.py \
             tests/test_0_1_19_model_fields.py \
             tests/test_0_1_19_model_fields_ui.py \
             tests/test_0_1_19_provider_overrides.py \
