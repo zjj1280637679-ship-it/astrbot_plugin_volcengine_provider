@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.1.31（发布候选）
+
+- **恢复 main → Gate → runtime 单向发布拓扑**：把 0.1.28–0.1.30 曾直接落在 `runtime` 的媒体限制、图片压缩、插件配置与缓存观测代码完整收编回 `main`；`runtime` 重新只由受控发布器生成，不再作为平行开发分支。
+- **修复上下文治理“只打日志不生效”**：已知模型族在 Provider 构造阶段直接写入 AstrBot 真正读取的 `max_context_tokens`；`deepseek-v4*` / `glm-5*` / `glm-4*` 使用 1,048,576，`doubao*` / `kimi*` / `minimax*` 使用 262,144；显式正值优先，未知模型不猜，继续交给 AstrBot fallback。
+- **修复缓存耗时语义**：`ms` 的计时从 completion 解析器移到 `_query` / `_query_stream` 外围，覆盖真实请求生命周期与内部重试；缓存命中仍直接读取上游 `prompt_tokens_details.cached_tokens`。
+- **修复缓存汇总串桶**：滚动汇总改为按 `channel + model` 独立计数，并把“计数 → 阈值判断 → 快照 → 清零”放在同一锁内，避免普通 API / Agent Plan / 不同模型互相污染及并发 reset 竞争。
+- **修复图片最长边无效**：超限图片进入压缩链后先按 `image_compress_max_size` 限制最长边，再逐级降质/降分辨率；只有同时满足字节上限与最长边目标才允许发送。
+- **图片压缩改为 fail closed**：一旦图片因字节超限进入压缩链，若内容无法解码或最终仍无法压入安全范围，抛出 `AdapterInputTransportError(reached_model=false)` 并停止本轮请求，不再 warning 后把原始超限图片继续发给 Ark。
+- **修复运行包白名单**：`_conf_schema.json` 与 `README.md` 进入 `build_runtime_package.py`、publisher `allowed_root` 与默认分支归档等价合同；`.gitattributes` 不再把 README 排除，避免正规发布再次丢掉 WebUI 配置或用户说明。
+- **补回归闭环**：`tests/test_video_transport_guards.py` 升级为 0.1.31 媒体/缓存/上下文合同，覆盖真实 context hint、按模型缓存分桶、图片最长边、图片 fail-closed、可配置视频上限/转码超时与 ffmpeg 取消清理；不调用付费火山 API。
+- **发布状态不再自锁**：README 预先同时描述“0.1.30 稳定 + 0.1.31 候选”和“0.1.31 晋升后的稳定状态”，发布后只需更新开发态 HOT 状态，不再在同一版本原地改写已属于 runtime 的 README。
+
 ## 0.1.30
 
 - **缓存命中强化收编进插件**（`capabilities/cache_insight.py`）：把此前散落在独立脚本里的缓存命中观测与上下文治理正式纳入插件管理，不再依赖难以维护的无头脚本。
@@ -156,8 +168,6 @@
 - 新增已合规 WAV 快路径：标准 Ark WAV 不再无条件启动 ffmpeg，也移除了每次请求都计算但没有协议用途的 SHA-256 调试摘要。
 - OpenAI SDK 的音视频 DEBUG 脱敏改为结构化 copy-on-write，不再先 `record.getMessage()` 生成巨型字符串。GitHub Actions 的 8 MiB 合成音频基准由约 299 ms / 64 MB 峰值额外内存降至约 0.124 ms / 0.001 MB。
 - 撤销对 AstrBot 全局 `modalities` 的 `video` 枚举污染；普通 Ark 与 Agent Plan 改用只属于各自 Provider Source 的“视频输入”布尔字段，旧版已保存的 `modalities: video` 仍作为兼容回退。
-- 接近 25 MiB 上限的 `input_audio` Base64 编码移出 asyncio 主协程的直接 Python 路径；最终 24 MiB 合成数据基准总编码约 24.8 ms，事件循环最大间隔约 20.1 ms。
-- 保留普通 Ark `/models` → AstrBot `LLM_METADATAS` 的元数据映射、Agent Plan 本地候选表，以及插件自有 Provider 注册替换保护：这些分别补足上游能力信息、Agent Plan 无 `/models` 与 AstrBot 当前无 Provider unregister 的宿主缺口，并未另建独立模型/注册生命周期。
 - 最终在 AstrBot `4.27.2` 完成汇总回归：两个 Provider 类型仍由宿主 registry 注册，真实 `/models` 返回 129 个模型，`doubao-seed-2-0-pro-260215` 真实 Chat Completions 返回 `FINAL_THIN_OK`；标准 WAV、真实 Tencent Silk、旧视频配置迁移、日志脱敏与静态职责检查全部通过。
 - 审计同时确认图片二次 materialize，以及 AstrBot 5 次 provider retry 与 OpenAI SDK 内层 retry 的 429 放大属于宿主/SDK 热路径；本插件刻意不为它们建立第二套重试或媒体旁路。
 
