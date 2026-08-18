@@ -10,6 +10,13 @@ from .cache_insight import (
     is_context_length_error,
     log_cache_usage,
 )
+from .context_feedback import (
+    ContextFeedbackLoop,
+    ContextFeedbackSnapshot,
+    context_guard_from_feedback,
+    extract_reported_context_limit,
+    requested_output_reserve,
+)
 from .model_fields import (
     ALL_MODEL_FIELD_KEYS,
     FREQUENCY_PENALTY_KEY,
@@ -75,6 +82,8 @@ __all__ = [
     "AGENT_PLAN_PROVIDER_TYPE",
     "ALL_MODEL_FIELD_KEYS",
     "ARK_PROVIDER_TYPE",
+    "ContextFeedbackLoop",
+    "ContextFeedbackSnapshot",
     "FREQUENCY_PENALTY_KEY",
     "LEGACY_MODEL_VIDEO_INPUT_KEY",
     "LEGACY_MODEL_VIDEO_UI_KEY_PREFIX",
@@ -109,6 +118,8 @@ __all__ = [
     "configure_cache_log",
     "configured_context_limit",
     "consume_source_model_hints",
+    "context_guard_from_feedback",
+    "extract_reported_context_limit",
     "is_context_length_error",
     "legacy_model_video_ui_key",
     "log_cache_usage",
@@ -121,6 +132,7 @@ __all__ = [
     "release_dashboard_asset_bridge",
     "release_dashboard_runtime_bridge",
     "remember_source_model_hint",
+    "requested_output_reserve",
     "source_scope_id",
     "source_types",
     "strip_model_fields",
