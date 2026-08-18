@@ -5,20 +5,29 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## 当前状态
+## 0.1.31 发布迁移
 
-| 对象 | 当前结论 |
+0.1.31 用来把 0.1.28–0.1.30 曾直接落在 `runtime` 的功能重新收编进 `main → Gate → Publisher → runtime` 正规链，并修复这批改动里已经确认的回归。发布状态的机器真值只看 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。
+
+### 候选验证阶段
+
+| 对象 | 状态 |
 |---|---|
-| 你可以安装的稳定版 | **0.1.30**；安装源为 `runtime` 分支 |
-| 活跃发布候选 | **0.1.31**；正在把 0.1.28–0.1.30 的 runtime 直改重新收编进 main 的正规发布链，并修复已确认回归 |
-| 0.1.31 修复范围 | main/runtime 重新单向收敛；图片压缩最长边真正生效并 fail-closed；缓存耗时覆盖整次请求；缓存汇总按 channel+model 分桶；已知模型上下文上限真正写入 AstrBot `max_context_tokens`；运行包重新包含 `_conf_schema.json` 与 README |
-| 外部分发 | AstrBot 商场刷新、真实 Windows/Launcher 重装仍属于外部观察项，不由仓库 CI 代替 |
+| 你可以安装的稳定版 | **0.1.30**；用户继续安装 `runtime` |
+| 活跃发布候选 | **0.1.31**；候选分支只用于验证，不作为用户安装源 |
 
-机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。
-任何涉及 Video / `modalities` / Provider Source / 模型卡 UI 的修改，继续遵守
-[`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
+### 完整门禁通过并由发布器晋升后的收敛状态
 
-> **不要安装当前 0.1.31 候选分支。** 用户安装仍使用 `runtime`；候选通过完整门禁并由发布器晋升后，`runtime` 才会更新。
+| 对象 | 状态 |
+|---|---|
+| 你可以安装的稳定版 | **0.1.31**；只有 `runtime` 被精确晋升后这一行才成立 |
+| 活跃发布候选 | **无**；发布后的 HOT 状态归位只改开发资料，不再改运行包 README |
+
+0.1.31 的修复范围：main/runtime 重新单向收敛；图片压缩最长边真正生效并 fail-closed；缓存耗时覆盖整次请求；缓存汇总按 channel+model 分桶；已知模型上下文上限真正写入 AstrBot `max_context_tokens`；运行包重新包含 `_conf_schema.json` 与 README。
+
+任何涉及 Video / `modalities` / Provider Source / 模型卡 UI 的修改，继续遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
+
+> 在 0.1.31 尚未由发布器晋升时，不要安装候选分支。用户安装源始终是 `runtime`。
 
 ## 两张供应商卡
 
@@ -27,8 +36,7 @@
 | `volcengine_ark_chat_completion` | `https://ark.cn-beijing.volces.com/api/v3` | 普通方舟推理 API Key | 官方模型 ID / 接入点 ID |
 | `volcengine_agent_plan_chat_completion` | `https://ark.cn-beijing.volces.com/api/plan/v3` | Agent Plan 专属 API Key | AstrBot 内显示为 `agentplan/...` |
 
-插件内部不会把普通 API 的失败请求自动改发到 Agent Plan，反之亦然。若你把两类模型主动混进 AstrBot
-`fallback_chat_models`，那属于宿主全局 fallback 行为。
+插件内部不会把普通 API 的失败请求自动改发到 Agent Plan，反之亦然。若你把两类模型主动混进 AstrBot `fallback_chat_models`，那属于宿主全局 fallback 行为。
 
 Agent Plan 的 `agentplan/` 只是 AstrBot 本地命名空间，发送给火山前会自动移除。
 
@@ -117,8 +125,6 @@ Video 的产品真值仍然只有一个：
 ## 开发与发布
 
 开发真值必须在 `main`；`runtime` 只能由发布器从 main 的 allow-list 运行包生成。
-
-0.1.31 的修复目标就是恢复这一单向关系：
 
 ```text
 main

@@ -7,9 +7,9 @@ Status: project release policy for `astrbot_plugin_volcengine_provider`.
 The GitHub development repository is not the AstrBot installation package.
 
 - Development state optimizes for maintainability, testability, evidence, AI onboarding, and engineering history.
-- Runtime state optimizes for minimum sufficient information, installability, portability, privacy, and execution reliability.
+- Runtime state optimizes for minimum sufficient information, installability, portability, privacy, user-facing configuration, and execution reliability.
 
-The release system must transform the former into the latter; it must never simply rename the repository archive as a product package.
+The release system must transform the former into the latter; it must never simply rename an arbitrary repository archive as a product package, and developers must not evolve `runtime` independently of `main`.
 
 ## 2. AstrBot-compatible distribution sources
 
@@ -17,9 +17,9 @@ AstrBot plugin-market records support a GitHub `repo` pointing to a branch using
 
 `https://github.com/{owner}/{repo}/tree/{branch}`
 
-AstrBot resolves that branch to a ZIP archive for direct installation. This project uses the stable generated branch `runtime` for that path.
+This project uses the generated stable branch `runtime` for that path.
 
-AstrBot Cloud publication is a second surface. The 2026-08-14 `0.1.19` release snapshot was observed to freeze the default-branch commit rather than the branch named in `metadata.repo`. The project therefore does not infer Cloud package identity from the metadata URL: before publication, the default-branch export must be exactly equivalent to the allow-list runtime package; after publication, the real frozen Cloud ZIP must be downloaded and compared again.
+AstrBot Cloud publication is a second surface. A historical release was observed to freeze the default-branch commit rather than the branch named in `metadata.repo`. The project therefore does not infer Cloud package identity from the metadata URL: before publication, the default-branch export must be exactly equivalent to the allow-list runtime package; after publication, the real frozen Cloud ZIP is an independent external observation.
 
 The installed archive must contain a valid `metadata.yaml` at the plugin archive root (or its single top-level repository directory), with non-empty `name`, `desc`, `version`, and `author` fields.
 
@@ -27,7 +27,7 @@ The installed archive must contain a valid `metadata.yaml` at the plugin archive
 
 AstrBot's published plugin-market guidance limits plugin ZIP packages to 16 MB unless maintainers explicitly bypass the limit.
 
-This project uses a stricter default runtime budget of **2 MiB** because its actual runtime is source code plus one logo. Crossing this budget is a review trigger, not an invitation to delete required functionality.
+This project uses a stricter default runtime budget of **2 MiB** because its runtime is source code, one logo and small user-facing documents/configuration. Crossing this budget is a review trigger, not an invitation to remove required functionality.
 
 ## 4. Runtime manifest
 
@@ -39,6 +39,8 @@ __init__.py
 main.py
 providers.py
 registry.py
+_conf_schema.json
+README.md
 logo.png
 LICENSE
 CHANGELOG.md
@@ -48,19 +50,19 @@ compatibility/*.py
 metadata/*.py
 ```
 
-Only files required by Python imports, AstrBot plugin discovery/configuration, runtime UI identity, licensing, or the post-update changelog display belong here. `CHANGELOG.md` is a runtime necessity because AstrBot's plugin service reads it from the installed plugin directory to render the update-log popup; it must remain the same file as the development changelog.
+Runtime root files have concrete consumers:
 
-The manifest version is derived from the packaged `metadata.yaml`. Active
-build, candidate, and native-install workflows must compare against that
-manifest rather than embedding the current plugin version independently. This
-keeps one version bump from leaving a stale validator behind. Versions use an
-unsigned three-part numeric format. A changed runtime tree must carry a version
-strictly newer than the currently published runtime; an identical tree is a
-no-op.
+- `metadata.yaml`: AstrBot discovery and update identity.
+- `_conf_schema.json`: AstrBot detects this file before plugin instantiation, creates/updates the plugin config, exposes it in WebUI, and passes the resulting config object into the plugin constructor.
+- `README.md`: user-facing documentation for the actual installable branch. Because it is part of the immutable runtime tree, release-state settlement after promotion must not require rewriting it at the same version.
+- `CHANGELOG.md`: AstrBot reads the installed file to render the post-update changelog popup.
+- `logo.png` / `LICENSE`: runtime identity and license distribution.
+
+The manifest version is derived from the packaged `metadata.yaml`. Active build, candidate, and native-install workflows must compare against that manifest rather than embedding the current plugin version independently. Versions use an unsigned three-part numeric format. A changed runtime tree must carry a version strictly newer than the currently published runtime; an identical tree is a no-op.
 
 ## 5. Development-only classes
 
-The following are excluded even if public in the development repository:
+The following remain excluded even when public in the development repository:
 
 ```text
 .github/**
@@ -73,11 +75,12 @@ model_cards/**
 assets/** test/experiment media
 AGENTS.md
 ARCHITECTURE.md
-README.md
 .gitignore
 ```
 
 A future file remains development-only by default. To add it to runtime, the change must identify the runtime consumer/import or user-facing necessity.
+
+`README.md` and `_conf_schema.json` are explicitly **not** development-only. Removing either from the generated package is a release-boundary regression.
 
 ## 6. Confidentiality and garbage-information policy
 
@@ -85,7 +88,7 @@ The runtime artifact must not contain information merely because it helped devel
 
 - CI/CD implementation details;
 - internal AI prompts/onboarding;
-- debugging or benchmark output;
+- debugging or benchmark output that is not part of the user-facing product contract;
 - experiment evidence or research data;
 - test media or private samples;
 - credentials, tokens, secrets, account state, private configuration, or conversation data;
@@ -95,23 +98,20 @@ Public development material can still be inappropriate for the runtime package: 
 
 ## 7. Artifact and promotion gates
 
-The runtime distribution gate runs for every pull request and every push to
-`main`. It must validate:
+The Runtime Distribution Gate runs for every pull request and every push to `main`. It must validate:
 
+- HOT state / metadata / README projection consistency;
 - manifest-only file inventory;
-- required metadata/entry files present;
+- `_conf_schema.json`, `README.md`, `CHANGELOG.md`, metadata and entry files present;
 - no forbidden development paths;
 - no high-confidence secret patterns;
 - package size within policy;
 - exported default-branch inventory and bytes equal the allow-list runtime artifact;
 - all packaged Python files compile;
 - the package loads against supported AstrBot versions;
-- packaged Provider/Dashboard behavior contracts pass.
+- packaged Provider, Dashboard and media/cache/context regression contracts pass.
 
-Publication is serialized and consumes the exact artifact accepted by the
-successful `main` push gate. An unchanged runtime tree is a no-op. A changed
-tree becomes one uniquely named temporary candidate, which must pass this
-native-install matrix before `runtime` changes:
+Publication is serialized and consumes the exact artifact accepted by the successful `main` push gate. An unchanged runtime tree is a no-op. A changed tree becomes one uniquely named temporary candidate, which must pass this native-install matrix before `runtime` changes:
 
 ```text
 AstrBot 4.26.1 × repo_branch
@@ -120,12 +120,7 @@ AstrBot 4.27.2 × repo_branch
 AstrBot 4.27.2 × download_url
 ```
 
-The publisher must reject a stale source SHA and update `runtime` only with an
-exact lease against the previously observed runtime SHA. After a real
-promotion, the same publication run must block on the same four-cell matrix
-against the promoted `runtime` branch and archive. Candidate validation
-authorizes promotion; the post-promotion matrix verifies the actual
-user-facing source and is not a substitute for candidate validation.
+The publisher must reject a stale source SHA and update `runtime` only with an exact lease against the previously observed runtime SHA. After a real promotion, the same publication run must block on the same four-cell matrix against the promoted `runtime` branch and archive. Candidate validation authorizes promotion; the post-promotion matrix verifies the actual user-facing source and is not a substitute for candidate validation.
 
 ## 8. Update invariant
 
@@ -149,4 +144,26 @@ default-branch export equals generated runtime bytes
 version metadata matches
 ```
 
-Adding development files to `main` must not change the exported package or the contents/size of `runtime` unless those files become explicitly necessary for execution.
+Adding development files to `main` must not change the exported package or `runtime` unless those files become explicitly necessary for execution or user configuration.
+
+After publication, changing only HOT development state from “candidate” to “stable” must be possible without mutating any file shipped in the already-published runtime tree. Runtime files are immutable within a version; a real runtime-content change requires a strictly newer version.
+
+## 9. Branch authority
+
+`main` is the only development truth. `runtime` is a generated product surface, not a parallel development branch.
+
+Allowed direction:
+
+```text
+main → gate artifact → immutable candidate → runtime
+```
+
+Disallowed steady state:
+
+```text
+runtime-only feature work
+runtime-only version bump
+manual runtime fix that is not immediately reconciled into main
+```
+
+Emergency observations on `runtime` may inform a repair, but the repair itself must be implemented and validated from `main` before the next publication.
