@@ -2,13 +2,13 @@
 
 Both upstreams implement the OpenAI Chat Completions protocol, so streaming,
 function calling, retries and response normalization stay on AstrBot's normal
-provider path.  This plugin adds only Volcengine-specific last-mile media
-handling, cache observability, fixed billing endpoints and the Agent Plan local
-namespace.
+provider path. This plugin adds only Volcengine-specific last-mile media handling,
+cache/context feedback observability, fixed billing endpoints and the Agent Plan
+local namespace.
 
-Context-window authority stays with AstrBot/model-card configuration.  Dynamic
-routing aliases and future model revisions make a plugin-owned static model
-family context table unsafe.
+Context governance is evidence-driven: model names are identity/diagnostic labels,
+never capability predicates. Pre-feedback comes from the current host/model-card
+state; post-feedback comes from the upstream request that actually ran.
 """
 
 from __future__ import annotations
@@ -30,11 +30,11 @@ from .adapters.limits import get_limits
 from .adapters.video import inject_current_request_videos
 from .compatibility.astrbot import _ApiKeyLogView
 from .capabilities import (
+    ContextFeedbackLoop,
     apply_request_overrides,
     cache_log_settings,
     channel_name,
     clear_source_model_hints,
-    configured_context_limit,
     is_context_length_error,
     log_cache_usage,
     remember_source_model_hint,
@@ -151,6 +151,7 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
             )
         config["api_base"] = fixed_base
         super().__init__(config, provider_settings)
+        self._context_feedback = ContextFeedbackLoop(self.provider_config)
 
         limits = get_limits()
         cache_enabled, cache_every = cache_log_settings()
@@ -166,6 +167,9 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
             cache_enabled,
             cache_every,
         )
+
+    def _provider_id(self) -> str:
+        return str(self.provider_config.get("id") or "")
 
     async def _resolve_audio_part(self, audio_ref: str) -> dict:
         return await build_ark_input_audio(audio_ref)
@@ -186,10 +190,10 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         """Keep image transport failures fail-closed on AstrBot 4.26/4.27.
 
         AstrBot's generic OpenAI adapter intentionally catches image preprocessing
-        exceptions and preserves the original image block.  That is unsafe for
-        this plugin's explicit size guard because an oversized/invalid image would
-        otherwise bypass the guard.  Only image blocks are specialized here;
-        all other content parts remain host-owned.
+        exceptions and preserves the original image block. That is unsafe for this
+        plugin's explicit size guard because an oversized/invalid image would
+        otherwise bypass the guard. Only image blocks are specialized here; all
+        other content parts remain host-owned.
         """
         if isinstance(part, dict) and part.get("type") == "image_url":
             image_url, image_detail = self._extract_image_part_info(part)
@@ -233,6 +237,13 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         *,
         request_max_retries: int | None = None,
     ):
+        # AstrBot's agent runner has already snapshotted max_context_tokens by
+        # this point. Re-confirming here records exactly which pre-feedback the
+        # current request used, without trying to rewrite the current runner.
+        self._context_feedback.pre_request(
+            self.provider_config,
+            provider_id=self._provider_id(),
+        )
         token = _REQUEST_STARTED_AT.set(time.perf_counter())
         try:
             return await super()._query(
@@ -250,15 +261,31 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         *,
         request_max_retries: int | None = None,
     ):
+        self._context_feedback.pre_request(
+            self.provider_config,
+            provider_id=self._provider_id(),
+        )
         token = _REQUEST_STARTED_AT.set(time.perf_counter())
+        last_usage = None
+        completed = False
         try:
             async for item in super()._query_stream(
                 payloads,
                 tools,
                 request_max_retries=request_max_retries,
             ):
+                usage = getattr(item, "usage", None)
+                if usage is not None:
+                    last_usage = usage
                 yield item
+            completed = True
         finally:
+            if completed and last_usage is not None:
+                self._context_feedback.post_success(
+                    prompt_tokens=int(getattr(last_usage, "input", 0) or 0),
+                    completion_tokens=int(getattr(last_usage, "output", 0) or 0),
+                    provider_id=self._provider_id(),
+                )
             _REQUEST_STARTED_AT.reset(token)
 
     async def _parse_openai_completion(self, completion, tools):
@@ -281,6 +308,14 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         ctd = getattr(usage, "completion_tokens_details", None)
         reasoning = int(getattr(ctd, "reasoning_tokens", 0) or 0) if ctd else 0
 
+        self._context_feedback.post_success(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            provider_id=self._provider_id(),
+        )
+
+        # completion.model is useful diagnostic evidence for the cache line, but
+        # is never fed into context-capability decisions.
         resolved_model = str(getattr(completion, "model", "") or "")
         log_cache_usage(
             channel=channel_name(self._fixed_api_base),
@@ -322,23 +357,17 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         image_fallback_used: bool = False,
     ) -> tuple:
         if is_context_length_error(error):
-            resolved = str(payloads.get("model", "") or self.get_model() or "")
-            guard = configured_context_limit(self.provider_config)
-            if guard is None:
-                logger.warning(
-                    "[VolcengineCache] context-length error for model=%s; "
-                    "plugin has no explicit context guard and does not invent one; "
-                    "AstrBot/model metadata owns compression and retry",
-                    resolved,
-                )
-            else:
-                logger.warning(
-                    "[VolcengineCache] context-length error for model=%s; "
-                    "explicit max_context_tokens=%d was still rejected; "
-                    "delegating history reduction/retry to AstrBot",
-                    resolved,
-                    guard,
-                )
+            # This post-feedback revision is intentionally written to the live
+            # Provider object only. The current AstrBot ContextManager was already
+            # built; native retry handles this request, while the next request sees
+            # the revised pre-feedback. Reload/restart creates a fresh Provider and
+            # therefore naturally discards the learned runtime observation.
+            self._context_feedback.post_context_rejection(
+                self.provider_config,
+                error,
+                payloads,
+                provider_id=self._provider_id(),
+            )
 
         result = await super()._handle_api_error(
             error,
