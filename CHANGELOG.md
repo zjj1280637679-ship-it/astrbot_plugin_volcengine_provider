@@ -1,5 +1,25 @@
 # 更新记录
 
+## 0.1.30
+
+- **缓存命中强化收编进插件**（`capabilities/cache_insight.py`）：把此前散落在独立脚本里的缓存命中观测与上下文治理正式纳入插件管理，不再依赖难以维护的无头脚本。
+- **缓存命中日志**：每次对话完成后打印 `[VolcengineCache]` 行，含 `channel`、`model`、输入/缓存命中/未缓存/输出 token 与命中率，以及 reasoning token 和耗时；每 N 次（默认 10）追加 `[VolcengineCache:SUM]` 汇总。仿照 DeepSeek Harness 的缓存命中诊断，用于验证稳定前缀（同模型、同渠道、对话头稳定）确实按缓存命中计费。
+- **上下文治理**：上下文长度错误不再盲目弹记录，而是先按模型解析已知上下文上限（deepseek-v4 系/glm 系 → 1M，doubao/kimi/minimax → 256K）并记入缓存日志；未知模型按保守上限降级。保持长对话前缀稳定，正是缓存高命中的关键前提。
+- **WebUI 可管理**：`_conf_schema.json` 新增 `cache_log_enabled`（默认开）与 `cache_log_every`（默认 10）两个配置项。
+- 实验数据见 README「缓存命中强化」一节：真实运行 24 条 Agent Plan 记录平均命中 83.1%（加权 85.9%），最近 6 条稳定 97.1–97.9%。
+
+## 0.1.29
+
+- **README 归位到运行时包**：`runtime` 分支此前缺少 `README.md`，GitHub 仓库的 `tree/runtime` 页面与 AstrBot 插件信息展示无文档可读。本版本把面向用户的 README 加入运行包，并在其中补齐 0.1.28 的媒体护栏配置说明。
+- 新增的 README 为自包含用户文档：安装、两张供应商卡配置、媒体输入上限与超限图片压缩（0.1.28+）、多模态路径、常见问题与隐私/费用边界；不再依赖 `docs/` 内部资料。
+- 本版本不改任何插件行为、UI、模型卡、Provider 路由、音视频协议或请求语义；只补文档并随严格更新的版本号 0.1.29 走完整门禁与发布器。
+
+## 0.1.28（已发布到 runtime）
+
+- **可配置媒体输入上限**：音频/视频输入上限与转码超时从写死的常量改为 `_conf_schema.json` 可调项（`audio_max_mb`、`audio_transcode_timeout_seconds`、`video_max_mb`、`video_transcode_timeout_seconds`），WebUI 插件配置页可直接修改。
+- **超限图片自动压缩**：新增 `adapters/image.py`，超过 `image_max_mb`（默认 5MB）的本地/`data` 图片在发送前自动降分辨率压缩到上限以内，压缩目标长边与 JPEG 质量可配；仍超限时逐级降质重试，避免请求被火山方舟拒绝。
+- 本版本不改 Provider 路由、模型卡 Video 合同或请求语义。
+
 ## 0.1.27
 
 - **发布状态归位**：0.1.26 已通过主分支 Runtime Distribution Gate 并由受控发布器晋升到 `runtime`；本版本把上一条更新记录从“发布候选”改为“已发布到 runtime”，避免 AstrBot 更新弹窗把已安装版本误标为候选。

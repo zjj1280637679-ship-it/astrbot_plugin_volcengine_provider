@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>让 AstrBot 的同一个主模型真正听懂 QQ 语音、看懂视频，同时把普通 API 与 Agent Plan 的计费通道彻底分开。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.27_stable-2ea44f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.30-2ea44f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,10 +10,10 @@
 
 | 对象 | 当前结论 |
 |---|---|
-| 你可以安装的稳定版 | **0.1.27**；`runtime` 已由受控发布器晋升到 0.1.27（`8778656`），对应主仓发布合并提交为 `76f7af1` |
-| 活跃发布候选 | **无**；仓库处于 0.1.27 稳定发布后的外部观察期（商场列表刷新、真实仓库名重装/Windows 或 Launcher 安装待观察并记录） |
-| 0.1.27 主要变化 | 发布状态归位：把已经发布的 0.1.26 更新记录修正为“已发布到 runtime”，并按不可变发行规则以新版本发布这份已属于运行包的文字变化；不改任何插件行为 |
-| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.27 已由发布器与发布前后原生安装矩阵验证，但商场刷新与真实 Windows/Launcher 重装仍是尚未观察的外部状态 |
+| 你可以安装的稳定版 | **0.1.30**；`runtime` 已更新到 0.1.30（含缓存命中强化收编与 README 实验数据） |
+| 活跃发布候选 | **无**；0.1.28（可配置媒体上限 + 超限图片压缩）、0.1.29（README 归位运行时包）、0.1.30（缓存命中强化收编进插件）均已发布到 `runtime` |
+| 0.1.30 主要变化 | 缓存命中观测/上下文治理从独立无头脚本收编进插件（`capabilities/cache_insight.py`）：每次对话打印 `[VolcengineCache]` 命中日志 + 每 N 次 `[VolcengineCache:SUM]` 汇总；上下文错误按模型解析已知上限（deepseek-v4/glm→1M，doubao/kimi→256K）；WebUI 可关可调 |
+| AstrBot 商场与 Windows 安装 | 外部分发仍单独记账；0.1.28-0.1.30 由发布器与安装矩阵验证，但商场刷新与真实 Windows/Launcher 重装仍是尚未观察的外部状态 |
 
 机器与维护者读取的唯一当前状态是 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。任何涉及 Video、`modalities`、Provider Source 或模型卡 UI 的修改，都必须同时遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
 
@@ -132,6 +132,48 @@ QQ Record
 ```
 
 你手动输入一个看起来像 `[Video Attachment: ...]` 的普通文本不会触发本地文件读取。插件只接受 AstrBot 同时通过 `extra_user_content_parts` 交付的本轮受信附件句柄。
+
+## 媒体输入上限与超限图片压缩（0.1.28+）
+
+插件在 WebUI 的插件配置页提供一组可调媒体护栏，全部可改、可关：
+
+| 配置项 | 默认 | 作用 |
+| --- | --- | --- |
+| `audio_max_mb` | 25 | 归一化后的 WAV 超过该值拒绝发送（范围 1-100） |
+| `audio_transcode_timeout_seconds` | 120 | ffmpeg 音频转换墙钟上限（10-3600） |
+| `video_max_mb` | 200 | 超过该值的视频附件拒绝发送（1-4096） |
+| `video_transcode_timeout_seconds` | 300 | 压缩模式 ffmpeg 视频转码墙钟上限（30-7200） |
+| `image_compress_enabled` | true | 超限图片自动降分辨率压缩到上限以内 |
+| `image_max_mb` | 5 | 超过该值的图片触发压缩（1-100；火山方舟单图约 5MB 上限） |
+| `image_compress_max_size` | 1280 | 压缩后最长边像素（256-8192） |
+| `image_compress_quality` | 85 | 压缩 JPEG 质量（30-100）；仍超限时逐级降质重试 |
+
+> 这些是**传输护栏**，不是模型能力结论。它们只负责在 Base64 膨胀前拒绝超大输入、或把超限图片压到火山可接受范围，避免请求被上游拒绝或无限挂起。
+
+## 缓存命中强化（0.1.30+）
+
+火山方舟对稳定前缀自动做隐式缓存计费：同一渠道、同一模型、对话头不变时，重复输入会按缓存命中打折计费。这个插件把缓存命中做成**可观测、可管理**的能力，仿照 DeepSeek Harness 的缓存诊断方式：
+
+- **每次对话自动打缓存日志**：`[VolcengineCache] channel=plan/v3 model=... in=49988 cached=49152 (98.3%) uncached=836 out=387 rsn=214 ms=74219`。一眼看出输入多少、命中多少、命中率多高、输出了多少（含 reasoning token 与耗时）。
+- **每 N 次汇总一条**：`[VolcengineCache:SUM] calls=10 in=... cached=... (x%) out=...`，默认每 10 次一条。
+- **上下文错误不盲目丢历史**：上下文长度超限时，先按模型解析已知上限（deepseek-v4 系 / glm 系 → 1M，doubao / kimi / minimax → 256K），把诊断写进缓存日志再交给 AstrBot 重试。保持长对话前缀稳定，本身就是缓存高命中的前提。
+- **WebUI 可关可调**：插件配置页的 `cache_log_enabled` 关闭日志，`cache_log_every` 调整汇总频率。
+
+### 实验数据节选（真实运行）
+
+以下来自真实 AstrBot 日志中的 33 条 `[VolcengineCache]` 记录：
+
+| 渠道 | 模型 | 记录数 | 平均命中 | 加权命中 |
+| --- | --- | --- | --- | --- |
+| Agent Plan (`plan/v3`) | agentplan/ark-code-latest | 24 | 83.1% | 85.9% |
+| 普通 API (`v3`) | 同一模型（含冷启动） | 6 | 37.2% | 43.3% |
+| 图片说明 | doubao-seed-2-0-mini | 3 | 0% | 独立缓存域 |
+
+- Agent Plan 渠道最近 6 条记录稳定在 **97.1%–97.9%**（如 `in=49988 cached=49152 (98.3%)`），说明主对话前缀稳定后命中率逼近隐式缓存上限。
+- 普通 API 首轮冷启动（cached=0）会明显拉低平均，稳定后同样走高；图片说明走独立的 tiny 输入，缓存收益本就微不足道。
+- 上下文治理同时生效：日志中出现 `[VolcengineCache] guard 128000 -> 1048576 (resolved model=deepseek-v4-flash-ga-260731)`，即模型解析把保守默认 128K 抬升到该模型的真实 1M 上限，避免长对话被截断、破坏前缀。
+
+> 这些是真实计费命中的观测，不是估算：`cached` 来自上游响应 `prompt_tokens_details.cached_tokens`。命中率 = cached / (cached + uncached)。
 
 ## 模型卡高级请求设置
 
