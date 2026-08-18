@@ -1,8 +1,9 @@
 """Ark Chat audio last-mile adapter.
 
 AstrBot owns media resolution and generic format handling. This module owns only
-the final Ark Chat invariant (16 kHz, mono, PCM16 WAV, <=25 MiB) and serialization
-to ``input_audio``. It has no Provider, retry, key-pool or model lifecycle logic.
+the final Ark Chat invariant (16 kHz, mono, PCM16 WAV, configured byte ceiling)
+and serialization to ``input_audio``. It has no Provider, retry, key-pool or
+model lifecycle logic.
 """
 
 from __future__ import annotations
@@ -31,7 +32,6 @@ ARK_CHAT_AUDIO_TRANSCODE_TIMEOUT_SECONDS = 120
 
 def _validate_ark_chat_wav(wav_data: bytes) -> None:
     """Enforce the exact audio invariant sent to Ark Chat Completions."""
-
     max_bytes = get_limits().audio_max_bytes
     if len(wav_data) > max_bytes:
         raise ValueError(
@@ -58,7 +58,6 @@ def _validate_ark_chat_wav(wav_data: bytes) -> None:
 
 async def _ffmpeg_to_ark_chat_wav(source_path: Path, output_path: Path) -> None:
     """Convert one materialized audio file to the provider's canonical WAV."""
-
     args = [
         "ffmpeg",
         "-nostdin",
@@ -100,9 +99,6 @@ async def _ffmpeg_to_ark_chat_wav(source_path: Path, output_path: Path) -> None:
         await process.communicate()
         raise ValueError("音频附件转换超时，未向火山方舟发送请求。") from exc
     except asyncio.CancelledError:
-        # A cancelled chat request must not strand the transcoding subprocess.
-        # kill() is synchronous so it completes even in an already-cancelled
-        # task; the subprocess transport reaps the child afterwards.
         try:
             process.kill()
         except (OSError, ProcessLookupError):
@@ -110,8 +106,6 @@ async def _ffmpeg_to_ark_chat_wav(source_path: Path, output_path: Path) -> None:
         raise
 
     if process.returncode != 0:
-        # Do not expose a signed source URL, local path or raw ffmpeg command in
-        # user-visible errors. The exit code is sufficient for diagnosis.
         stderr_size = len(stderr or b"")
         raise ValueError(
             "音频附件无法解码为标准 WAV，未向火山方舟发送请求"
@@ -121,7 +115,6 @@ async def _ffmpeg_to_ark_chat_wav(source_path: Path, output_path: Path) -> None:
 
 async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
     """Use AstrBot for audio resolution and enforce only Ark's final WAV invariant."""
-
     temp_dir = Path(get_astrbot_temp_path())
     temp_dir.mkdir(parents=True, exist_ok=True)
     output_path = temp_dir / f"volcengine_audio_{uuid.uuid4().hex}.wav"
@@ -147,6 +140,23 @@ async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
 
             if wav_data is None:
                 await _ffmpeg_to_ark_chat_wav(source_path, output_path)
+                try:
+                    output_stat = await asyncio.to_thread(output_path.stat)
+                except OSError as exc:
+                    raise ValueError(
+                        "音频归一化结果缺失，未向火山方舟发送请求。"
+                    ) from exc
+                if output_stat.st_size <= 0:
+                    raise ValueError(
+                        "音频归一化结果为空文件，未向火山方舟发送请求。"
+                    )
+                max_bytes = get_limits().audio_max_bytes
+                if output_stat.st_size > max_bytes:
+                    raise ValueError(
+                        "音频归一化结果超过火山方舟 Base64 音频输入的 "
+                        f"{max_bytes // (1024 * 1024)} MB 上限，"
+                        "在读取/Base64 前已停止。"
+                    )
                 wav_data = await asyncio.to_thread(output_path.read_bytes)
 
         _validate_ark_chat_wav(wav_data)
@@ -160,6 +170,8 @@ async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
         return wav_data
     except ValueError:
         raise
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
         raise ValueError(
             "无法把本次音频附件归一化为火山方舟可读格式，未发送请求。"
@@ -172,13 +184,7 @@ async def normalize_ark_chat_audio(audio_ref: str) -> bytes:
 
 
 async def build_ark_input_audio(audio_ref: str) -> dict:
-    """Return one Ark ``input_audio`` block from an AstrBot media reference.
-
-    A failure here means the request did not reach the model.  Wrap the local
-    failure with structured provenance instead of letting it masquerade as a
-    negative model-capability observation.
-    """
-
+    """Return one Ark ``input_audio`` block from an AstrBot media reference."""
     try:
         wav_data = await normalize_ark_chat_audio(audio_ref)
     except AdapterInputTransportError:
