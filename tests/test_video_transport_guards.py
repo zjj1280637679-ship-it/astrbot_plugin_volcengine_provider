@@ -251,9 +251,28 @@ async def test_audio_transcode_output_is_size_checked_before_read() -> None:
 
 async def test_plugin_initialize_rebinds_live_owned_providers_only() -> None:
     reloaded: list[str] = []
+    configs = {
+        "ark/card": {"id": "ark/card", "type": plugin_main.ARK_PROVIDER_TYPE, "enable": True},
+        "plan/card": {"id": "plan/card", "type": plugin_main.AGENT_PLAN_PROVIDER_TYPE, "enable": True},
+        "foreign/card": {"id": "foreign/card", "type": "openai_chat_completion", "enable": True},
+    }
+
+    class _OwnedLive:
+        _volcengine_provider_plugin_owned = True
+
+    class _ForeignLive:
+        pass
 
     class _Manager:
-        inst_map = {"ark/card": object(), "plan/card": object(), "foreign/card": object()}
+        inst_map = {
+            "ark/card": _OwnedLive(),
+            "plan/card": _OwnedLive(),
+            "foreign/card": _ForeignLive(),
+        }
+
+        def get_provider_config_by_id(self, provider_id):
+            value = configs.get(provider_id)
+            return dict(value) if value else None
 
         async def reload(self, provider):
             reloaded.append(provider["id"])
@@ -263,12 +282,10 @@ async def test_plugin_initialize_rebinds_live_owned_providers_only() -> None:
             raise AssertionError("no migration should be persisted in this fixture")
 
     class _ConfigMgr:
+        # Deliberately make config type insufficient evidence: the live marker is
+        # the authority at this lifecycle boundary. Foreign live objects remain out.
         default_conf = _Config(
-            provider=[
-                {"id": "ark/card", "type": plugin_main.ARK_PROVIDER_TYPE},
-                {"id": "plan/card", "type": plugin_main.AGENT_PLAN_PROVIDER_TYPE},
-                {"id": "foreign/card", "type": "openai_chat_completion"},
-            ],
+            provider=list(configs.values()),
             provider_sources=[],
         )
 
