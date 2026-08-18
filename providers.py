@@ -1,11 +1,14 @@
 """Two isolated Volcengine Ark chat providers built on AstrBot.
 
-Both upstreams implement the OpenAI Chat Completions protocol, so this plugin
-inherits AstrBot's native OpenAI adapter. Streaming, multimodal assembly,
-function calling, retries and response normalization stay on the host path.
+Both upstreams implement the OpenAI Chat Completions protocol, so streaming,
+function calling, retries and response normalization stay on AstrBot's normal
+provider path.  This plugin adds only Volcengine-specific last-mile media
+handling, cache observability, fixed billing endpoints and the Agent Plan local
+namespace.
 
-The plugin adds only Volcengine-specific last-mile media handling, cache
-observability and model-family context hints.
+Context-window authority stays with AstrBot/model-card configuration.  Dynamic
+routing aliases and future model revisions make a plugin-owned static model
+family context table unsafe.
 """
 
 from __future__ import annotations
@@ -21,18 +24,20 @@ from astrbot.core.provider.sources.request_retry import retry_provider_request
 from openai._exceptions import NotFoundError
 
 from .adapters.audio import build_ark_input_audio
-from .adapters.image import enforce_image_limits
+from .adapters.errors import AdapterInputTransportError
+from .adapters.image import build_ark_image_part
+from .adapters.limits import get_limits
 from .adapters.video import inject_current_request_videos
 from .compatibility.astrbot import _ApiKeyLogView
 from .capabilities import (
-    apply_context_limit_hint,
     apply_request_overrides,
+    cache_log_settings,
     channel_name,
     clear_source_model_hints,
+    configured_context_limit,
     is_context_length_error,
     log_cache_usage,
     remember_source_model_hint,
-    resolve_context_limit,
     source_scope_id,
     video_input_mode,
 )
@@ -145,12 +150,65 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
                 fixed_base,
             )
         config["api_base"] = fixed_base
-
-        apply_context_limit_hint(config)
         super().__init__(config, provider_settings)
+
+        limits = get_limits()
+        cache_enabled, cache_every = cache_log_settings()
+        logger.info(
+            "[VolcenginePolicy] provider-bound id=%s type=%s model=%s "
+            "audio=%dMiB video=%dMiB image=%dMiB cache=%s/every=%d",
+            str(self.provider_config.get("id") or ""),
+            str(self.provider_config.get("type") or ""),
+            str(self.get_model() or ""),
+            limits.audio_max_bytes // (1024 * 1024),
+            limits.video_max_bytes // (1024 * 1024),
+            limits.image_max_bytes // (1024 * 1024),
+            cache_enabled,
+            cache_every,
+        )
 
     async def _resolve_audio_part(self, audio_ref: str) -> dict:
         return await build_ark_input_audio(audio_ref)
+
+    async def _resolve_image_part(
+        self,
+        image_url: str,
+        *,
+        image_detail: str | None = None,
+    ) -> dict:
+        """Resolve/compress an Ark image before raw bytes become Base64."""
+        return await build_ark_image_part(
+            image_url,
+            image_detail=image_detail,
+        )
+
+    async def _transform_content_part(self, part: dict) -> dict:
+        """Keep image transport failures fail-closed on AstrBot 4.26/4.27.
+
+        AstrBot's generic OpenAI adapter intentionally catches image preprocessing
+        exceptions and preserves the original image block.  That is unsafe for
+        this plugin's explicit size guard because an oversized/invalid image would
+        otherwise bypass the guard.  Only image blocks are specialized here;
+        all other content parts remain host-owned.
+        """
+        if isinstance(part, dict) and part.get("type") == "image_url":
+            image_url, image_detail = self._extract_image_part_info(part)
+            if not image_url:
+                return part
+            try:
+                return await self._resolve_image_part(
+                    image_url,
+                    image_detail=image_detail,
+                )
+            except AdapterInputTransportError:
+                raise
+            except Exception as exc:
+                raise AdapterInputTransportError(
+                    "图片预处理失败，未向火山方舟发送请求。",
+                    media_type="image",
+                    stage="resolve_media",
+                ) from exc
+        return await super()._transform_content_part(part)
 
     async def _prepare_chat_payload(self, *args, **kwargs):
         extra_user_content_parts = kwargs.get("extra_user_content_parts")
@@ -158,7 +216,6 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
             extra_user_content_parts = args[7]
 
         payloads, context_query = await super()._prepare_chat_payload(*args, **kwargs)
-        await enforce_image_limits(payloads)
 
         mode = video_input_mode(self.provider_config)
         await inject_current_request_videos(
@@ -266,20 +323,21 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
     ) -> tuple:
         if is_context_length_error(error):
             resolved = str(payloads.get("model", "") or self.get_model() or "")
-            known_limit = resolve_context_limit(resolved)
-            if known_limit is None:
+            guard = configured_context_limit(self.provider_config)
+            if guard is None:
                 logger.warning(
                     "[VolcengineCache] context-length error for model=%s; "
-                    "no plugin-owned context hint is known, delegating to AstrBot retry",
+                    "plugin has no explicit context guard and does not invent one; "
+                    "AstrBot/model metadata owns compression and retry",
                     resolved,
                 )
             else:
                 logger.warning(
                     "[VolcengineCache] context-length error for model=%s; "
-                    "configured max_context_tokens=%d; upstream still rejected, "
+                    "explicit max_context_tokens=%d was still rejected; "
                     "delegating history reduction/retry to AstrBot",
                     resolved,
-                    known_limit,
+                    guard,
                 )
 
         result = await super()._handle_api_error(
