@@ -1,5 +1,5 @@
 {
-  "schema_version": 20,
+  "schema_version": 21,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
@@ -8,9 +8,9 @@
     "active_release_candidate": {
       "version": "0.1.31",
       "branch": "agent/0.1.31-reconcile-runtime",
-      "status": "validating",
+      "status": "validating_negative_lifecycle_counterexamples",
       "releaseable": false,
-      "purpose": "reconcile runtime-only 0.1.28-0.1.30 work into main and repair confirmed regressions"
+      "purpose": "reconcile runtime-only 0.1.28-0.1.30 work into main, repair confirmed regressions, and prove critical invariants again after each lifecycle transition"
     },
     "marketplace": {
       "listed_version": "0.1.22",
@@ -23,7 +23,7 @@
     "version": "0.1.31",
     "branch": "agent/0.1.31-reconcile-runtime",
     "track": "release_candidate",
-    "status": "validating_reconciliation_and_regression_fix",
+    "status": "negative_counterexample_closure",
     "installable": false
   },
   "published_baseline": {
@@ -35,41 +35,47 @@
     "status": "runtime_contains_features_not_yet_present_in_main"
   },
   "current_goal": {
-    "id": "release-0.1.31-reconcile-main-runtime",
-    "goal": "Restore main as the only development truth, repair confirmed 0.1.28-0.1.30 regressions, and return runtime to generated-only status.",
+    "id": "release-0.1.31-lifecycle-evidence-chain",
+    "goal": "Restore main as the only development truth and make every critical invariant re-confirm itself after the lifecycle transitions that can invalidate its previous evidence.",
     "active_decision_ids": [],
     "non_goals": [
       "Do not change the model-card Video ownership contract.",
       "Do not introduce cross-channel fallback between Ark and Agent Plan.",
+      "Do not build a second static global model-capability/context database inside the plugin.",
       "Do not claim marketplace or Windows verification from repository CI."
     ]
   },
   "active_validation_frontier": {
     "release": "0.1.31",
-    "name": "runtime_reconciliation_and_regression_fix",
-    "current_stage": "candidate_open_before_full_gate",
+    "name": "negative_lifecycle_counterexample_closure",
+    "current_stage": "reopened_after_first_all_green_gate_due_to_lifecycle_counterexamples",
     "next_actions": [
-      "Run Runtime Distribution Gate on the candidate.",
-      "Verify media/cache/context regression contracts on AstrBot 4.26.1 and 4.27.2.",
-      "After all blocking gates are green, change candidate status to ready/releaseable before merge and publication."
+      "Re-run Runtime Distribution Gate with both preserved 0.1.25 negative transport contracts and new 0.1.31 lifecycle-policy contracts.",
+      "Run the real AstrBot 4.27.3 lifecycle matrix through plugin-config hot reload, provider rebind, process restart, same-version replacement and uninstall.",
+      "Re-run model-card Video, lifecycle and 0.1.19 compatibility workflows after the negative-case fixes.",
+      "Only after every current-head blocking workflow is green may the candidate move to ready/releaseable."
     ],
     "observed": [
-      "runtime 0.1.30 contains media-limit, image-compression and cache-insight code missing from main 0.1.30.",
-      "main metadata 0.1.30 drifted from PROJECT_STATE development/stable 0.1.27, which makes the knowledge-state gate fail.",
-      "0.1.30 context-limit code resolved values but did not write max_context_tokens used by AstrBot.",
-      "0.1.30 cache ms timing started inside completion parsing rather than around the request.",
-      "0.1.28 image compression accepted max_size but did not use it and could return a still-oversized terminal result.",
-      "runtime packager/publisher allow-lists omitted _conf_schema.json and README.md."
+      "The first 0.1.31 candidate reached all-green Runtime Distribution, Video, Lifecycle and 0.1.19 compatibility workflows.",
+      "That all-green state did not prove every later lifecycle transition because confirmations have scope and lifetime.",
+      "Agent Plan ark-code-latest is a dynamic routing alias, so its visible model name cannot safely identify one fixed context window.",
+      "Writing plugin-family context values before AstrBot resolution can suppress more accurate host LLM metadata and can also confuse total model window with the input-history compression guard.",
+      "The first 0.1.31 image guard ran after AstrBot native image Base64 materialization, so it protected the upstream byte ceiling but not pre-Base64 memory expansion.",
+      "The first 0.1.31 test rewrite replaced several 0.1.25 video negative-path assertions instead of retaining them as an independent evidence layer.",
+      "AstrBot plugin-config save performs an in-process plugin reload; existing Provider instances have a separate lifecycle and must be explicitly rebound to new media/cache policy.",
+      "Audio transcoding previously read the entire output file before enforcing the configured byte ceiling."
     ]
   },
   "closed_experiments": [],
   "stable_boundaries": [
-    "AstrBot owns provider lifecycle, fallback, retry, model-card management and shared Dashboard schema.",
-    "The plugin owns Volcengine protocol adaptation and must not maintain a second global capability database.",
+    "AstrBot owns provider lifecycle, fallback, retry, model-card management, shared Dashboard schema and host model metadata.",
+    "The plugin owns Volcengine protocol adaptation and must not maintain a second global capability/context database.",
     "Video remains a native per-model-card modalities choice scoped only to Ark and Agent Plan Source types.",
     "Ordinary Ark and Agent Plan keep separate fixed endpoints and credentials; the plugin never silently crosses channels.",
-    "Explicit positive max_context_tokens values win over plugin model-family hints.",
-    "Unknown model context limits are not guessed.",
+    "Explicit positive max_context_tokens values are host/model-card input-guard configuration; the plugin does not infer them from broad model-name families.",
+    "Dynamic aliases, endpoint IDs and unknown models do not receive plugin-guessed context windows.",
+    "A confirmation is valid only for its object/state/lifecycle node; transitions that can invalidate it require a new confirmation.",
+    "Older negative-path contracts remain independently executable when later releases add new tests.",
     "Runtime is generated from main; direct runtime development is not an accepted steady state."
   ],
   "knowledge_lifecycle": {
@@ -79,5 +85,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "0.1.31 is validating, not installable. Stable user installations remain on runtime 0.1.30 until all gates are green and the guarded publisher promotes a ready candidate."
+  "warning": "0.1.31 remains validating and is not installable. Stable user installations remain on runtime 0.1.30 until the negative lifecycle counterexample matrix is green on the current head and the guarded publisher promotes a ready candidate."
 }
