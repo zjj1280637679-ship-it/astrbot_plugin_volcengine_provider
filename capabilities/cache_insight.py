@@ -1,68 +1,40 @@
-"""Cache observability and context-limit hints for Volcengine Ark providers.
+"""Cache observability and conservative context diagnostics for Volcengine providers.
 
-This module owns two narrow responsibilities:
+Lifecycle rule: an observation is only valid for the state in which it was made.
+Changing cache-log policy resets rolling evidence instead of mixing samples across
+policy generations.
 
-1. Report upstream cache-hit accounting from ``usage.cached_tokens``.
-2. Apply a model-specific ``max_context_tokens`` hint before AstrBot builds
-   the main-agent context guard. Explicit user/provider values always win.
-
-It does not rewrite chat history itself. If the upstream still rejects a
-request for context length, AstrBot keeps ownership of its normal retry /
-history-shrinking policy.
+Context-window ownership deliberately stays with AstrBot/model-card configuration.
+The plugin does not author a second static model-family capability table: dynamic
+routing aliases and future model revisions make such a table unsafe. Explicit
+positive ``max_context_tokens`` values can still be observed for diagnostics, but
+are never invented here.
 """
 
 from __future__ import annotations
 
+import json
 import threading
+from typing import Any
 
 from astrbot import logger
 
 DEFAULT_CACHE_LOG_ENABLED = True
 DEFAULT_CACHE_LOG_EVERY = 10
 
-_AGENT_PLAN_PREFIX = "agentplan/"
-_CONTEXT_LIMITS = (
-    (("deepseek-v4", "glm-5", "glm-4"), 1_048_576),
-    (("doubao", "kimi", "minimax"), 262_144),
-)
 
-
-def _normalize_model_name(model: object) -> str:
-    name = str(model or "").strip().lower()
-    if name.startswith(_AGENT_PLAN_PREFIX):
-        name = name[len(_AGENT_PLAN_PREFIX) :].strip()
-    return name
-
-
-def resolve_context_limit(model: object) -> int | None:
-    """Return a verified model-family context hint, otherwise ``None``."""
-    name = _normalize_model_name(model)
-    for prefixes, limit in _CONTEXT_LIMITS:
-        if any(name.startswith(prefix) for prefix in prefixes):
-            return limit
-    return None
-
-
-def apply_context_limit_hint(provider_config: dict) -> int | None:
-    """Apply a known ceiling only when no positive explicit value exists.
-
-    AstrBot's main-agent builder only injects its fallback context ceiling when
-    ``provider_config['max_context_tokens'] <= 0``. Setting the known value here
-    therefore changes the real guard used by AstrBot instead of merely logging
-    a larger number after a failure.
-    """
-    raw_current = provider_config.get("max_context_tokens", 0)
+def configured_context_limit(provider_config: dict[str, Any] | object) -> int | None:
+    """Return an explicit positive host/model-card context guard, if present."""
+    if not isinstance(provider_config, dict):
+        return None
+    raw = provider_config.get("max_context_tokens")
+    if isinstance(raw, bool):
+        return None
     try:
-        current = int(raw_current or 0)
+        value = int(raw)
     except (TypeError, ValueError):
-        current = 0
-    if current > 0:
-        return current
-
-    limit = resolve_context_limit(provider_config.get("model"))
-    if limit is not None:
-        provider_config["max_context_tokens"] = limit
-    return limit
+        return None
+    return value if value > 0 else None
 
 
 class _CacheAccumulator:
@@ -96,6 +68,11 @@ class _CacheAccumulator:
             self._buckets[key] = [0, 0, 0, 0, 0]
             return snapshot
 
+    def reset(self) -> None:
+        """Invalidate rolling evidence after an observability-policy transition."""
+        with self._lock:
+            self._buckets.clear()
+
 
 _accumulator = _CacheAccumulator()
 _current_cache_log_enabled = DEFAULT_CACHE_LOG_ENABLED
@@ -103,18 +80,36 @@ _current_cache_log_every = DEFAULT_CACHE_LOG_EVERY
 
 
 def configure_cache_log(enabled: bool | None = None, every: int | None = None) -> None:
-    """Apply plugin-config overrides."""
+    """Apply plugin-config overrides and invalidate old-policy rollups."""
     global _current_cache_log_enabled, _current_cache_log_every
-    if enabled is not None:
-        _current_cache_log_enabled = bool(enabled)
+
+    next_enabled = _current_cache_log_enabled if enabled is None else bool(enabled)
+    next_every = _current_cache_log_every
     if every is not None:
         parsed = int(every)
         if parsed > 0:
-            _current_cache_log_every = parsed
+            next_every = parsed
+
+    changed = (
+        next_enabled != _current_cache_log_enabled
+        or next_every != _current_cache_log_every
+    )
+    _current_cache_log_enabled = next_enabled
+    _current_cache_log_every = next_every
+    if changed:
+        _accumulator.reset()
 
 
 def cache_log_enabled() -> bool:
     return _current_cache_log_enabled
+
+
+def cache_log_every() -> int:
+    return _current_cache_log_every
+
+
+def cache_log_settings() -> tuple[bool, int]:
+    return _current_cache_log_enabled, _current_cache_log_every
 
 
 def log_cache_usage(
@@ -180,17 +175,45 @@ def log_cache_usage(
     )
 
 
+def _error_text_candidates(error: Exception) -> list[str]:
+    candidates: list[str] = [str(error)]
+
+    body = getattr(error, "body", None)
+    if isinstance(body, dict):
+        try:
+            candidates.append(json.dumps(body, ensure_ascii=False, default=str))
+        except Exception:
+            pass
+        nested = body.get("error")
+        if isinstance(nested, dict):
+            for key in ("message", "type", "code", "param"):
+                value = nested.get(key)
+                if value is not None:
+                    candidates.append(str(value))
+    elif isinstance(body, str):
+        candidates.append(body)
+
+    response = getattr(error, "response", None)
+    text = getattr(response, "text", None) if response is not None else None
+    if isinstance(text, str):
+        candidates.append(text)
+
+    return candidates
+
+
 def is_context_length_error(error: Exception) -> bool:
     """Return whether an exception resembles an upstream context rejection."""
-    lowered = str(error).lower()
+    lowered = "\n".join(_error_text_candidates(error)).lower()
     return any(
         marker in lowered
         for marker in (
             "context length",
             "maximum context",
             "context_length",
-            "token limit",
             "context window",
+            "token limit",
+            "too many tokens",
+            "max context",
         )
     )
 
