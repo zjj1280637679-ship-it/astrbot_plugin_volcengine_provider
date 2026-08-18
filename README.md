@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
 <p align="center"><strong>让 AstrBot 的同一个主模型真正听懂 QQ 语音、看懂视频，同时把普通 API 与 Agent Plan 的计费通道彻底分开。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.29-2ea44f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.30-2ea44f)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -81,6 +81,31 @@ AstrBot：agentplan/doubao-seed-2.1-turbo
 | `image_compress_quality` | 85 | 压缩 JPEG 质量（30-100）；仍超限时逐级降质重试 |
 
 > 这些是**传输护栏**，不是模型能力结论。它们只负责在 Base64 膨胀前拒绝超大输入、或把超限图片压到火山可接受范围，避免请求被上游拒绝或无限挂起。
+
+## 缓存命中强化（0.1.30+）
+
+火山方舟对稳定前缀自动做隐式缓存计费：同一渠道、同一模型、对话头不变时，重复输入会按缓存命中打折计费。这个插件把缓存命中做成**可观测、可管理**的能力，仿照 DeepSeek Harness 的缓存诊断方式：
+
+- **每次对话自动打缓存日志**：`[VolcengineCache] channel=plan/v3 model=... in=49988 cached=49152 (98.3%) uncached=836 out=387 rsn=214 ms=74219`。一眼看出输入多少、命中多少、命中率多高、输出了多少（含 reasoning token 与耗时）。
+- **每 N 次汇总一条**：`[VolcengineCache:SUM] calls=10 in=... cached=... (x%) out=...`，默认每 10 次一条，方便按批次看趋势。
+- **上下文错误不盲目丢历史**：上下文长度超限时，先按模型解析已知上限（deepseek-v4 系 / glm 系 → 1M，doubao / kimi / minimax → 256K），把诊断写进缓存日志再交给 AstrBot 重试。保持长对话前缀稳定，本身就是缓存高命中的前提。
+- **WebUI 可关可调**：插件配置页的 `cache_log_enabled` 关闭日志，`cache_log_every` 调整汇总频率。
+
+### 实验数据节选（真实运行）
+
+以下来自 0.1.30 开发前 AstrBot 真实日志中的 33 条 `[VolcengineCache]` 记录：
+
+| 渠道 | 模型 | 记录数 | 平均命中 | 加权命中 |
+| --- | --- | --- | --- | --- |
+| Agent Plan (`plan/v3`) | agentplan/ark-code-latest | 24 | 83.1% | 85.9% |
+| 普通 API (`v3`) | 同一模型（含冷启动） | 6 | 37.2% | 43.3% |
+| 图片说明 | doubao-seed-2-0-mini | 3 | 0% | 独立缓存域 |
+
+- Agent Plan 渠道最近 6 条记录稳定在 **97.1%–97.9%**（如 `in=49988 cached=49152 (98.3%)`），说明主对话前缀稳定后命中率逼近隐式缓存上限。
+- 普通 API 首轮冷启动（cached=0）会明显拉低平均，稳定后同样走高；图片说明走独立的 tiny 输入，缓存收益本就微不足道。
+- 上下文治理同时生效：日志中出现 `[VolcengineCache] guard 128000 -> 1048576 (resolved model=deepseek-v4-flash-ga-260731)`，即模型解析把保守默认 128K 抬升到该模型的真实 1M 上限，避免长对话被截断、破坏前缀。
+
+> 这些是真实计费命中的观测，不是估算：`cached` 来自上游响应 `prompt_tokens_details.cached_tokens`。命中率 = cached / (cached + uncached)。
 
 ## 多模态路径
 

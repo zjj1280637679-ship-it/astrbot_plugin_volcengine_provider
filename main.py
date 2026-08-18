@@ -14,6 +14,7 @@ from .capabilities import (
     acquire_dashboard_asset_bridge,
     acquire_dashboard_runtime_bridge,
     acquire_model_fields_bridge,
+    configure_cache_log,
     migrate_legacy_video_settings,
     release_dashboard_asset_bridge,
     release_dashboard_runtime_bridge,
@@ -57,11 +58,16 @@ def _media_limits_from_config(config: dict | None) -> MediaLimits:
 class VolcengineProviderPlugin(star.Star):
     def __init__(self, context: star.Context, config=None):
         super().__init__(context)
+        settings = config if isinstance(config, dict) else {}
         limits = _media_limits_from_config(config)
         set_limits(limits)
+        configure_cache_log(
+            enabled=settings.get("cache_log_enabled", True),
+            every=_bounded_int(settings.get("cache_log_every"), 10, 1, 1000),
+        )
         logger.info(
             "Volcengine media limits: audio=%dMiB/%ds video=%dMiB/%ds "
-            "image_compress=%s image<=%dMiB (%dpx q%d)",
+            "image_compress=%s image<=%dMiB (%dpx q%d); cache_log=%s/every=%d",
             limits.audio_max_bytes // (1024 * 1024),
             limits.audio_transcode_timeout_seconds,
             limits.video_max_bytes // (1024 * 1024),
@@ -70,6 +76,8 @@ class VolcengineProviderPlugin(star.Star):
             limits.image_max_bytes // (1024 * 1024),
             limits.image_compress_max_size,
             limits.image_compress_quality,
+            settings.get("cache_log_enabled", True),
+            _bounded_int(settings.get("cache_log_every"), 10, 1, 1000),
         )
         self._dashboard_bridge_acquired = False
         self._dashboard_asset_bridge_acquired = False

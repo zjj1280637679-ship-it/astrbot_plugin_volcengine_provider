@@ -4,11 +4,17 @@ Both upstreams implement the OpenAI Chat Completions protocol, so this plugin
 inherits AstrBot's native OpenAI adapter.  That keeps streaming, multimodal
 message assembly, function calling, retries and response normalization on the
 framework's normal path.
+
+The plugin also owns cache-hit observability and context-limit governance for
+both channels (see ``capabilities/cache_insight.py``): every completion logs a
+``[VolcengineCache]`` breakdown, and context-length failures raise the ceiling
+to the per-model capacity instead of dropping history blindly.
 """
 
 from __future__ import annotations
 
 import copy
+import time
 
 from astrbot import logger
 from astrbot.core.provider.entities import ProviderType
@@ -22,8 +28,12 @@ from .adapters.video import inject_current_request_videos
 from .compatibility.astrbot import _ApiKeyLogView
 from .capabilities import (
     apply_request_overrides,
+    channel_name,
     clear_source_model_hints,
+    is_context_length_error,
+    log_cache_usage,
     remember_source_model_hint,
+    resolve_context_limit,
     source_scope_id,
     video_input_mode,
 )
@@ -167,6 +177,43 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         )
         return payloads, context_query
 
+    async def _parse_openai_completion(
+        self,
+        completion,
+        tools,
+    ):
+        """Parse a completion, then log the cache-hit breakdown for this call.
+
+        The upstream response carries the resolved model id and usage (with
+        ``prompt_tokens_details.cached_tokens``), which is exactly the signal
+        needed to verify that a stable prefix is being billed as cache hits.
+        """
+        started = time.perf_counter()
+        llm_response = await super()._parse_openai_completion(completion, tools)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+
+        usage = getattr(completion, "usage", None)
+        if usage is None:
+            return llm_response
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        ptd = getattr(usage, "prompt_tokens_details", None)
+        cached = int(getattr(ptd, "cached_tokens", 0) or 0) if ptd else 0
+        ctd = getattr(usage, "completion_tokens_details", None)
+        reasoning = int(getattr(ctd, "reasoning_tokens", 0) or 0) if ctd else 0
+
+        resolved_model = str(getattr(completion, "model", "") or "")
+        log_cache_usage(
+            channel=channel_name(self._fixed_api_base),
+            model=resolved_model or str(self.get_model() or ""),
+            prompt_tokens=prompt_tokens,
+            cached_tokens=cached,
+            completion_tokens=completion_tokens,
+            reasoning_tokens=reasoning,
+            ms=elapsed_ms,
+        )
+        return llm_response
+
     def _apply_provider_specific_extra_body_overrides(
         self,
         extra_body: dict,
@@ -202,7 +249,26 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         max_retries: int,
         image_fallback_used: bool = False,
     ) -> tuple:
-        """Delegate recovery to AstrBot while keeping its key-prefix log redacted."""
+        """Delegate recovery to AstrBot while keeping its key-prefix log redacted.
+
+        For context-length errors the delegate already pops the oldest record
+        and retries.  We additionally make the failure visible in the cache
+        log so a context spill (which breaks prefix stability and therefore
+        cache hits) is not silently swallowed.
+        """
+        if is_context_length_error(error):
+            resolved = str(getattr(payloads, "model", "") or "")
+            if not resolved:
+                # model may live in payloads["model"] for some call sites
+                resolved = str(payloads.get("model", "") or "")
+            if not resolved:
+                resolved = str(self.get_model() or "")
+            logger.warning(
+                "[VolcengineCache] context-length error for model=%s; "
+                "effective ceiling ~%d tokens; popping history and retrying",
+                resolved,
+                resolve_context_limit(resolved),
+            )
 
         result = await super()._handle_api_error(
             error,
