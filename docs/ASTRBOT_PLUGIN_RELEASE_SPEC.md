@@ -2,6 +2,29 @@
 
 Status: project release policy for `astrbot_plugin_volcengine_provider`.
 
+## 0. Branch discipline: no parallel trees; a small version is a publish
+
+The repository maintains exactly two permanent branches:
+
+- `main` — development default branch (docs, tests, CI, evidence);
+- `runtime` — the stable AstrBot installation source.
+
+**No parallel tree may exist.** A version-named branch (e.g. `release/0.1.xx`,
+`fix/0.1.xx`, `agent/0.1.xx-*`, `runtime-rollback-0.1.xx`, or any other
+per-version branch) is forbidden: it cannot be maintained, and AstrBot's
+plugin market can only download the `runtime` branch ZIP, so a parallel tree is
+dead weight that also misleads every future reader.
+
+A small version (0.1.x) is not a branch; it is a publish. Delivering one means:
+
+1. update the tree and bump `metadata.yaml` `version` to the strictly newer
+   value;
+2. push directly to `runtime` (after the release gate);
+3. sync the equivalent user-facing state into `main`.
+
+A bad release is fixed by a direct `runtime` revert with a strict version bump,
+never by creating a rollback or per-version branch.
+
 ## 1. Product separation
 
 The GitHub development repository is not the AstrBot installation package.

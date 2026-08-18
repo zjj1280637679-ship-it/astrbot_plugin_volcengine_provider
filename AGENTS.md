@@ -8,6 +8,10 @@ Lifecycle role: **WARM entry point**. This file provides stable ownership and na
 
 This repository implements Volcengine Ark providers for AstrBot. It adapts Volcengine-specific protocols and media payloads to AstrBot's existing provider lifecycle. It does **not** own AstrBot routing, fallback, retry, or a second model-capability database.
 
+## Branch discipline: no parallel trees
+
+Only two permanent branches exist: `main` (development) and `runtime` (the AstrBot installation source). A small version (0.1.x) is a **publish**, not a branch: bump `metadata.yaml` version and push directly to `runtime`. **Never create a version-named or rollback branch** — AstrBot can only download the `runtime` ZIP, and parallel trees are unmaintainable, misleading dead weight.
+
 ## Read in this order
 
 1. `docs/PROJECT_STATE.json` — current verdict, stable release, active candidate, frontier, and stopped experiments.
