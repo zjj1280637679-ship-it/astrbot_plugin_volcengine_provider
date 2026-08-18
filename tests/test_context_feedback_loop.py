@@ -7,18 +7,22 @@ feedback and must have a bounded lifecycle.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "AstrBot" / "data" / "plugins"))
 
+from astrbot.core.provider.sources.openai_source import ProviderOpenAIOfficial
 from astrbot_plugin_volcengine_provider.capabilities import (
     ContextFeedbackLoop,
     context_guard_from_feedback,
     extract_reported_context_limit,
     requested_output_reserve,
 )
+from astrbot_plugin_volcengine_provider.providers import ProviderVolcengineArk
 
 
 class FeedbackError(Exception):
@@ -59,8 +63,6 @@ def test_explicit_pre_feedback_is_used_without_name_inference() -> None:
 def test_host_can_supply_late_pre_feedback_before_first_request() -> None:
     config = {"id": "card/a", "model": "unknown"}
     loop = ContextFeedbackLoop(config)
-    # AstrBot may fill its host metadata/fallback after Provider construction but
-    # before ToolLoopAgentRunner snapshots the request guard.
     config["max_context_tokens"] = 128_000
     snapshot = loop.pre_request(config, provider_id="card/a")
     assert snapshot.guard == 128_000
@@ -111,8 +113,6 @@ def test_structured_post_feedback_can_raise_stale_host_fallback() -> None:
     assert snapshot.source == "post_feedback"
     assert config["max_context_tokens"] == 1_040_384
 
-    # The learned post-feedback is the next request's pre-feedback. The alias
-    # name is unchanged, but it never participates in the calculation.
     next_snapshot = loop.pre_request(config, provider_id="card/a")
     assert next_snapshot.guard == 1_040_384
     assert next_snapshot.source == "post_feedback"
@@ -178,7 +178,7 @@ def test_multiple_explicit_feedback_values_fail_conservatively() -> None:
     assert extract_reported_context_limit(error) == 262_144
 
 
-def test_output_reserve_uses_only_explicit_request_fields() -> None:
+def test_output_reserve_uses_all_explicit_request_feedback() -> None:
     assert requested_output_reserve({}) == 0
     assert requested_output_reserve({"max_tokens": 8_192}) == 8_192
     assert (
@@ -189,6 +189,16 @@ def test_output_reserve_uses_only_explicit_request_fields() -> None:
             }
         )
         == 16_384
+    )
+    assert (
+        requested_output_reserve(
+            {},
+            {
+                "custom_extra_body": {"max_tokens": 8_192},
+                "volcengine_max_output_tokens": 32_768,
+            },
+        )
+        == 32_768
     )
     assert context_guard_from_feedback(262_144, output_reserve=16_384) == 245_760
     assert context_guard_from_feedback(8_192, output_reserve=8_192) is None
@@ -210,8 +220,6 @@ def test_provider_rebuild_discards_runtime_post_feedback() -> None:
     )
     assert live_config["max_context_tokens"] == 1_040_384
 
-    # Provider reload/restart creates a new object from persisted/current host
-    # pre-feedback. Runtime post-feedback is not a permanent capability truth.
     rebuilt_config = dict(persisted_pre_feedback)
     second_lifecycle = ContextFeedbackLoop(rebuilt_config)
     snapshot = second_lifecycle.pre_request(rebuilt_config, provider_id="card/a")
@@ -245,6 +253,96 @@ def test_same_alias_can_be_revised_by_new_feedback_not_by_its_name() -> None:
     assert config["model"] == "agentplan/ark-code-latest"
 
 
+async def test_provider_error_hook_feeds_next_request_guard() -> None:
+    provider = object.__new__(ProviderVolcengineArk)
+    provider.provider_config = {
+        "id": "ark/card",
+        "model": "alias-without-capability-semantics",
+        "max_context_tokens": 128_000,
+        "volcengine_max_output_tokens": 8_192,
+    }
+    provider._context_feedback = ContextFeedbackLoop(provider.provider_config)
+
+    original = ProviderOpenAIOfficial._handle_api_error
+
+    async def fake_parent(*args, **kwargs):
+        return (0, "chosen-key", [], 0, False)
+
+    ProviderOpenAIOfficial._handle_api_error = fake_parent
+    try:
+        await provider._handle_api_error(
+            FeedbackError("maximum context length is 1048576 tokens"),
+            {"model": "alias-without-capability-semantics"},
+            [],
+            None,
+            "chosen-key",
+            [],
+            0,
+            2,
+        )
+    finally:
+        ProviderOpenAIOfficial._handle_api_error = original
+
+    assert provider.provider_config["max_context_tokens"] == 1_040_384
+    next_pre = provider._context_feedback.pre_request(
+        provider.provider_config,
+        provider_id="ark/card",
+    )
+    assert next_pre.source == "post_feedback"
+    assert next_pre.guard == 1_040_384
+
+
+async def test_provider_success_hook_records_lower_bound_once() -> None:
+    provider = object.__new__(ProviderVolcengineArk)
+    provider.provider_config = {
+        "id": "ark/card",
+        "model": "alias",
+        "max_context_tokens": 128_000,
+    }
+    provider._context_feedback = ContextFeedbackLoop(provider.provider_config)
+
+    original = ProviderOpenAIOfficial._parse_openai_completion
+
+    async def fake_parent(*args, **kwargs):
+        return SimpleNamespace(role="assistant")
+
+    ProviderOpenAIOfficial._parse_openai_completion = fake_parent
+    try:
+        completion = SimpleNamespace(
+            model="resolved-label-only",
+            usage=SimpleNamespace(
+                prompt_tokens=100_000,
+                completion_tokens=2_000,
+                prompt_tokens_details=SimpleNamespace(cached_tokens=50_000),
+                completion_tokens_details=SimpleNamespace(reasoning_tokens=500),
+            ),
+        )
+        await provider._parse_openai_completion(completion, None)
+    finally:
+        ProviderOpenAIOfficial._parse_openai_completion = original
+
+    snapshot = provider._context_feedback.pre_request(
+        provider.provider_config,
+        provider_id="ark/card",
+    )
+    assert snapshot.accepted_input_high_water == 100_000
+    assert snapshot.accepted_total_high_water == 102_000
+    assert snapshot.guard == 128_000
+
+
+def test_stream_path_relies_on_final_parser_for_post_success() -> None:
+    source = (
+        ROOT
+        / "AstrBot"
+        / "data"
+        / "plugins"
+        / "astrbot_plugin_volcengine_provider"
+        / "providers.py"
+    ).read_text("utf-8")
+    assert source.count("self._context_feedback.post_success(") == 1
+    assert "parent stream creates a final ChatCompletion" in source
+
+
 def main() -> None:
     test_model_name_is_not_context_evidence()
     test_explicit_pre_feedback_is_used_without_name_inference()
@@ -255,9 +353,12 @@ def main() -> None:
     test_context_error_without_explicit_ceiling_cannot_mutate_guard()
     test_unrelated_numeric_fields_are_not_context_feedback()
     test_multiple_explicit_feedback_values_fail_conservatively()
-    test_output_reserve_uses_only_explicit_request_fields()
+    test_output_reserve_uses_all_explicit_request_feedback()
     test_provider_rebuild_discards_runtime_post_feedback()
     test_same_alias_can_be_revised_by_new_feedback_not_by_its_name()
+    asyncio.run(test_provider_error_hook_feeds_next_request_guard())
+    asyncio.run(test_provider_success_hook_records_lower_bound_once())
+    test_stream_path_relies_on_final_parser_for_post_success()
     print("CONTEXT_FEEDBACK_LOOP_0_1_31=OK")
 
 
