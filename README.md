@@ -23,7 +23,7 @@
 | 你可以安装的稳定版 | **0.1.31**；只有 `runtime` 被精确晋升后这一行才成立 |
 | 活跃发布候选 | **无**；发布后的 HOT 状态归位只改开发资料，不再改运行包 README |
 
-0.1.31 的修复范围：main/runtime 重新单向收敛；图片压缩最长边真正生效并在 Base64 膨胀前执行；音频转码输出先做 stat 上限检查再读入；缓存耗时覆盖整次请求、汇总按 channel+model 分桶；插件配置热重载后重建现有火山 Provider；撤销不安全的插件静态“模型族上下文上限”表，让 AstrBot/模型卡显式元数据继续拥有上下文 guard；运行包重新包含 `_conf_schema.json` 与 README。
+0.1.31 的修复范围：main/runtime 重新单向收敛；图片压缩最长边真正生效并在 Base64 膨胀前执行；音频转码输出先做 stat 上限检查再读入；缓存耗时覆盖整次请求、汇总按 channel+model 分桶；插件配置热重载后重建现有火山 Provider；上下文治理从“按模型名猜能力”改为**前反馈 → 请求 → 后反馈 → 下一次前反馈**的证据闭环；运行包重新包含 `_conf_schema.json` 与 README。
 
 任何涉及 Video / `modalities` / Provider Source / 模型卡 UI 的修改，继续遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
 
@@ -49,7 +49,7 @@ Agent Plan 的 `agentplan/` 只是 AstrBot 本地命名空间，发送给火山�
 - **逐模型请求设置**：保留视频质量、Thinking Mode、Reasoning Effort、Temperature、Top P、Max Output Tokens、Stop、Frequency/Presence Penalty 与 `custom_extra_body`。
 - **媒体护栏**：音频/视频大小与转码超时、超限图片压缩参数均由插件配置控制。
 - **缓存观测**：从上游 `usage.prompt_tokens_details.cached_tokens` 记录真实命中；每次请求一条明细，每 N 次按 `channel + model` 独立汇总。观测策略改变时旧汇总桶清零，避免跨生命周期混样本。
-- **上下文边界**：插件不再根据 `deepseek* / glm* / doubao*` 等名字自行写一张静态上下文能力表。AstrBot 自带模型元数据、模型卡显式 `max_context_tokens` 与宿主 fallback 继续拥有最终 guard。
+- **反馈驱动上下文**：插件不再根据 `deepseek* / glm* / doubao* / ark-code-latest` 等名字写静态能力表。上下文 guard 只接受明确的前反馈和实际请求后的后反馈。
 
 ## 安装稳定版
 
@@ -82,19 +82,55 @@ https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/tree
 
 这些配置是**传输与观测策略**，不是永久模型能力真值。AstrBot 保存插件配置会触发插件热重载；0.1.31 会在该转换点重新构造当前已加载的 Ark / Agent Plan Provider，使下一请求绑定新策略，而不是要求“保存成功”替代“实际生效”的确认。
 
-## 上下文与缓存
+## 上下文：前反馈与后反馈
 
-0.1.31 撤回了 0.1.30/早期候选中“按模型名前缀自动把 128K 抬到 256K/1M”的做法。原因不是模型一定没有更大窗口，而是**模型名不是稳定的一一映射证据**：接入点 ID、未来模型修订和动态路由别名都可能改变真正的上游模型。
+0.1.31 撤回 0.1.30 和早期候选中“看模型名前缀，把 128K 自动抬到 256K/1M”的方案。原因不是某个模型一定没有更大窗口，而是**模型名只是对象标签，不是能力证据**：同名路由可以换后端，接入点 ID 也不包含窗口事实，未来模型修订同样会让静态表过期。
 
-当前规则：
+现在的闭环是：
 
-- 模型卡已有显式正值 `max_context_tokens`：插件尊重但不改写；
-- AstrBot 自己认识该模型：由宿主模型元数据决定；
-- 宿主不认识 / `ep-*` / 动态路由别名：插件不猜，继续走 AstrBot fallback；
-- 如果你手动设置 `max_context_tokens`，请把它理解为**输入历史压缩 guard**，而不是可以无余量占满的“总上下文窗口”；还要给系统提示、工具 schema、本轮用户输入和输出 token 留安全空间；
-- 上游仍返回 context-length error 时，插件只记录当前明确 guard（若存在），历史缩减和 retry 仍由 AstrBot 原生策略负责。
+```text
+前反馈
+  ↓
+本轮上下文 guard
+  ↓
+实际请求到上游
+  ↓
+后反馈
+  ↓
+下一轮重新作为前反馈判决
+```
 
-缓存日志中的 `ms` 从 0.1.31 起覆盖 `_query` / `_query_stream` 的完整请求生命周期，而不是只统计 completion 对象解析耗时。
+### 前反馈
+
+请求前只接受当前对象上能明确取得的证据：
+
+- 普通 Ark `/models` 本次实时回执中的 `token_limits.context_window` 等明确字段；
+- AstrBot 已经投影到具体模型卡的正值 `max_context_tokens`；
+- 用户在具体模型卡上的显式配置；
+- AstrBot 当前宿主元数据或 fallback 所给出的 guard。
+
+这里没有“看到 `deepseek` 就算 1M”或“看到 `doubao` 就算 256K”的分支。`ark-code-latest`、`ep-*`、动态路由别名也一样：没有反馈就不猜。
+
+### 后反馈
+
+请求真的到达上游后，结果才产生新的证据：
+
+- **成功**：只证明这次实际输入/输出规模被接受，因此只记作“至少能到这里”的下界；成功一次不能反推出最大窗口。
+- **上下文拒绝但没有明确上限**：只说明这次请求失败，不能从 `requested_tokens`、HTTP 400、模型名或其它数字臆测窗口；guard 不改。
+- **上游明确反馈最大上下文窗口**：这属于直接后反馈，可以纠正当前实例里的旧 guard，既可以向上也可以向下。
+- 如果本轮明确请求了 `max_tokens`、`max_completion_tokens`、模型卡 `Max Output Tokens` 或等价显式输出额度，换算输入历史 guard 时会给这部分输出留下空间；没有明确输出额度时不凭空编一个 reserve。
+
+后反馈只作用于**当前 Provider 实例的运行证据**。它不会写成按模型名永久保存的能力事实；插件热重载、Provider 重建、AstrBot 重启后，都要从当时的新前反馈重新开始。
+
+因此：
+
+```text
+同一个模型名 + 不同后反馈 → 可以得到不同下一轮 guard
+不同模型名 + 同一份明确反馈 → 可以得到相同 guard
+模型名本身 → 永远不能决定 guard
+```
+
+当前失败请求仍由 AstrBot 原生历史缩减与 retry 处理；插件的后反馈主要约束**下一次请求**。缓存日志中的 `ms` 从 0.1.31 起覆盖 `_query` / `_query_stream` 的完整请求生命周期，而不是只统计 completion 对象解析耗时。
 
 ## 生命周期确认合同
 
@@ -109,6 +145,15 @@ https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/tree
   → AstrBot 整进程重启
   → 同版本插件目录替换 + 重启
   → 卸载 + 重启
+```
+
+上下文反馈也遵守同一合同：
+
+```text
+本轮前反馈成立 ≠ 下一生命周期仍成立
+一次成功后反馈 ≠ 已知最大窗口
+一次拒绝 ≠ 已知最大窗口
+Provider 重建前的后反馈 ≠ 重建后的永久事实
 ```
 
 这些确认不可互相替代。例如：
@@ -145,7 +190,7 @@ Video 的产品真值仍然只有一个：
 - 本地媒体解析、压缩、转码或序列化失败：fail closed，不伪装成“模型不支持”。
 - 远程 HTTP(S) 视频：保持 Ark 服务端拉取语义，本地无法预知文件大小。
 - 超限图片：在 Base64 前进入压缩链；若无法同时满足字节上限与最长边要求，停止本轮请求。
-- 动态模型路由 / 接入点 / 宿主未知模型：不由插件猜上下文窗口。
+- 动态模型路由 / 接入点 / 宿主未知模型：不由插件按名称猜上下文窗口；只有明确反馈才能改变运行 guard。
 - 两条火山通道：不跨通道静默回退。
 
 ## 开发与发布
