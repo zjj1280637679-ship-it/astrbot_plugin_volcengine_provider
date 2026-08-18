@@ -1,10 +1,11 @@
 """Stable lifecycle entrypoint with repeated post-transition confirmation.
 
 The base 0.1.24 lifecycle contract already separates Dashboard refresh, process
-restart, same-version replacement and uninstall.  This wrapper additionally
+restart, same-version replacement and uninstall. This wrapper additionally
 tests the normal AstrBot plugin-config hot-reload path: save plugin settings
-through the real Dashboard API, wait for the plugin to reinitialize/rebind live
-owned Provider instances, then re-confirm UI/persistence in the same process.
+through the authenticated Dashboard fetch layer, wait for the plugin to
+reinitialize/rebind live owned Provider instances, then re-confirm UI and
+persistence in the same process.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from playwright.async_api import Page
 
@@ -66,26 +68,66 @@ async def _wait_for_log_marker(marker: str, *, timeout_seconds: float = 20.0) ->
     raise AssertionError(f"timed out waiting for lifecycle log marker: {marker!r}")
 
 
-async def hot_config_reload_stage(page: Page) -> dict[str, Any]:
-    """Change runtime policy through AstrBot's real plugin-config API."""
-    endpoint = f"{base.BASE_URL}/api/v1/plugins/config"
-    response = await page.request.get(
-        endpoint,
-        params={"plugin_id": PLUGIN_NAME},
-    )
-    if not response.ok:
-        raise AssertionError(
-            f"plugin config GET failed: status={response.status} body={await response.text()}"
-        )
-    payload = await response.json()
-    if payload.get("status") not in {"ok", "success"}:
-        raise AssertionError(f"plugin config GET returned failure: {payload!r}")
+async def _dashboard_fetch(
+    page: Page,
+    *,
+    url: str,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Use Dashboard's installed ``window.fetch`` auth wrapper.
 
+    Playwright ``page.request`` has a separate request context and therefore
+    does not inherit the token stored by the real Dashboard login. AstrBot's
+    frontend wraps ``window.fetch`` to attach that token, so using page-side
+    fetch exercises the same authenticated path as a user action.
+    """
+    result = await page.evaluate(
+        """
+        async ({url, method, body}) => {
+          const init = {method};
+          if (body !== null) {
+            init.headers = {'Content-Type': 'application/json'};
+            init.body = JSON.stringify(body);
+          }
+          const response = await window.fetch(url, init);
+          const text = await response.text();
+          let payload = null;
+          try { payload = text ? JSON.parse(text) : null; } catch (_) {}
+          return {ok: response.ok, status: response.status, text, payload};
+        }
+        """,
+        {"url": url, "method": method, "body": body},
+    )
+    if not isinstance(result, dict):
+        raise AssertionError(f"Dashboard fetch returned invalid result: {result!r}")
+    return result
+
+
+async def _get_plugin_config(page: Page) -> dict[str, Any]:
+    url = f"/api/v1/plugins/config?plugin_id={quote(PLUGIN_NAME)}"
+    result = await _dashboard_fetch(page, url=url)
+    if not result.get("ok"):
+        raise AssertionError(
+            "plugin config GET failed: "
+            f"status={result.get('status')} body={result.get('text')}"
+        )
+    payload = result.get("payload")
+    if not isinstance(payload, dict) or payload.get("status") not in {
+        "ok",
+        "success",
+    }:
+        raise AssertionError(f"plugin config GET returned failure: {payload!r}")
     data = payload.get("data")
     current = data.get("config") if isinstance(data, dict) else None
     if not isinstance(current, dict):
         raise AssertionError(f"plugin config response has no config object: {payload!r}")
+    return current
 
+
+async def hot_config_reload_stage(page: Page) -> dict[str, Any]:
+    """Change runtime policy through AstrBot's real plugin-config API."""
+    current = await _get_plugin_config(page)
     updated = dict(current)
     updated.update(
         {
@@ -100,16 +142,22 @@ async def hot_config_reload_stage(page: Page) -> dict[str, Any]:
         with SERVER_LOG_PATH.open("a", encoding="utf-8") as stream:
             stream.write("\n[LIFECYCLE] about-to-save-hot-policy\n")
 
-    saved = await page.request.put(
-        endpoint,
-        data={"plugin_id": PLUGIN_NAME, "config": updated},
+    saved = await _dashboard_fetch(
+        page,
+        url="/api/v1/plugins/config",
+        method="PUT",
+        body={"plugin_id": PLUGIN_NAME, "config": updated},
     )
-    if not saved.ok:
+    if not saved.get("ok"):
         raise AssertionError(
-            f"plugin config PUT failed: status={saved.status} body={await saved.text()}"
+            "plugin config PUT failed: "
+            f"status={saved.get('status')} body={saved.get('text')}"
         )
-    saved_payload = await saved.json()
-    if saved_payload.get("status") not in {"ok", "success"}:
+    saved_payload = saved.get("payload")
+    if not isinstance(saved_payload, dict) or saved_payload.get("status") not in {
+        "ok",
+        "success",
+    }:
         raise AssertionError(f"plugin config PUT returned failure: {saved_payload!r}")
 
     marker = (
@@ -126,19 +174,7 @@ async def hot_config_reload_stage(page: Page) -> dict[str, Any]:
         stage="after-hot-config-reload",
     )
 
-    reread = await page.request.get(
-        endpoint,
-        params={"plugin_id": PLUGIN_NAME},
-    )
-    reread_payload = await reread.json()
-    reread_data = reread_payload.get("data")
-    persisted_plugin_config = (
-        reread_data.get("config") if isinstance(reread_data, dict) else None
-    )
-    if not isinstance(persisted_plugin_config, dict):
-        raise AssertionError(
-            f"plugin config reread has no config object: {reread_payload!r}"
-        )
+    persisted_plugin_config = await _get_plugin_config(page)
     expected = {
         "video_max_mb": 1,
         "image_max_mb": 2,
