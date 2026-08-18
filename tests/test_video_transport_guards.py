@@ -44,7 +44,6 @@ class _NullContext:
 
 
 def test_context_authority_is_not_replaced_by_static_family_guesses() -> None:
-    """Known-looking names and dynamic aliases must remain host-owned."""
     for model in (
         "deepseek-v4-flash-ga-260731",
         "glm-5.2",
@@ -79,28 +78,13 @@ def test_context_error_detection_reads_structured_body() -> None:
 def test_cache_rollups_are_bucketed_atomically() -> None:
     acc = cache_insight._CacheAccumulator()
     assert acc.note(
-        ("v3", "m1"),
-        in_tokens=10,
-        cached_tokens=5,
-        out_tokens=1,
-        ms=100,
-        every=2,
+        ("v3", "m1"), in_tokens=10, cached_tokens=5, out_tokens=1, ms=100, every=2
     ) is None
     assert acc.note(
-        ("plan/v3", "m2"),
-        in_tokens=20,
-        cached_tokens=10,
-        out_tokens=2,
-        ms=200,
-        every=2,
+        ("plan/v3", "m2"), in_tokens=20, cached_tokens=10, out_tokens=2, ms=200, every=2
     ) is None
     snapshot = acc.note(
-        ("v3", "m1"),
-        in_tokens=30,
-        cached_tokens=20,
-        out_tokens=3,
-        ms=300,
-        every=2,
+        ("v3", "m1"), in_tokens=30, cached_tokens=20, out_tokens=3, ms=300, every=2
     )
     assert snapshot == (2, 40, 25, 4, 400)
 
@@ -110,30 +94,15 @@ def test_cache_policy_transition_invalidates_old_rollup_evidence() -> None:
     try:
         cache_insight.configure_cache_log(enabled=True, every=10)
         cache_insight._accumulator.note(
-            ("v3", "m"),
-            in_tokens=100,
-            cached_tokens=50,
-            out_tokens=1,
-            ms=10,
-            every=10,
+            ("v3", "m"), in_tokens=100, cached_tokens=50, out_tokens=1, ms=10, every=10
         )
         cache_insight.configure_cache_log(enabled=True, every=2)
         assert cache_insight.cache_log_settings() == (True, 2)
         assert cache_insight._accumulator.note(
-            ("v3", "m"),
-            in_tokens=1,
-            cached_tokens=1,
-            out_tokens=1,
-            ms=1,
-            every=2,
+            ("v3", "m"), in_tokens=1, cached_tokens=1, out_tokens=1, ms=1, every=2
         ) is None
         snapshot = cache_insight._accumulator.note(
-            ("v3", "m"),
-            in_tokens=2,
-            cached_tokens=2,
-            out_tokens=2,
-            ms=2,
-            every=2,
+            ("v3", "m"), in_tokens=2, cached_tokens=2, out_tokens=2, ms=2, every=2
         )
         assert snapshot == (2, 3, 3, 3, 3)
     finally:
@@ -144,12 +113,8 @@ def test_image_compressor_honors_longest_edge() -> None:
     source_image = Image.new("RGB", (2048, 1024), "white")
     source = io.BytesIO()
     source_image.save(source, format="PNG")
-
     compressed = image_adapter._compress_image_sync(
-        source.getvalue(),
-        max_bytes=1_000_000,
-        max_size=256,
-        quality=90,
+        source.getvalue(), max_bytes=1_000_000, max_size=256, quality=90
     )
     assert compressed is not None
     with Image.open(io.BytesIO(compressed)) as result:
@@ -161,10 +126,7 @@ def test_transparent_image_flattens_to_white_not_black() -> None:
     source = io.BytesIO()
     source_image.save(source, format="PNG")
     compressed = image_adapter._compress_image_sync(
-        source.getvalue(),
-        max_bytes=100_000,
-        max_size=32,
-        quality=95,
+        source.getvalue(), max_bytes=100_000, max_size=32, quality=95
     )
     assert compressed is not None
     with Image.open(io.BytesIO(compressed)) as opened:
@@ -189,9 +151,7 @@ async def test_oversized_local_image_compresses_before_raw_read_base64() -> None
                 resolved = SimpleNamespace(path=source, mime_type="image/bmp")
 
                 def forbidden_read():
-                    raise AssertionError(
-                        "raw oversized bytes were read before compression"
-                    )
+                    raise AssertionError("raw oversized bytes were read before compression")
 
                 resolved.read_bytes = forbidden_read
                 return _NullContext(resolved)
@@ -216,6 +176,22 @@ async def test_oversized_local_image_compresses_before_raw_read_base64() -> None
             set_limits(original_limits)
 
 
+async def test_oversized_image_with_compression_disabled_fails_closed() -> None:
+    original = get_limits()
+    set_limits(MediaLimits(image_compress_enabled=False, image_max_bytes=8))
+    try:
+        ref = "data:image/png;base64," + base64.b64encode(b"oversized-image-bytes").decode("ascii")
+        try:
+            await image_adapter.build_ark_image_part(ref)
+        except AdapterInputTransportError as exc:
+            assert exc.stage == "validate_media"
+            assert "自动压缩已关闭" in str(exc)
+        else:
+            raise AssertionError("disabled compression must not bypass image ceiling")
+    finally:
+        set_limits(original)
+
+
 async def test_oversized_invalid_data_image_fails_closed() -> None:
     original = get_limits()
     set_limits(
@@ -227,10 +203,7 @@ async def test_oversized_invalid_data_image_fails_closed() -> None:
         )
     )
     try:
-        ref = (
-            "data:image/png;base64,"
-            + base64.b64encode(b"not-an-image" * 4).decode("ascii")
-        )
+        ref = "data:image/png;base64," + base64.b64encode(b"not-an-image" * 4).decode("ascii")
         try:
             await image_adapter.build_ark_image_part(ref)
         except AdapterInputTransportError as exc:
@@ -246,7 +219,6 @@ async def test_audio_transcode_output_is_size_checked_before_read() -> None:
     original_limits = get_limits()
     original_resolver = audio_adapter.MediaResolver
     original_transcode = audio_adapter._ffmpeg_to_ark_chat_wav
-
     with tempfile.TemporaryDirectory(prefix="volcengine-audio-prebase64-") as tmp:
         source = Path(tmp) / "source.bin"
         source.write_bytes(b"x")
@@ -281,11 +253,7 @@ async def test_plugin_initialize_rebinds_live_owned_providers_only() -> None:
     reloaded: list[str] = []
 
     class _Manager:
-        inst_map = {
-            "ark/card": object(),
-            "plan/card": object(),
-            "foreign/card": object(),
-        }
+        inst_map = {"ark/card": object(), "plan/card": object(), "foreign/card": object()}
 
         async def reload(self, provider):
             reloaded.append(provider["id"])
@@ -297,26 +265,14 @@ async def test_plugin_initialize_rebinds_live_owned_providers_only() -> None:
     class _ConfigMgr:
         default_conf = _Config(
             provider=[
-                {
-                    "id": "ark/card",
-                    "type": plugin_main.ARK_PROVIDER_TYPE,
-                },
-                {
-                    "id": "plan/card",
-                    "type": plugin_main.AGENT_PLAN_PROVIDER_TYPE,
-                },
-                {
-                    "id": "foreign/card",
-                    "type": "openai_chat_completion",
-                },
+                {"id": "ark/card", "type": plugin_main.ARK_PROVIDER_TYPE},
+                {"id": "plan/card", "type": plugin_main.AGENT_PLAN_PROVIDER_TYPE},
+                {"id": "foreign/card", "type": "openai_chat_completion"},
             ],
             provider_sources=[],
         )
 
-    context = SimpleNamespace(
-        astrbot_config_mgr=_ConfigMgr(),
-        provider_manager=_Manager(),
-    )
+    context = SimpleNamespace(astrbot_config_mgr=_ConfigMgr(), provider_manager=_Manager())
     result = await plugin_main._reload_owned_provider_instances(context)
     assert result == ["ark/card", "plan/card"]
     assert reloaded == result
@@ -324,12 +280,7 @@ async def test_plugin_initialize_rebinds_live_owned_providers_only() -> None:
 
 def test_request_timer_wraps_query_not_parser() -> None:
     provider_source = (
-        ROOT
-        / "AstrBot"
-        / "data"
-        / "plugins"
-        / "astrbot_plugin_volcengine_provider"
-        / "providers.py"
+        ROOT / "AstrBot" / "data" / "plugins" / "astrbot_plugin_volcengine_provider" / "providers.py"
     ).read_text("utf-8")
     assert "_REQUEST_STARTED_AT.set(time.perf_counter())" in provider_source
     assert "started = time.perf_counter()" not in provider_source
@@ -344,6 +295,7 @@ def main() -> None:
     test_transparent_image_flattens_to_white_not_black()
     test_request_timer_wraps_query_not_parser()
     asyncio.run(test_oversized_local_image_compresses_before_raw_read_base64())
+    asyncio.run(test_oversized_image_with_compression_disabled_fails_closed())
     asyncio.run(test_oversized_invalid_data_image_fails_closed())
     asyncio.run(test_audio_transcode_output_is_size_checked_before_read())
     asyncio.run(test_plugin_initialize_rebinds_live_owned_providers_only())
