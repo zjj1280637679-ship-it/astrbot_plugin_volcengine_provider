@@ -23,7 +23,7 @@
 | 你可以安装的稳定版 | **0.1.31**；只有 `runtime` 被精确晋升后这一行才成立 |
 | 活跃发布候选 | **无**；发布后的 HOT 状态归位只改开发资料，不再改运行包 README |
 
-0.1.31 的修复范围：main/runtime 重新单向收敛；图片压缩最长边真正生效并 fail-closed；缓存耗时覆盖整次请求；缓存汇总按 channel+model 分桶；已知模型上下文上限真正写入 AstrBot `max_context_tokens`；运行包重新包含 `_conf_schema.json` 与 README。
+0.1.31 的修复范围：main/runtime 重新单向收敛；图片压缩最长边真正生效并在 Base64 膨胀前执行；音频转码输出先做 stat 上限检查再读入；缓存耗时覆盖整次请求、汇总按 channel+model 分桶；插件配置热重载后重建现有火山 Provider；撤销不安全的插件静态“模型族上下文上限”表，让 AstrBot/模型卡显式元数据继续拥有上下文 guard；运行包重新包含 `_conf_schema.json` 与 README。
 
 任何涉及 Video / `modalities` / Provider Source / 模型卡 UI 的修改，继续遵守 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
 
@@ -42,14 +42,14 @@ Agent Plan 的 `agentplan/` 只是 AstrBot 本地命名空间，发送给火山�
 
 ## 核心能力
 
-- **图片**：沿 AstrBot 原生图片链进入当前主模型。超过插件图片字节上限时才进入压缩路径；进入后输出必须同时满足字节上限与最长边目标，否则请求停止，不发送超限图片。
-- **QQ 语音**：由 AstrBot MediaResolver 解析后，插件最终规范化为 16 kHz / 单声道 / PCM16 WAV，再作为 Ark `input_audio` 交给当前主模型。
+- **图片**：插件接管火山 Provider 的图片 materialize 节点。超限本地/远端图片在原始字节变成 Base64 前直接从物化文件压缩；透明图转 JPEG 时以白底合成。压缩结果必须同时满足字节上限与最长边目标，否则请求停止。
+- **QQ 语音**：由 AstrBot MediaResolver 解析后，插件最终规范化为 16 kHz / 单声道 / PCM16 WAV；转码结果先检查文件大小，再读取和 Base64。
 - **视频**：`视频 / Video` 仍是单模型卡原生 capability。只有当前火山模型卡的 `modalities` 包含 `video` 时，本轮受信附件才转换为 `video_url`。
 - **严格对象级隔离**：OpenAI、xAI、Gemini、DeepSeek 等 foreign 模型卡不出现插件 Video 或 `volcengine_*` 私有行。
 - **逐模型请求设置**：保留视频质量、Thinking Mode、Reasoning Effort、Temperature、Top P、Max Output Tokens、Stop、Frequency/Presence Penalty 与 `custom_extra_body`。
 - **媒体护栏**：音频/视频大小与转码超时、超限图片压缩参数均由插件配置控制。
-- **缓存观测**：从上游 `usage.prompt_tokens_details.cached_tokens` 记录真实命中；每次请求一条明细，每 N 次按 `channel + model` 独立汇总。
-- **上下文提示**：对已知模型族，在 Provider 初始化时写入 `max_context_tokens`，从而真正影响 AstrBot 主 Agent 的上下文 guard；用户显式配置的正值优先，未知模型继续由 AstrBot fallback 管理。
+- **缓存观测**：从上游 `usage.prompt_tokens_details.cached_tokens` 记录真实命中；每次请求一条明细，每 N 次按 `channel + model` 独立汇总。观测策略改变时旧汇总桶清零，避免跨生命周期混样本。
+- **上下文边界**：插件不再根据 `deepseek* / glm* / doubao*` 等名字自行写一张静态上下文能力表。AstrBot 自带模型元数据、模型卡显式 `max_context_tokens` 与宿主 fallback 继续拥有最终 guard。
 
 ## 安装稳定版
 
@@ -80,21 +80,47 @@ https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider/tree
 | `cache_log_enabled` | true | 缓存命中日志开关 |
 | `cache_log_every` | 10 | 每 N 次按 channel+model 汇总 |
 
-这些配置是**传输与观测策略**，不是永久模型能力真值。
+这些配置是**传输与观测策略**，不是永久模型能力真值。AstrBot 保存插件配置会触发插件热重载；0.1.31 会在该转换点重新构造当前已加载的 Ark / Agent Plan Provider，使下一请求绑定新策略，而不是要求“保存成功”替代“实际生效”的确认。
 
 ## 上下文与缓存
 
-0.1.31 不再在“已经超限以后”只打印一个更大的数字。
+0.1.31 撤回了 0.1.30/早期候选中“按模型名前缀自动把 128K 抬到 256K/1M”的做法。原因不是模型一定没有更大窗口，而是**模型名不是稳定的一一映射证据**：接入点 ID、未来模型修订和动态路由别名都可能改变真正的上游模型。
 
-对于已知模型族，插件在 Provider 构造阶段设置 AstrBot 真正读取的 `provider_config["max_context_tokens"]`：
+当前规则：
 
-- `deepseek-v4*`、`glm-5*`、`glm-4*` → 1,048,576
-- `doubao*`、`kimi*`、`minimax*` → 262,144
-- 未知模型 / `ep-*` → 不猜，继续使用 AstrBot 自己的 fallback 或用户显式配置
-
-若上游在已设置提示后仍返回 context-length error，插件只记录诊断，历史缩减与 retry 仍由 AstrBot 原生策略负责。
+- 模型卡已有显式正值 `max_context_tokens`：插件尊重但不改写；
+- AstrBot 自己认识该模型：由宿主模型元数据决定；
+- 宿主不认识 / `ep-*` / 动态路由别名：插件不猜，继续走 AstrBot fallback；
+- 如果你手动设置 `max_context_tokens`，请把它理解为**输入历史压缩 guard**，而不是可以无余量占满的“总上下文窗口”；还要给系统提示、工具 schema、本轮用户输入和输出 token 留安全空间；
+- 上游仍返回 context-length error 时，插件只记录当前明确 guard（若存在），历史缩减和 retry 仍由 AstrBot 原生策略负责。
 
 缓存日志中的 `ms` 从 0.1.31 起覆盖 `_query` / `_query_stream` 的完整请求生命周期，而不是只统计 completion 对象解析耗时。
+
+## 生命周期确认合同
+
+0.1.31 的阻断测试不再把一次成功外推到整个生命周期。关键不变量会在不同状态点重新判决：
+
+```text
+初始安装
+  → 创建/保存模型卡
+  → Dashboard 刷新
+  → 插件配置热重载
+  → 现有火山 Provider 重新绑定新策略
+  → AstrBot 整进程重启
+  → 同版本插件目录替换 + 重启
+  → 卸载 + 重启
+```
+
+这些确认不可互相替代。例如：
+
+```text
+配置保存成功 ≠ Provider 已使用新配置
+插件 reload 成功 ≠ 下一请求已绑定新模块
+本地 payload 合法 ≠ 上游接受
+一次运行成功 ≠ restart/update 后仍成立
+```
+
+历史 0.1.25 的视频大小、空文件、data URL、ffmpeg timeout/cancel 等负路径合同也单独保留；新增测试不得通过“改写同一个测试文件”把旧确认悄悄覆盖掉。
 
 ## 视频模型卡合同
 
@@ -118,8 +144,8 @@ Video 的产品真值仍然只有一个：
 
 - 本地媒体解析、压缩、转码或序列化失败：fail closed，不伪装成“模型不支持”。
 - 远程 HTTP(S) 视频：保持 Ark 服务端拉取语义，本地无法预知文件大小。
-- 超限图片：一旦进入压缩链，若无法同时满足字节上限与最长边要求，停止本轮请求。
-- 上下文模型族未知：不猜上限。
+- 超限图片：在 Base64 前进入压缩链；若无法同时满足字节上限与最长边要求，停止本轮请求。
+- 动态模型路由 / 接入点 / 宿主未知模型：不由插件猜上下文窗口。
 - 两条火山通道：不跨通道静默回退。
 
 ## 开发与发布
