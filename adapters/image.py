@@ -176,8 +176,14 @@ async def materialize_ark_image_url(image_ref: str) -> str:
 
     if normalized.lower().startswith("data:image/"):
         source = _data_url_bytes(normalized)
-        if not limits.image_compress_enabled or len(source) <= limits.image_max_bytes:
+        if len(source) <= limits.image_max_bytes:
             return normalized
+        if not limits.image_compress_enabled:
+            raise AdapterInputTransportError(
+                "图片超过输入上限且自动压缩已关闭，未向火山方舟发送请求。",
+                media_type="image",
+                stage="validate_media",
+            )
         compressed = await asyncio.to_thread(
             _compress_image_sync,
             source,
@@ -210,7 +216,13 @@ async def materialize_ark_image_url(image_ref: str) -> str:
                 )
 
             oversized = stat.st_size > limits.image_max_bytes
-            if oversized and limits.image_compress_enabled:
+            if oversized and not limits.image_compress_enabled:
+                raise AdapterInputTransportError(
+                    "图片超过输入上限且自动压缩已关闭，未向火山方舟发送请求。",
+                    media_type="image",
+                    stage="validate_media",
+                )
+            if oversized:
                 compressed = await asyncio.to_thread(
                     _compress_image_path_sync,
                     source_path,
