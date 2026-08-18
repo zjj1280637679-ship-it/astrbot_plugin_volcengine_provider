@@ -8,7 +8,7 @@
     "active_release_candidate": {
       "version": "0.1.31",
       "branch": "agent/0.1.31-reconcile-runtime",
-      "status": "validating_negative_lifecycle_counterexamples",
+      "status": "validating",
       "releaseable": false,
       "purpose": "reconcile runtime-only 0.1.28-0.1.30 work into main, repair confirmed regressions, and prove critical invariants again after each lifecycle transition"
     },
@@ -23,7 +23,7 @@
     "version": "0.1.31",
     "branch": "agent/0.1.31-reconcile-runtime",
     "track": "release_candidate",
-    "status": "negative_counterexample_closure",
+    "status": "validating_negative_lifecycle_counterexamples",
     "installable": false
   },
   "published_baseline": {
