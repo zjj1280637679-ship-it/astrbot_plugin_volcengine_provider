@@ -5,18 +5,18 @@ This module deliberately separates *identity* from *evidence*.
 - Model names/aliases may be logged by callers, but they are never used to infer
   a context limit here.
 - Pre-feedback is the explicit positive ``max_context_tokens`` value already on
-  the live Provider card/host object before a request.  That value may have come
+  the live Provider card/host object before a request. That value may have come
   from a live Ark ``/models`` receipt, user configuration, AstrBot metadata, or
   AstrBot's own fallback; this module does not guess which model family produced it.
 - Post-feedback is evidence from the request that actually reached upstream.
-  A successful request proves only a lower bound.  A context rejection may revise
+  A successful request proves only a lower bound. A context rejection may revise
   the next request's guard only when upstream explicitly reports a context ceiling.
-- Learned post-feedback is scoped to the current Provider *instance*.  Reloading
+- Learned post-feedback is scoped to the current Provider *instance*. Reloading
   the Provider, replacing the plugin, or restarting AstrBot creates a fresh loop
   from new pre-feedback instead of inheriting the old observation.
 
 AstrBot's current ``ContextManager`` snapshots ``provider_config.max_context_tokens``
-before the network call.  Therefore a post-feedback revision naturally affects the
+before the network call. Therefore a post-feedback revision naturally affects the
 next request, while AstrBot's native retry path remains responsible for the current
 failed request.
 """
@@ -48,9 +48,6 @@ _CONTEXT_LIMIT_KEYS = frozenset(
     }
 )
 
-# Text parsing is intentionally narrow: a number is evidence only when the same
-# phrase explicitly labels it as the maximum/context window.  Generic "limit",
-# "requested tokens" and unrelated numeric fields are ignored.
 _CONTEXT_LIMIT_PATTERNS = (
     re.compile(
         r"(?:maximum|max)\s+(?:model\s+)?context(?:\s+(?:length|window|tokens?))?"
@@ -172,9 +169,16 @@ def extract_reported_context_limit(error: Exception) -> int | None:
     """
     limits: list[int] = []
     limits.extend(_structured_context_limits(getattr(error, "body", None)))
+
     response = getattr(error, "response", None)
     if response is not None:
-        limits.extend(_structured_context_limits(getattr(response, "json", None)))
+        json_loader = getattr(response, "json", None)
+        if callable(json_loader):
+            try:
+                response_json = json_loader()
+            except Exception:
+                response_json = None
+            limits.extend(_structured_context_limits(response_json))
 
     for text in _error_text_candidates(error):
         lowered = text.lower()
@@ -187,22 +191,42 @@ def extract_reported_context_limit(error: Exception) -> int | None:
     return min(limits) if limits else None
 
 
-def requested_output_reserve(payloads: dict[str, Any] | object) -> int:
-    """Return only an explicitly requested output-token reservation.
+def requested_output_reserve(
+    payloads: dict[str, Any] | object,
+    provider_config: dict[str, Any] | object | None = None,
+) -> int:
+    """Return only explicitly requested output-token reservations.
 
-    Ark/OpenAI payloads may carry the value directly or in ``extra_body``.  An
-    absent value is not guessed: zero here means "no explicit reserve evidence".
+    Evidence can come from the OpenAI payload, ``extra_body``, the user's
+    ``custom_extra_body`` or this plugin's explicit horizontal
+    ``volcengine_max_output_tokens`` field. The latter outranks custom extra-body
+    at request construction time, but choosing the largest explicit value here is
+    deliberately conservative when multiple compatible fields are present.
+
+    An absent value is never guessed: zero means "no explicit reserve evidence".
     """
-    if not isinstance(payloads, dict):
-        return 0
     candidates: list[int] = []
-    for container in (payloads, payloads.get("extra_body")):
+
+    def inspect_container(container: object) -> None:
         if not isinstance(container, dict):
-            continue
+            return
         for key in ("max_completion_tokens", "max_tokens"):
             parsed = _positive_int(container.get(key))
             if parsed is not None:
                 candidates.append(parsed)
+
+    if isinstance(payloads, dict):
+        inspect_container(payloads)
+        inspect_container(payloads.get("extra_body"))
+
+    if isinstance(provider_config, dict):
+        inspect_container(provider_config.get("custom_extra_body"))
+        explicit_plugin_value = _positive_int(
+            provider_config.get("volcengine_max_output_tokens")
+        )
+        if explicit_plugin_value is not None:
+            candidates.append(explicit_plugin_value)
+
     return max(candidates) if candidates else 0
 
 
@@ -214,7 +238,7 @@ def context_guard_from_feedback(
     """Translate a total-window ceiling into AstrBot's input-history guard.
 
     If the request explicitly reserved output tokens, leave those tokens outside
-    the history guard.  If no output reservation was explicit, keep the reported
+    the history guard. If no output reservation was explicit, keep the reported
     ceiling unchanged rather than inventing a reserve.
     """
     reported = _positive_int(reported_context_limit)
@@ -255,7 +279,7 @@ class ContextFeedbackLoop:
         """Re-confirm the guard immediately before the network request.
 
         A newer host/model-card value wins if it differs from our current
-        post-feedback value.  Otherwise the learned post-feedback remains the
+        post-feedback value. Otherwise the learned post-feedback remains the
         current runtime pre-feedback until this Provider instance is rebuilt or
         contradicted by another explicit upstream ceiling.
         """
@@ -325,7 +349,7 @@ class ContextFeedbackLoop:
     ) -> ContextFeedbackSnapshot:
         """Use only an explicit upstream ceiling to revise the next pre-feedback."""
         reported = extract_reported_context_limit(error)
-        reserve = requested_output_reserve(payloads)
+        reserve = requested_output_reserve(payloads, provider_config)
         derived = (
             context_guard_from_feedback(reported, output_reserve=reserve)
             if reported is not None
@@ -334,7 +358,7 @@ class ContextFeedbackLoop:
 
         if derived is not None:
             # Direct post-feedback is allowed to correct a stale host fallback in
-            # either direction.  This is the critical distinction from model-name
+            # either direction. This is the critical distinction from model-name
             # inference: the request actually reached upstream and upstream named
             # the ceiling explicitly.
             provider_config["max_context_tokens"] = derived
