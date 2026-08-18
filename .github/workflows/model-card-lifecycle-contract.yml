@@ -28,15 +28,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  refresh-restart-update-uninstall:
+  refresh-hot-reload-restart-update-uninstall:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     env:
       ASTRBOT_E2E_URL: http://127.0.0.1:6185
       ASTRBOT_E2E_USERNAME: e2e-admin
       ASTRBOT_E2E_PASSWORD: E2e-password-123
       ASTRBOT_E2E_ARTIFACT_DIR: ${{ github.workspace }}/e2e-artifacts
       ASTRBOT_E2E_CONFIG_PATH: ${{ github.workspace }}/AstrBot/data/cmd_config.json
+      ASTRBOT_E2E_SERVER_LOG: /tmp/astrbot-lifecycle.log
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -106,22 +107,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-lifecycle.log 2>&1 &
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >"$ASTRBOT_E2E_SERVER_LOG" 2>&1 &
           echo $! >/tmp/astrbot-lifecycle.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then ready=1; break; fi
             if ! kill -0 "$(cat /tmp/astrbot-lifecycle.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-lifecycle.log
+              cat "$ASTRBOT_E2E_SERVER_LOG"
               exit 1
             fi
             sleep 1
           done
           test "$ready" = '1'
-          grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
+          grep -q 'Volcengine providers registered' "$ASTRBOT_E2E_SERVER_LOG"
 
       - name: Create owned and foreign cards, save Video, and prove Dashboard refresh
         run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage setup
+
+      - name: Change plugin policy by real Dashboard config hot reload and re-confirm
+        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage after-hot-config-reload
+
+      - name: Confirm hot reload rebound the existing owned Provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '\[VolcenginePolicy\] lifecycle-confirm phase=plugin-initialize provider_reloads=1' "$ASTRBOT_E2E_SERVER_LOG"
+          grep -q 'audio=25MiB video=1MiB image=2MiB cache=True/every=3' "$ASTRBOT_E2E_SERVER_LOG"
+          grep -q '\[VolcenginePolicy\] provider-bound .*video=1MiB image=2MiB cache=True/every=3' "$ASTRBOT_E2E_SERVER_LOG"
 
       - name: Stop AstrBot before process-restart stage
         shell: bash
@@ -141,22 +153,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : >/tmp/astrbot-lifecycle.log
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-lifecycle.log 2>&1 &
+          : >"$ASTRBOT_E2E_SERVER_LOG"
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >"$ASTRBOT_E2E_SERVER_LOG" 2>&1 &
           echo $! >/tmp/astrbot-lifecycle.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then ready=1; break; fi
             if ! kill -0 "$(cat /tmp/astrbot-lifecycle.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-lifecycle.log
+              cat "$ASTRBOT_E2E_SERVER_LOG"
               exit 1
             fi
             sleep 1
           done
           test "$ready" = '1'
-          grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
+          grep -q 'Volcengine providers registered' "$ASTRBOT_E2E_SERVER_LOG"
+          grep -q 'video=1MiB image=2MiB cache=True/every=3' "$ASTRBOT_E2E_SERVER_LOG"
 
-      - name: Prove the saved single-card state after a real AstrBot restart
+      - name: Prove saved model-card and plugin-policy state after a real AstrBot restart
         run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage after-restart
 
       - name: Stop AstrBot before same-version plugin replacement
@@ -192,22 +205,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : >/tmp/astrbot-lifecycle.log
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-lifecycle.log 2>&1 &
+          : >"$ASTRBOT_E2E_SERVER_LOG"
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >"$ASTRBOT_E2E_SERVER_LOG" 2>&1 &
           echo $! >/tmp/astrbot-lifecycle.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then ready=1; break; fi
             if ! kill -0 "$(cat /tmp/astrbot-lifecycle.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-lifecycle.log
+              cat "$ASTRBOT_E2E_SERVER_LOG"
               exit 1
             fi
             sleep 1
           done
           test "$ready" = '1'
-          grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
+          grep -q 'Volcengine providers registered' "$ASTRBOT_E2E_SERVER_LOG"
+          grep -q 'video=1MiB image=2MiB cache=True/every=3' "$ASTRBOT_E2E_SERVER_LOG"
 
-      - name: Prove the same model-card state after same-version plugin replacement
+      - name: Prove the same model-card and policy state after same-version plugin replacement
         run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage after-same-version-update
 
       - name: Stop AstrBot and remove the plugin directory
@@ -230,22 +244,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : >/tmp/astrbot-lifecycle.log
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-lifecycle.log 2>&1 &
+          : >"$ASTRBOT_E2E_SERVER_LOG"
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >"$ASTRBOT_E2E_SERVER_LOG" 2>&1 &
           echo $! >/tmp/astrbot-lifecycle.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then ready=1; break; fi
             if ! kill -0 "$(cat /tmp/astrbot-lifecycle.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-lifecycle.log
+              cat "$ASTRBOT_E2E_SERVER_LOG"
               exit 1
             fi
             sleep 1
           done
           test "$ready" = '1'
-          if grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log; then
+          if grep -q 'Volcengine providers registered' "$ASTRBOT_E2E_SERVER_LOG"; then
             echo 'plugin unexpectedly loaded after directory removal'
-            cat /tmp/astrbot-lifecycle.log
+            cat "$ASTRBOT_E2E_SERVER_LOG"
             exit 1
           fi
 
@@ -257,7 +271,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p e2e-artifacts/lifecycle-0.1.24
-          cp /tmp/astrbot-lifecycle.log e2e-artifacts/lifecycle-0.1.24/final-startup.log 2>/dev/null || true
+          cp "$ASTRBOT_E2E_SERVER_LOG" e2e-artifacts/lifecycle-0.1.24/final-startup.log 2>/dev/null || true
 
       - name: Final process cleanup
         if: always()
