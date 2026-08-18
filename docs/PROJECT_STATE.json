@@ -1,5 +1,5 @@
 {
-  "schema_version": 21,
+  "schema_version": 22,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
@@ -10,7 +10,7 @@
       "branch": "agent/0.1.31-reconcile-runtime",
       "status": "validating",
       "releaseable": false,
-      "purpose": "reconcile runtime-only 0.1.28-0.1.30 work into main, repair confirmed regressions, and prove critical invariants again after each lifecycle transition"
+      "purpose": "reconcile runtime-only 0.1.28-0.1.30 work into main, repair confirmed regressions, replace model-name context guesses with pre/post model feedback, and re-prove invariants after every invalidating lifecycle transition"
     },
     "marketplace": {
       "listed_version": "0.1.22",
@@ -23,7 +23,7 @@
     "version": "0.1.31",
     "branch": "agent/0.1.31-reconcile-runtime",
     "track": "release_candidate",
-    "status": "validating_negative_lifecycle_counterexamples",
+    "status": "validating_final_feedback_lifecycle_head",
     "installable": false
   },
   "published_baseline": {
@@ -35,45 +35,54 @@
     "status": "runtime_contains_features_not_yet_present_in_main"
   },
   "current_goal": {
-    "id": "release-0.1.31-lifecycle-evidence-chain",
-    "goal": "Restore main as the only development truth and make every critical invariant re-confirm itself after the lifecycle transitions that can invalidate its previous evidence.",
+    "id": "release-0.1.31-feedback-lifecycle-evidence-chain",
+    "goal": "Restore main as the only development truth and make context/media/UI decisions depend on scoped feedback whose validity is re-confirmed after every lifecycle transition that can invalidate it.",
     "active_decision_ids": [],
     "non_goals": [
       "Do not change the model-card Video ownership contract.",
       "Do not introduce cross-channel fallback between Ark and Agent Plan.",
-      "Do not build a second static global model-capability/context database inside the plugin.",
+      "Do not infer model capabilities or context windows from model names, aliases or broad families.",
+      "Do not persist per-instance post-feedback as a permanent global capability table.",
       "Do not claim marketplace or Windows verification from repository CI."
     ]
   },
   "active_validation_frontier": {
     "release": "0.1.31",
-    "name": "negative_lifecycle_counterexample_closure",
-    "current_stage": "reopened_after_first_all_green_gate_due_to_lifecycle_counterexamples",
+    "name": "feedback_and_lifecycle_closure",
+    "current_stage": "final_head_revalidation_after_feedback_loop_and_hot_reload_fix",
     "next_actions": [
-      "Re-run Runtime Distribution Gate with both preserved 0.1.25 negative transport contracts and new 0.1.31 lifecycle-policy contracts.",
-      "Run the real AstrBot 4.27.3 lifecycle matrix through plugin-config hot reload, provider rebind, process restart, same-version replacement and uninstall.",
-      "Re-run model-card Video, lifecycle and 0.1.19 compatibility workflows after the negative-case fixes.",
-      "Only after every current-head blocking workflow is green may the candidate move to ready/releaseable."
+      "Run Runtime Distribution Gate on the final documentation/code head with preserved 0.1.25 negative transport contracts, 0.1.31 negative media/cache contracts, and the dedicated pre/post context-feedback loop contract on AstrBot 4.26.1 and 4.27.2.",
+      "Run the real AstrBot 4.27.3 lifecycle matrix again on the final head: Dashboard refresh, plugin-config hot reload, live Provider rebind, process restart, same-version replacement and uninstall.",
+      "Run model-card Video and 0.1.19 compatibility workflows on that same final head.",
+      "Only after every blocking workflow for one identical current head is green may the candidate move to ready/releaseable."
     ],
     "observed": [
-      "The first 0.1.31 candidate reached all-green Runtime Distribution, Video, Lifecycle and 0.1.19 compatibility workflows.",
-      "That all-green state did not prove every later lifecycle transition because confirmations have scope and lifetime.",
-      "Agent Plan ark-code-latest is a dynamic routing alias, so its visible model name cannot safely identify one fixed context window.",
-      "Writing plugin-family context values before AstrBot resolution can suppress more accurate host LLM metadata and can also confuse total model window with the input-history compression guard.",
-      "The first 0.1.31 image guard ran after AstrBot native image Base64 materialization, so it protected the upstream byte ceiling but not pre-Base64 memory expansion.",
-      "The first 0.1.31 test rewrite replaced several 0.1.25 video negative-path assertions instead of retaining them as an independent evidence layer.",
-      "AstrBot plugin-config save performs an in-process plugin reload; existing Provider instances have a separate lifecycle and must be explicitly rebound to new media/cache policy.",
-      "Audio transcoding previously read the entire output file before enforcing the configured byte ceiling."
+      "The first 0.1.31 candidate reached all-green Runtime Distribution, Video, Lifecycle and 0.1.19 workflows, but that evidence did not cover newly identified lifecycle counterexamples.",
+      "A real AstrBot 4.27.3 plugin-config hot reload later exposed a genuine state bug: the new plugin instance loaded the new media/cache policy while the already-live Ark Provider was not rebuilt, producing provider_reloads=0.",
+      "The hot-reload rebind now selects targets from live instances carrying the plugin-owned marker, obtains their current AstrBot config, and asks ProviderManager.reload() to terminate/load them under the newly imported class; foreign Provider instances are not selected.",
+      "After that fix, the real AstrBot 4.27.3 lifecycle workflow completed every stage successfully: initial create/save, Dashboard refresh, plugin-config hot reload, provider_reloads=1 confirmation, process restart, same-version plugin replacement, uninstall and restart without plugin.",
+      "The original model-family context mapping was rejected: ark-code-latest and other routing aliases demonstrate that model identity is not a stable capability proof.",
+      "The replacement context design is feedback-driven: pre-feedback comes from current explicit host/model-card evidence such as live Ark /models translation; model names are diagnostic labels only.",
+      "Successful upstream requests are post-feedback lower bounds only and never prove the maximum context window.",
+      "A context rejection changes the next guard only when upstream explicitly reports a context ceiling; requested-token counts, status codes and unrelated numeric fields are insufficient evidence.",
+      "Explicit upstream context-ceiling post-feedback can correct a stale guard upward or downward; an explicit output-token reservation is subtracted when known so the derived history guard leaves room for output.",
+      "Learned post-feedback is scoped to the current Provider instance. Provider reload, plugin replacement or AstrBot restart starts again from then-current pre-feedback instead of inheriting the old observation as permanent truth.",
+      "The dedicated context-feedback contract has already passed in packaged runtime environments for AstrBot 4.26.1 and 4.27.2 together with the preserved 0.1.25 transport negatives; the latest small feedback-hook/documentation changes still require one identical-head re-run before readiness.",
+      "The first 0.1.31 image guard ran after AstrBot native image Base64 materialization; it has been moved to the image materialization boundary so oversized images are compressed/rejected before Base64 expansion.",
+      "Audio transcode output is now stat-checked against the configured ceiling before the file is read/Base64 encoded.",
+      "The first 0.1.31 test rewrite had replaced several 0.1.25 video negative paths; those historical contracts are now kept in an independent blocking test file so new tests cannot erase old evidence."
     ]
   },
   "closed_experiments": [],
   "stable_boundaries": [
     "AstrBot owns provider lifecycle, fallback, retry, model-card management, shared Dashboard schema and host model metadata.",
-    "The plugin owns Volcengine protocol adaptation and must not maintain a second global capability/context database.",
+    "The plugin owns Volcengine protocol adaptation and scoped translation of explicit feedback; it must not maintain a second static global capability/context database.",
     "Video remains a native per-model-card modalities choice scoped only to Ark and Agent Plan Source types.",
     "Ordinary Ark and Agent Plan keep separate fixed endpoints and credentials; the plugin never silently crosses channels.",
-    "Explicit positive max_context_tokens values are host/model-card input-guard configuration; the plugin does not infer them from broad model-name families.",
-    "Dynamic aliases, endpoint IDs and unknown models do not receive plugin-guessed context windows.",
+    "Model identity and model capability are separate: model names, aliases and endpoint IDs never determine context limits by themselves.",
+    "Pre-feedback is current request-before evidence from the concrete object/host state; post-feedback is evidence from the actual upstream request outcome.",
+    "Successful post-feedback establishes only an accepted lower bound; an explicit upstream ceiling is required to revise a context ceiling/guard.",
+    "Post-feedback may constrain the next request inside the same Provider lifecycle but does not become permanent global model truth.",
     "A confirmation is valid only for its object/state/lifecycle node; transitions that can invalidate it require a new confirmation.",
     "Older negative-path contracts remain independently executable when later releases add new tests.",
     "Runtime is generated from main; direct runtime development is not an accepted steady state."
@@ -85,5 +94,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "0.1.31 remains validating and is not installable. Stable user installations remain on runtime 0.1.30 until the negative lifecycle counterexample matrix is green on the current head and the guarded publisher promotes a ready candidate."
+  "warning": "0.1.31 remains validating and is not installable. Stable user installations remain on runtime 0.1.30 until every blocking workflow is green for one identical final head and the guarded publisher later promotes a ready candidate."
 }
