@@ -3,14 +3,18 @@
 ## 0.1.31（发布候选）
 
 - **恢复 main → Gate → runtime 单向发布拓扑**：把 0.1.28–0.1.30 曾直接落在 `runtime` 的媒体限制、图片压缩、插件配置与缓存观测代码完整收编回 `main`；`runtime` 重新只由受控发布器生成，不再作为平行开发分支。
-- **修复上下文治理“只打日志不生效”**：已知模型族在 Provider 构造阶段直接写入 AstrBot 真正读取的 `max_context_tokens`；`deepseek-v4*` / `glm-5*` / `glm-4*` 使用 1,048,576，`doubao*` / `kimi*` / `minimax*` 使用 262,144；显式正值优先，未知模型不猜，继续交给 AstrBot fallback。
+- **上下文治理改为“前反馈 → 后反馈”证据闭环**：撤回早期候选按 `deepseek* / glm* / doubao*` 等模型名写静态上下文上限的方案。模型名、接入点 ID、`ark-code-latest` 等别名只作为对象标签，不再拥有能力裁决权。请求前只采用当前 Ark `/models` 回执、具体模型卡、AstrBot 元数据/fallback 等明确前反馈；请求真的到达上游后再记录后反馈。
+- **成功后反馈只证明下界**：一次请求成功只记录本次实际输入/输出规模被接受，不反推出最大窗口，也不会因为同一模型名曾成功过就永久扩大上下文 guard。
+- **明确拒绝反馈可纠正下一轮 guard**：只有上游明确报告 context ceiling 时，才允许把当前 Provider 实例里的旧 guard 向上或向下纠正；`requested_tokens`、HTTP 状态码、其它数字和模型名均不足以改写。若本轮显式设置了 `max_tokens`、`max_completion_tokens`、`custom_extra_body` 中的等价字段或模型卡 `Max Output Tokens`，换算输入历史 guard 时会为输出预留相应空间。
+- **反馈有生命周期**：后反馈只属于当前 Provider 实例；插件热重载、Provider 重建、同版本替换或 AstrBot restart 后重新从当时的前反馈开始，不把旧观察提升成永久全局模型事实。当前失败请求的历史缩减/retry 仍由 AstrBot 原生策略负责，后反馈主要约束下一次请求。
+- **修复插件配置热重载的真实 Provider 漂移**：消极生命周期测试真实抓到“新插件实例已加载新策略，但旧 Ark Provider 仍存活”的 `provider_reloads=0`。修复后按 live Provider 实例自身的 plugin-owned marker 识别重绑对象，从 AstrBot 取得当前配置并 `ProviderManager.reload()`；foreign Provider 不被选择。真实 AstrBot 4.27.3 已通过 refresh → plugin-config hot reload → `provider_reloads=1` → restart → 同版本替换 → uninstall 的全链重新确认。
 - **修复缓存耗时语义**：`ms` 的计时从 completion 解析器移到 `_query` / `_query_stream` 外围，覆盖真实请求生命周期与内部重试；缓存命中仍直接读取上游 `prompt_tokens_details.cached_tokens`。
-- **修复缓存汇总串桶**：滚动汇总改为按 `channel + model` 独立计数，并把“计数 → 阈值判断 → 快照 → 清零”放在同一锁内，避免普通 API / Agent Plan / 不同模型互相污染及并发 reset 竞争。
-- **修复图片最长边无效**：超限图片进入压缩链后先按 `image_compress_max_size` 限制最长边，再逐级降质/降分辨率；只有同时满足字节上限与最长边目标才允许发送。
-- **图片压缩改为 fail closed**：一旦图片因字节超限进入压缩链，若内容无法解码或最终仍无法压入安全范围，抛出 `AdapterInputTransportError(reached_model=false)` 并停止本轮请求，不再 warning 后把原始超限图片继续发给 Ark。
+- **修复缓存汇总串桶**：滚动汇总改为按 `channel + model` 独立计数，并把“计数 → 阈值判断 → 快照 → 清零”放在同一锁内；插件观测配置发生变化时清空旧汇总桶，避免跨策略/跨生命周期混样本。
+- **图片护栏前移到 Base64 之前**：超限本地/远端图片在 materialize 阶段先 stat，并直接从物化文件压缩；透明图转 JPEG 时铺白底。压缩链先执行 `image_compress_max_size` 最长边，再逐级降质/降分辨率；无法同时满足字节上限与最长边目标时 fail closed。关闭自动压缩只关闭“自动修复”，不会关闭 `image_max_mb` 上限。
+- **音频输出读前限流**：ffmpeg 归一化输出先 stat 检查字节上限，再读文件/Base64；取消与超时继续清理子进程。
+- **保留旧证据而不是覆盖旧测试**：0.1.25 的 data URL、大文件、空文件、ffmpeg timeout/cancel 等负路径合同独立保存在 `tests/test_transport_legacy_guards.py`；0.1.31 新增 `tests/test_context_feedback_loop.py` 专门验证模型名无裁决权、前反馈/后反馈、成功下界、明确拒绝 ceiling、输出 reserve、Provider hook 接入与 Provider 重建后旧反馈失效。两类合同同时进入 Runtime Distribution Gate，不互相替代。
 - **修复运行包白名单**：`_conf_schema.json` 与 `README.md` 进入 `build_runtime_package.py`、publisher `allowed_root` 与默认分支归档等价合同；`.gitattributes` 不再把 README 排除，避免正规发布再次丢掉 WebUI 配置或用户说明。
-- **补回归闭环**：`tests/test_video_transport_guards.py` 升级为 0.1.31 媒体/缓存/上下文合同，覆盖真实 context hint、按模型缓存分桶、图片最长边、图片 fail-closed、可配置视频上限/转码超时与 ffmpeg 取消清理；不调用付费火山 API。
-- **发布状态不再自锁**：README 预先同时描述“0.1.30 稳定 + 0.1.31 候选”和“0.1.31 晋升后的稳定状态”，发布后只需更新开发态 HOT 状态，不再在同一版本原地改写已属于 runtime 的 README。
+- **发布状态不再自锁**：README 预先同时描述“0.1.30 稳定 + 0.1.31 候选”和“0.1.31 晋升后的稳定状态”；候选继续保持 `validating / releaseable=false`，只有同一个最终 head 的 Runtime、Lifecycle、Video 与 0.1.19 四套阻断 workflow 全绿后才允许进入 ready。
 
 ## 0.1.30
 
@@ -94,7 +98,7 @@
 - 横向模型字段的优先级明确为“显式横向设置 > 同名 `custom_extra_body` > AstrBot/Ark/模型默认”。数字项在 Dashboard 中以可空字符串承载，空值表示**不注入**而不是数值 0；保存时空字段会清理，真实 `0` 仍可作为合法值持久化。
 - 思考参数只提升已经有明确通用语义的 `thinking.type` 与 `reasoning_effort`；本版本没有伪造统一 `Thinking Budget` 字段。厂商/模型专属预算参数继续由 `custom_extra_body` 承载，直到存在可验证的 Ark 映射。
 - 同时兼容 AstrBot `4.26.1` 的 `_apply_provider_specific_extra_body_overrides` 与 `4.27.2+` 的 `_apply_provider_specific_request_overrides`，使横向字段在两条受支持宿主路径都于 `custom_extra_body` 合并后覆盖同名请求值。
-- 新增独立、可撤销的 0.1.19 model-fields Dashboard bridge，并叠在 0.1.18 Source bridge 外层；安装顺序为 Source bridge → model-fields bridge，卸载顺序反向。`registry.py` 与 0.1.18 Source UI 逻辑保持不变，AstrBot `modalities` 仍不改写。
+- 新增独立、可撤销的 0.1.19 model-fields Dashboard bridge，并叠在 0.1.18 Source bridge外层；安装顺序为 Source bridge → model-fields bridge，卸载顺序反向。`registry.py` 与 0.1.18 Source UI 逻辑保持不变，AstrBot `modalities` 仍不改写。
 - AstrBot 的首次“新增模型”弹窗由前端本地构造，插件无法在不修改共享 Dashboard 的前提下把服务端投影字段塞进该未保存对象；因此新横向字段在模型**保存后重新打开编辑弹窗**时出现。这是宿主 UI 生命周期边界，不是保存失败。
 - 发布实现已经通过 AstrBot `4.26.1` / `4.27.2` 双版本最小运行包合同与真实启动；真实 `4.27.2` Dashboard 浏览器矩阵确认 Ark / Agent Plan 模型显示并持久化双语横向字段，foreign 模型保持干净，0.1.18 Source master/selector 不受影响且 `pageErrors=[]`。压缩正向合同会现场生成测试视频、走 `Compressed` 转码、再由 ffmpeg 完整解码生成结果，不依赖付费火山 API。
 - 修复首次合并后的发行阻断：活动发布链不再分别硬编码插件版本，而是由 `metadata.yaml` 生成 runtime manifest，再验证候选包和原生安装后的 metadata 与该 manifest 完全一致；知识状态门禁会拒绝重新引入固定发行版本比较，避免下次迭代再次因遗漏旧版本字面量而失败。
