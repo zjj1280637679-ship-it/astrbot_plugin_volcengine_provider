@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.1.29
+
+- **README 归位到运行时包**：`runtime` 分支此前缺少 `README.md`，GitHub 仓库的 `tree/runtime` 页面与 AstrBot 插件信息展示无文档可读。本版本把面向用户的 README 加入运行包，并在其中补齐 0.1.28 的媒体护栏配置说明。
+- 新增的 README 为自包含用户文档：安装、两张供应商卡配置、媒体输入上限与超限图片压缩（0.1.28+）、多模态路径、常见问题与隐私/费用边界；不再依赖 `docs/` 内部资料。
+- 本版本不改任何插件行为、UI、模型卡、Provider 路由、音视频协议或请求语义；只补文档并随严格更新的版本号 0.1.29 走完整门禁与发布器。
+
+## 0.1.28（已发布到 runtime）
+
+- **可配置媒体输入上限**：音频/视频输入上限与转码超时从写死的常量改为 `_conf_schema.json` 可调项（`audio_max_mb`、`audio_transcode_timeout_seconds`、`video_max_mb`、`video_transcode_timeout_seconds`），WebUI 插件配置页可直接修改。
+- **超限图片自动压缩**：新增 `adapters/image.py`，超过 `image_max_mb`（默认 5MB）的本地/`data` 图片在发送前自动降分辨率压缩到上限以内，压缩目标长边与 JPEG 质量可配；仍超限时逐级降质重试，避免请求被火山方舟拒绝。
+- 本版本不改 Provider 路由、模型卡 Video 合同或请求语义。
+
 ## 0.1.27
 
 - **发布状态归位**：0.1.26 已通过主分支 Runtime Distribution Gate 并由受控发布器晋升到 `runtime`；本版本把上一条更新记录从“发布候选”改为“已发布到 runtime”，避免 AstrBot 更新弹窗把已安装版本误标为候选。
