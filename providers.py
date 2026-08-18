@@ -180,21 +180,13 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         *,
         image_detail: str | None = None,
     ) -> dict:
-        """Resolve/compress an Ark image before raw bytes become Base64."""
         return await build_ark_image_part(
             image_url,
             image_detail=image_detail,
         )
 
     async def _transform_content_part(self, part: dict) -> dict:
-        """Keep image transport failures fail-closed on AstrBot 4.26/4.27.
-
-        AstrBot's generic OpenAI adapter intentionally catches image preprocessing
-        exceptions and preserves the original image block. That is unsafe for this
-        plugin's explicit size guard because an oversized/invalid image would
-        otherwise bypass the guard. Only image blocks are specialized here; all
-        other content parts remain host-owned.
-        """
+        """Keep image transport failures fail-closed on AstrBot 4.26/4.27."""
         if isinstance(part, dict) and part.get("type") == "image_url":
             image_url, image_detail = self._extract_image_part_info(part)
             if not image_url:
@@ -238,8 +230,7 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         request_max_retries: int | None = None,
     ):
         # AstrBot's agent runner has already snapshotted max_context_tokens by
-        # this point. Re-confirming here records exactly which pre-feedback the
-        # current request used, without trying to rewrite the current runner.
+        # this point. This records exactly which pre-feedback the request used.
         self._context_feedback.pre_request(
             self.provider_config,
             provider_id=self._provider_id(),
@@ -266,26 +257,17 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
             provider_id=self._provider_id(),
         )
         token = _REQUEST_STARTED_AT.set(time.perf_counter())
-        last_usage = None
-        completed = False
         try:
+            # AstrBot's parent stream creates a final ChatCompletion and calls
+            # self._parse_openai_completion(), so post-success/cache feedback is
+            # recorded exactly once there for both stream and non-stream paths.
             async for item in super()._query_stream(
                 payloads,
                 tools,
                 request_max_retries=request_max_retries,
             ):
-                usage = getattr(item, "usage", None)
-                if usage is not None:
-                    last_usage = usage
                 yield item
-            completed = True
         finally:
-            if completed and last_usage is not None:
-                self._context_feedback.post_success(
-                    prompt_tokens=int(getattr(last_usage, "input", 0) or 0),
-                    completion_tokens=int(getattr(last_usage, "output", 0) or 0),
-                    provider_id=self._provider_id(),
-                )
             _REQUEST_STARTED_AT.reset(token)
 
     async def _parse_openai_completion(self, completion, tools):
@@ -357,11 +339,8 @@ class _FixedArkEndpointProvider(ProviderOpenAIOfficial):
         image_fallback_used: bool = False,
     ) -> tuple:
         if is_context_length_error(error):
-            # This post-feedback revision is intentionally written to the live
-            # Provider object only. The current AstrBot ContextManager was already
-            # built; native retry handles this request, while the next request sees
-            # the revised pre-feedback. Reload/restart creates a fresh Provider and
-            # therefore naturally discards the learned runtime observation.
+            # The current AstrBot ContextManager was already built. Native retry
+            # handles this request; explicit post-feedback revises the next one.
             self._context_feedback.post_context_rejection(
                 self.provider_config,
                 error,
