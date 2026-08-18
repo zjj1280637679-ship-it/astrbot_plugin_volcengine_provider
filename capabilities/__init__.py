@@ -1,13 +1,14 @@
 """Stable entry point for Volcengine model-card settings and feedback."""
 
 from .cache_insight import (
-    apply_context_limit_hint,
     cache_log_enabled,
+    cache_log_every,
+    cache_log_settings,
     channel_name,
     configure_cache_log,
+    configured_context_limit,
     is_context_length_error,
     log_cache_usage,
-    resolve_context_limit,
 )
 from .model_fields import (
     ALL_MODEL_FIELD_KEYS,
@@ -98,13 +99,15 @@ __all__ = [
     "acquire_dashboard_asset_bridge",
     "acquire_dashboard_runtime_bridge",
     "acquire_model_fields_bridge",
-    "apply_context_limit_hint",
     "apply_request_overrides",
     "cache_log_enabled",
+    "cache_log_every",
+    "cache_log_settings",
     "channel_name",
     "cleanup_owned_settings_on_source_change",
     "clear_source_model_hints",
     "configure_cache_log",
+    "configured_context_limit",
     "consume_source_model_hints",
     "is_context_length_error",
     "legacy_model_video_ui_key",
@@ -118,7 +121,6 @@ __all__ = [
     "release_dashboard_asset_bridge",
     "release_dashboard_runtime_bridge",
     "remember_source_model_hint",
-    "resolve_context_limit",
     "source_scope_id",
     "source_types",
     "strip_model_fields",
