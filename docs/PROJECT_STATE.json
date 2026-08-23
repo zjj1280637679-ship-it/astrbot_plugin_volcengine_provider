@@ -1,65 +1,58 @@
 {
-  "schema_version": 19,
+  "schema_version": 20,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
-    "stable_release": "0.1.27",
-    "stable_status": "repository_main_and_runtime_published_0_1_27_release_state_normalization",
+    "stable_release": "0.1.32",
+    "stable_status": "repository_main_and_runtime_version_reconciled_0_1_32",
     "active_release_candidate": null,
     "safe_development_branch": "main",
     "safe_install_branch": "runtime",
     "marketplace": {
-      "listed_version": "0.1.22",
-      "status": "last_observed_listing_0_1_22_runtime_0_1_27_published_listing_refresh_unobserved"
+      "listed_version": "0.1.30",
+      "status": "last_observed_listing_0_1_30_runtime_0_1_32_published_listing_refresh_pending"
     },
-    "windows_marketplace_install": "0.1.27_unverified"
+    "windows_marketplace_install": "0.1.32_unverified"
   },
   "active_experiment": null,
   "development": {
-    "version": "0.1.27",
+    "version": "0.1.32",
     "branch": "main",
     "track": "stable",
-    "status": "stable_0_1_27_published_runtime_and_contract_verified",
+    "status": "stable_0_1_32_version_identity_reconciled",
     "installable": true
   },
   "published_baseline": {
-    "version": "0.1.27",
-    "main_commit": "76f7af1abe44f49a4a3f92c027cd5eb322f269a1",
+    "version": "0.1.32",
+    "main_commit": "965f2a12656d4d730c286531981fd53fe3732a64",
     "runtime_branch": "runtime",
-    "runtime_commit": "877865675ea2b05ad30891774f85f455e48247fa",
-    "runtime_tree": "976ad7df9d9f1bb88eeb13e8063fd6fcdf3480d8",
-    "dashboard_evidence_run": 31914581988,
-    "runtime_gate_run": 31924210745,
-    "publisher_run": 31924267237,
-    "status": "repository_runtime_and_contract_verified"
+    "runtime_commit": "48a1f0068bddc86a8be6e63ec57eeecf974ab6ab",
+    "status": "repository_runtime_metadata_reconciled_pending_external_market_refresh"
   },
   "current_goal": {
-    "id": "observe-0.1.27-external-publication",
-    "goal": "Complete the external-publication observations that repository CI cannot provide: confirm the AstrBot marketplace listing refresh and a real repository-name reinstall (and, where applicable, the Windows/Launcher install) of the published 0.1.27 runtime, then record those observations before preparing the next release.",
+    "id": "observe-0.1.32-external-publication",
+    "goal": "Confirm that the AstrBot marketplace central index refreshes from the previously observed 0.1.30 listing to the repository-published 0.1.32 identity, and record a real reinstall observation without treating repository CI as proof of external cache state.",
     "active_decision_ids": [],
     "non_goals": [
-      "Do not claim marketplace or Windows installation verification from CI success alone.",
-      "Do not create another release candidate merely to change development-only status prose.",
-      "Do not change the published runtime tree without a strictly newer three-part version and a new ready candidate.",
-      "Do not restore the superseded PR #3 or use an old repository as a merge source."
+      "Do not claim marketplace refresh until the public listing is actually observed as 0.1.32.",
+      "Do not change Provider, model-card, routing, audio/video or request semantics as part of this version-identity repair.",
+      "Do not create parallel version branches; main is development authority and runtime is the installation source."
     ]
   },
   "active_validation_frontier": {
-    "release": "0.1.27",
-    "name": "release_state_normalization",
-    "current_stage": "published_runtime_verified_pending_external_observations",
+    "release": "0.1.32",
+    "name": "version_identity_reconciliation",
+    "current_stage": "repository_reconciled_gate_rerun_pending_external_market_refresh",
     "next_actions": [
-      "Observe the AstrBot marketplace listing and perform a real repository-name reinstall/Windows or Launcher installation of the 0.1.27 runtime, then record the results in the HOT state.",
-      "Configure repository branch protection or rulesets for main and runtime through GitHub settings while preserving the guarded publisher's ability to update runtime.",
-      "Prepare the next release candidate only when a new runtime-tree change is intentional and versioned."
+      "Run the Runtime Distribution Gate with metadata, README and PROJECT_STATE aligned to 0.1.32.",
+      "Observe the AstrBot marketplace listing and confirm it advances from 0.1.30 to 0.1.32.",
+      "Perform a real runtime reinstall and record the observed installed metadata version."
     ],
     "observed": [
-      "PR #20 was merged to main as 76f7af1abe44f49a4a3f92c027cd5eb322f269a1 after two green candidate gates: Runtime Distribution Gate runs 31924034199 and 31924131043.",
-      "Main-branch Runtime Distribution Gate run 31924210745 passed after the merge, including the knowledge-state guard, minimal artifact boundary, default-archive equivalence, packaged contracts and clean AstrBot 4.26.1 / 4.27.2 plugin loads.",
-      "Guarded publisher run 31924267237 completed successfully: ready-candidate validation, four-cell pre-publish native-install matrix, exact leased runtime promotion, four-cell post-publish native-install matrix and source-identity checks.",
-      "The published runtime branch is 877865675ea2b05ad30891774f85f455e48247fa with tree 976ad7df9d9f1bb88eeb13e8063fd6fcdf3480d8, metadata 0.1.27 and the corrected shipped CHANGELOG; corresponding main is 76f7af1abe44f49a4a3f92c027cd5eb322f269a1.",
-      "PR #3 was closed as superseded; its useful release-hardening ideas are already represented in the current mainline.",
-      "No Provider, Dashboard bridge, model-card, routing, audio/video adapter or request-semantic code changed in 0.1.27."
+      "The first 0.1.32 gate attempt loaded the packaged plugin successfully on AstrBot 4.26.1 and 4.27.2 but the artifact-boundary job rejected stale HOT/README version projections.",
+      "main metadata was reconciled to 0.1.32 at 965f2a12656d4d730c286531981fd53fe3732a64.",
+      "runtime metadata was reconciled to 0.1.32 at 48a1f0068bddc86a8be6e63ec57eeecf974ab6ab.",
+      "The user-facing marketplace was still observed as 0.1.30 after repository 0.1.31, establishing that marketplace indexing is a separate external state."
     ]
   },
   "closed_experiments": [
@@ -82,22 +75,19 @@
       ],
       "final_failed_run": 31719539311,
       "archive": "docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md",
-      "resume_condition": "Satisfied by the 0.1.22 recovery, the 0.1.23 robust delivery layer, the 0.1.24 object-scoped UI, the 0.1.25 transport guards, the 0.1.26 changelog distribution and the 0.1.27 release-state normalization."
+      "resume_condition": "Satisfied by the 0.1.22 recovery and later stable releases; this experiment remains historical."
     }
   ],
   "stable_boundaries": [
     "AstrBot owns provider lifecycle, routing, fallback, retry, model-card management, and the base shared Dashboard schema.",
     "The plugin adapts Volcengine request and media protocols; it does not maintain a second global model-capability database.",
-    "The user-facing Video truth remains the native per-model-card modalities selection. The precise UI path scopes it to the two plugin-owned Source types after a private dialog clone exists.",
-    "No shared-schema Video injection exists anymore. The native video option may only be added on concrete model-card objects of the two plugin-owned Source types, via the private dialog clone (asset bridge) or the live component instance (runtime bridge). Foreign dialogs must never receive it, and the create/update save boundary strips any forged value.",
-    "Future AstrBot-native Video support is host-owned and must not be deleted by plugin cleanup.",
+    "The user-facing Video truth remains the native per-model-card modalities selection scoped to the two plugin-owned Source types.",
+    "Foreign Provider dialogs must never receive plugin Video or volcengine_* model-card fields.",
     "Request transport settings are not permanent model-capability facts.",
-    "Local video materialization must reject empty and oversized input before base64-encoding and bound any ffmpeg work with a timeout plus kill-on-cancel; remote http(s) URLs remain pass-through because their size is unknown locally.",
-    "CHANGELOG.md ships with the runtime package because AstrBot renders the post-update changelog popup from it; it stays byte-identical to the development changelog and must not carry secrets.",
-    "A changed shipped CHANGELOG.md is a changed runtime tree and therefore requires a strictly newer metadata version plus a validated release candidate; published runtime artifacts are never edited in place.",
-    "The 0.1.19+ rich per-model request fields, audio path, video quality modes, Agent Plan routing, migrations, and request override semantics are compatibility baseline behavior unless a separate validated change explicitly replaces them.",
-    "Development documentation, tests, evidence, and experiments stay outside the allow-list runtime package.",
-    "A passing gate proves only the object and layer named by that gate; real source-type differential, persistence, runtime behavior and unload/release evidence remain distinct checks."
+    "Local video materialization must reject empty and oversized input before base64 encoding and bound ffmpeg work with timeout plus kill-on-cancel.",
+    "CHANGELOG.md ships with the runtime package because AstrBot renders the post-update changelog popup from it.",
+    "Development documentation, tests, evidence and experiments stay outside the allow-list runtime package.",
+    "A passing repository gate proves only the named repository/runtime boundary; marketplace cache and real user installations remain separate observations."
   ],
   "knowledge_lifecycle": {
     "policy": "docs/KNOWLEDGE_LIFECYCLE.md",
@@ -106,5 +96,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. The repository is in the post-publication steady state for stable 0.1.27: there is no active release candidate, the publisher treats a no-candidate main push as a verified no-op only when the runtime tree is unchanged, and any changed runtime tree still requires a strictly newer version plus a new ready candidate."
+  "warning": "Read verdict first, then docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md for any Video/modalities/Provider-UI task. Stable repository identity is 0.1.32 with no active release candidate; marketplace refresh is still an external observation and must not be inferred from CI alone."
 }
