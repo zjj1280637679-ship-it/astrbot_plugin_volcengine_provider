@@ -29,8 +29,13 @@ concurrency:
 
 jobs:
   refresh-restart-update-uninstall:
+    name: AstrBot ${{ matrix.astrbot-version }} lifecycle
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        astrbot-version: ['4.27.3', '4.27.4']
     env:
       ASTRBOT_E2E_URL: http://127.0.0.1:6185
       ASTRBOT_E2E_USERNAME: e2e-admin
@@ -42,8 +47,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Clone exact AstrBot 4.27.3 host
-        run: git clone --depth 1 --branch v4.27.3 https://github.com/AstrBotDevs/AstrBot.git AstrBot
+      - name: Clone exact AstrBot host
+        run: >-
+          git clone --depth 1 --branch v${{ matrix.astrbot-version }}
+          https://github.com/AstrBotDevs/AstrBot.git AstrBot
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -67,7 +74,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: AstrBot/dashboard/pnpm-lock.yaml
 
-      - name: Build exact AstrBot 4.27.3 Dashboard
+      - name: Build exact AstrBot Dashboard
         working-directory: AstrBot/dashboard
         run: pnpm install --frozen-lockfile && pnpm run build
 
@@ -78,7 +85,7 @@ jobs:
           mkdir -p AstrBot/astrbot/dashboard/dist
           rsync -a --delete AstrBot/dashboard/dist/ AstrBot/astrbot/dashboard/dist/
           mkdir -p AstrBot/astrbot/dashboard/dist/assets
-          printf '4.27.3' > AstrBot/astrbot/dashboard/dist/assets/version
+          printf '${{ matrix.astrbot-version }}' > AstrBot/astrbot/dashboard/dist/assets/version
 
       - name: Initialize one persistent AstrBot data directory and install candidate
         shell: bash
@@ -275,7 +282,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: model-card-lifecycle-4.27.3
+          name: model-card-lifecycle-${{ matrix.astrbot-version }}
           path: e2e-artifacts/lifecycle-0.1.24
           if-no-files-found: error
           retention-days: 14

@@ -56,6 +56,7 @@ def _dashboard_fixture(
     *,
     relaxed_minifier_shape: bool = False,
     labels_as_i18n_key: bool = False,
+    include_reasoning: bool = True,
 ) -> str:
     plugin_rows = ",".join(
         f'{json.dumps(key)}:{{type:"string",invisible:true}}' for key in PLUGIN_KEYS
@@ -70,6 +71,7 @@ def _dashboard_fixture(
 ; for ( const M of U ) { k.provider.items[M] && (k.provider.items[M].invisible = true); }'''
     else:
         boundary = '$==="googlegenai_chat_completion"&&U.push("custom_extra_body");for(const M of U)k.provider.items[M]&&(k.provider.items[M].invisible=!0);'
+    reasoning_member = ",reasoning:me(le)" if include_reasoning else ""
 
     # The helper pair models the concrete ConfigItemRenderer contract: I(S)
     # resolves host-owned metadata labels; _(S,index,option) chooses one label.
@@ -81,7 +83,7 @@ const base={{value:{{id:"base"}}}};
 function me(x){{return false}}
 function I(S){{if(Array.isArray(S.labels))return S.labels;if(typeof S.labels==="string")return ["文本","图像","音频","工具使用"];return null}}
 function _(S,k,$){{const U=I(S);return U?U[k]:$}}
-function nt(C){{var Le,se;if(!base.value)return;const Q=((Le=selected.value)==null?void 0:Le.id)||base.value.id,q=`${{Q}}/${{C}}`,le={{limit:{{context:128000}}}};let re;re=["text","image","audio","tool_use"];let De=0;return(se=le==null?void 0:le.limit)!=null&&se.context&&typeof le.limit.context=="number"&&(De=le.limit.context),{{id:q,enable:!0,provider_source_id:Q,model:C,modalities:re,custom_extra_body:{{}},max_context_tokens:De,reasoning:me(le)}}}}
+function nt(C){{var Le,se;if(!base.value)return;const Q=((Le=selected.value)==null?void 0:Le.id)||base.value.id,q=`${{Q}}/${{C}}`,le={{limit:{{context:128000}}}};let re;re=["text","image","audio","tool_use"];let De=0;return(se=le==null?void 0:le.limit)!=null&&se.context&&typeof le.limit.context=="number"&&(De=le.limit.context),{{id:q,enable:!0,provider_source_id:Q,model:C,modalities:re,custom_extra_body:{{}},max_context_tokens:De{reasoning_member}}}}}
 function newCard(type){{selected.value={{id:type,type}};return nt("model")}}
 function card(type){{
 const l={{value:{{provider:{{items:{{modalities:{{options:["text","image","audio","tool_use"],labels:{labels}}},{plugin_rows},custom_extra_body:{{type:"dict"}}}}}}}}}};
@@ -158,6 +160,23 @@ def main() -> None:
     for name in ("openai", "xai"):
         for key in PLUGIN_KEYS:
             assert key not in new_cards[name], (name, key, new_cards[name])
+
+    # AstrBot 4.27.4 removed the provider-config ``reasoning`` member while
+    # preserving the rest of this builder. The same object-scoped contract must
+    # survive that host change without widening the foreign-provider surface.
+    no_reasoning = _run_transformed(_dashboard_fixture(include_reasoning=False))
+    for name in ("ark", "plan"):
+        assert no_reasoning["dialogs"][name]["modalities"]["options"] == [
+            *HOST_VALUES,
+            "video",
+        ]
+        for key in PLUGIN_KEYS:
+            assert key in no_reasoning["newCards"][name]
+    for name in ("openai", "xai", "google"):
+        assert no_reasoning["dialogs"][name]["modalities"]["options"] == HOST_VALUES
+    for name in ("openai", "xai"):
+        for key in PLUGIN_KEYS:
+            assert key not in no_reasoning["newCards"][name]
 
     i18n_result = _run_transformed(_dashboard_fixture(labels_as_i18n_key=True))
     i18n_dialogs = i18n_result["dialogs"]
