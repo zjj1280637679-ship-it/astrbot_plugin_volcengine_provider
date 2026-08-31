@@ -86,6 +86,11 @@ jobs:
       - name: Install exact AstrBot runtime
         run: uv sync --directory AstrBot
 
+      - name: Install media contract dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+
       - name: Setup pnpm exactly as the verified Dashboard baseline
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
