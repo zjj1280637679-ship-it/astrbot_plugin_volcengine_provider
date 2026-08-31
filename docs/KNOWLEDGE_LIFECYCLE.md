@@ -139,16 +139,12 @@ An experiment is not a release candidate merely because some layers passed. If a
 
 ## CI guard
 
-`tools/release/check_knowledge_state.py` is a lightweight drift guard. It checks at minimum that:
+`tools/release/check_main_install_source.py` is the active release drift guard.
+It checks that `metadata.yaml`, README, CHANGELOG, and the candidate/stable state
+in `docs/PROJECT_STATE.json` identify the same version. It also verifies that
+the default `main` root contains the complete runtime closure and configuration
+schema expected by the documented feature set.
 
-- `metadata.yaml` candidate version matches `docs/PROJECT_STATE.json` development version;
-- the active validation frontier belongs to that same development version;
-- `PROJECT_STATE.verdict` names at most one active release candidate;
-- an active experiment and an active release candidate cannot coexist;
-- an experiment is always `releaseable=false`; a release candidate is first `validating/releaseable=false` and becomes `ready/releaseable=true` only after every pre-publication blocker passes;
-- publication, unlike ordinary PR validation, requires a `ready` release candidate explicitly;
-- stopped experiments are explicitly non-releaseable and point to a cold archive record;
-- `docs/DECISION_INDEX.json` points to `PROJECT_STATE` and does not duplicate an active frontier;
-- warm entry documents acknowledge `PROJECT_STATE` as the hot-state authority.
-
-The guard is intentionally narrow. It catches stale *authority*, not legitimate historical references or the vocabulary needed by a future explicitly authorised workflow. Completed decisions are pinned inert; a future live decision is permitted only when the HOT current goal names its exact decision ID.
+The guard intentionally leaves historical release references untouched. It
+rejects only current-authority or installation-source drift; old evidence may
+retain the version and branch identity under which it was observed.

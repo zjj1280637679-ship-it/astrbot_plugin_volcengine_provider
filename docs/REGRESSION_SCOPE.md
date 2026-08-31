@@ -15,6 +15,7 @@ The goal is to avoid both under-testing and work explosion.
 | Dashboard bridge / schema | service-path tests; coarse real Dashboard reachability; UI evidence collection | No |
 | `adapters/audio.py` or audio request hook | audio unit/integration regression plus QQ-equivalent audio chain | **Yes** |
 | `adapters/video.py` or trusted attachment hook | video trusted-boundary regression plus QQ-equivalent video chain | **Yes** |
+| `adapters/image.py` or image limit configuration | byte threshold, longest edge, no-upscale/no-trigger preservation, and metadata-field preservation | No, unless AstrBot's image representation changes |
 | AstrBot `MediaResolver` contract/version used by media adapters | compatibility regression using actual host media representation | **Yes** for affected modality |
 | Ark `input_audio` / `video_url` contract | raw-vs-plugin protocol attribution plus QQ-equivalent path | **Yes** for affected modality |
 | Provider routing/retry/fallback code | normally forbidden plugin ownership change; requires explicit architecture decision | Depends on approved ownership change |

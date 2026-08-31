@@ -8,11 +8,13 @@ video settings; it does not author model capability feedback.
 from astrbot.api import logger, star
 
 from . import providers as _providers  # noqa: F401
+from .adapters.limits import MediaLimits, set_limits
 from .adapters.logging import install_video_log_redaction, remove_video_log_redaction
 from .capabilities import (
     acquire_dashboard_asset_bridge,
     acquire_dashboard_runtime_bridge,
     acquire_model_fields_bridge,
+    configure_cache_log,
     migrate_legacy_video_settings,
     release_dashboard_asset_bridge,
     release_dashboard_runtime_bridge,
@@ -26,9 +28,57 @@ from .registry import (
 )
 
 
+def _bounded_int(value, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return min(max(parsed, minimum), maximum)
+
+
+def _media_limits_from_config(config: dict | None) -> MediaLimits:
+    """Resolve the runtime media limits from AstrBot plugin configuration."""
+    settings = config if isinstance(config, dict) else {}
+    return MediaLimits(
+        audio_max_bytes=_bounded_int(settings.get("audio_max_mb"), 25, 1, 100) * 1024 * 1024,
+        audio_transcode_timeout_seconds=_bounded_int(
+            settings.get("audio_transcode_timeout_seconds"), 120, 10, 3600
+        ),
+        video_max_bytes=_bounded_int(settings.get("video_max_mb"), 200, 1, 4096) * 1024 * 1024,
+        video_transcode_timeout_seconds=_bounded_int(
+            settings.get("video_transcode_timeout_seconds"), 300, 30, 7200
+        ),
+        image_compress_enabled=bool(settings.get("image_compress_enabled", True)),
+        image_max_bytes=_bounded_int(settings.get("image_max_mb"), 5, 1, 100) * 1024 * 1024,
+        image_compress_max_size=_bounded_int(settings.get("image_compress_max_size"), 1280, 256, 8192),
+        image_compress_quality=_bounded_int(settings.get("image_compress_quality"), 85, 30, 100),
+    )
+
+
 class VolcengineProviderPlugin(star.Star):
-    def __init__(self, context: star.Context):
+    def __init__(self, context: star.Context, config=None):
         super().__init__(context)
+        settings = config if isinstance(config, dict) else {}
+        limits = _media_limits_from_config(config)
+        set_limits(limits)
+        configure_cache_log(
+            enabled=settings.get("cache_log_enabled", True),
+            every=_bounded_int(settings.get("cache_log_every"), 10, 1, 1000),
+        )
+        logger.info(
+            "Volcengine media limits: audio=%dMiB/%ds video=%dMiB/%ds "
+            "image_compress=%s image<=%dMiB (%dpx q%d); cache_log=%s/every=%d",
+            limits.audio_max_bytes // (1024 * 1024),
+            limits.audio_transcode_timeout_seconds,
+            limits.video_max_bytes // (1024 * 1024),
+            limits.video_transcode_timeout_seconds,
+            limits.image_compress_enabled,
+            limits.image_max_bytes // (1024 * 1024),
+            limits.image_compress_max_size,
+            limits.image_compress_quality,
+            settings.get("cache_log_enabled", True),
+            _bounded_int(settings.get("cache_log_every"), 10, 1, 1000),
+        )
         self._dashboard_bridge_acquired = False
         self._dashboard_asset_bridge_acquired = False
         self._dashboard_runtime_bridge_acquired = False
@@ -122,4 +172,3 @@ class VolcengineProviderPlugin(star.Star):
         if getattr(self, "_dashboard_bridge_acquired", False):
             release_owned_dashboard_bridge()
             self._dashboard_bridge_acquired = False
-        return None

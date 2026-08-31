@@ -14,7 +14,7 @@ During 0.1.19 development, `PROJECT_STATE.json`, `DECISION_INDEX.json`, `AI_ONBO
 2. Other documents are WARM/COLD explanation or history and must reference HOT state instead of copying the current goal/frontier.
 3. Completed release frontiers are demoted to `docs/archive/` summaries or existing historical ledgers.
 4. Rejected/superseded strategies are retained with status and reconsideration/invalidator conditions rather than deleted.
-5. A lightweight CI guard checks that the candidate version and active frontier in `PROJECT_STATE` match `metadata.yaml`, and that `DECISION_INDEX` remains navigation rather than a second active-state store.
+5. A lightweight CI guard checks that the candidate/stable version in `PROJECT_STATE` matches `metadata.yaml`, and that the default `main` root contains the complete installation closure promised by the current release.
 
 ## Consequences
 

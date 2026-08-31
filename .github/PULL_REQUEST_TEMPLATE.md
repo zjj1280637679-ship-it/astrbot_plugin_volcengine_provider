@@ -20,11 +20,12 @@ Allowed status: `PASS`, `FAIL`, `UNMEASURED`. Do not replace this table with one
 ## Non-regression
 
 - [ ] Foreign provider behavior is unchanged, or the intentional change is stated.
-- [ ] The generated runtime allow-list is unchanged, or the runtime consumer is stated.
+- [ ] The default `main` installation source remains complete, or the packaging change is stated.
 - [ ] Stable workflow identities were not repurposed for an experiment.
 - [ ] Failed or stopped experiments are `releaseable: false` and archived.
 
 ## Release decision
 
 - [ ] This change is **not** being presented as a release candidate.
-- [ ] Or every blocking condition passed and `PROJECT_STATE` explicitly names the candidate.
+- [ ] Or `PROJECT_STATE` explicitly names a **validating** candidate, keeps `releaseable: false`, and lists every pending blocker.
+- [ ] Or every blocking condition passed and `PROJECT_STATE` names a **ready**, releaseable candidate.

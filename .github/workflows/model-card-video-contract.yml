@@ -7,31 +7,41 @@ on:
     paths:
       - .github/workflows/model-card-video-contract.yml
       - AGENTS.md
+      - CHANGELOG.md
+      - README.md
+      - _conf_schema.json
+      - adapters/image.py
+      - adapters/limits.py
       - adapters/video.py
       - capabilities/**
       - main.py
+      - metadata.yaml
       - providers.py
       - registry.py
+      - docs/PROJECT_STATE.json
+      - tools/release/check_main_install_source.py
       - docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md
-      - tests/test_model_card_video_runtime_switch.py
-      - tests/test_model_card_video_unload_contract.py
-      - tests/test_0_1_20_dashboard_asset_scope.py
-      - tests/test_0_1_23_video_delivery_fallback.py
+      - tests/test_*.py
       - tests/e2e/provider_card_matrix/**
   push:
     branches: [main]
     paths:
       - .github/workflows/model-card-video-contract.yml
+      - CHANGELOG.md
+      - README.md
+      - _conf_schema.json
+      - adapters/image.py
+      - adapters/limits.py
       - adapters/video.py
       - capabilities/**
       - main.py
+      - metadata.yaml
       - providers.py
       - registry.py
+      - docs/PROJECT_STATE.json
+      - tools/release/check_main_install_source.py
       - docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md
-      - tests/test_model_card_video_runtime_switch.py
-      - tests/test_model_card_video_unload_contract.py
-      - tests/test_0_1_20_dashboard_asset_scope.py
-      - tests/test_0_1_23_video_delivery_fallback.py
+      - tests/test_*.py
       - tests/e2e/provider_card_matrix/**
 
 permissions:
@@ -145,10 +155,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv run --directory AstrBot python ../tests/test_model_card_video_runtime_switch.py
-          uv run --directory AstrBot python ../tests/test_model_card_video_unload_contract.py
-          uv run --directory AstrBot python ../tests/test_0_1_20_dashboard_asset_scope.py
-          uv run --directory AstrBot python ../tests/test_0_1_23_video_delivery_fallback.py
+          release_args=()
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            release_args+=(--require-releaseable)
+          fi
+          uv run --directory AstrBot python ../tools/release/check_main_install_source.py "${release_args[@]}"
+          for test in tests/test_*.py; do
+            uv run --directory AstrBot python "../$test"
+          done
 
       - name: Install Playwright Chromium
         run: |
