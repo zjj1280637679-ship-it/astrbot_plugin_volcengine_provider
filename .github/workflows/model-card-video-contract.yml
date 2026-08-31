@@ -89,7 +89,9 @@ jobs:
       - name: Install media contract dependency
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg
+          sudo apt-get install --yes --no-install-recommends ffmpeg libavcodec-extra
+          ffmpeg -hide_banner -version
+          ffmpeg -hide_banner -encoders 2>&1 | grep -F libopencore_amrnb
 
       - name: Setup pnpm exactly as the verified Dashboard baseline
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -160,6 +162,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p e2e-artifacts
+          exec > >(tee e2e-artifacts/contracts.log) 2>&1
           release_args=()
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
             release_args+=(--require-releaseable)
@@ -247,5 +251,5 @@ jobs:
         with:
           name: model-card-video-contract-${{ matrix.astrbot-version }}
           path: e2e-artifacts
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
