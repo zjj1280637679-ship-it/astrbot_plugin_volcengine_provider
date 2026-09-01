@@ -1,25 +1,17 @@
 {
-  "schema_version": 21,
+  "schema_version": 22,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
-    "stable_release": "0.1.32",
-    "stable_status": "last_complete_functional_baseline_for_recovery_only",
-    "active_release_candidate": {
-      "version": "0.1.34",
-      "branch": "fix/astrbot-video-ui-compat",
-      "base_branch": "main",
-      "base_commit": "23a7b9866538711c711751bbb8f5924ffddbce49",
-      "status": "validating",
-      "releaseable": false,
-      "purpose": "restore the complete 0.1.32 runtime payload to default main and fix AstrBot 4.27.4 model-card Video compatibility"
-    },
+    "stable_release": "0.1.34",
+    "stable_status": "current_stable_release",
+    "active_release_candidate": null,
     "safe_development_branch": "main",
     "safe_install_branch": "main",
     "marketplace": {
       "last_project_record_version": "0.1.30",
       "current_official_collection_lookup": "not_found_2026-09-01",
-      "status": "0.1.34_requires_github_merge_then_astrbot_cloud_first_publication"
+      "status": "0.1.34_astrbot_cloud_first_publication_pending"
     },
     "windows_marketplace_install": "unmeasured"
   },
@@ -31,16 +23,15 @@
   "active_experiment": null,
   "development": {
     "version": "0.1.34",
-    "branch": "fix/astrbot-video-ui-compat",
-    "track": "release_candidate",
-    "status": "validating",
-    "installable": false
+    "branch": "main",
+    "track": "stable",
+    "status": "stable",
+    "installable": true
   },
   "published_baseline": {
-    "version": "0.1.32",
-    "branch": "runtime",
-    "commit": "89c55120555e1bf3632dd250a0d690513b2b29aa",
-    "status": "complete_payload_recovery_reference_only_not_an_active_install_source"
+    "version": "0.1.34",
+    "branch": "main",
+    "status": "complete_default_branch_installation_source"
   },
   "current_goal": {
     "id": "publish-0.1.34-default-main",
@@ -60,21 +51,24 @@
   "active_validation_frontier": {
     "release": "0.1.34",
     "name": "complete_default_main_and_astrbot_4_27_4_video",
-    "current_stage": "local_candidate_validation",
-    "blocking_acceptance": [
-      "default-main release integrity and secret/size checks pass",
-      "all deterministic plugin regression scripts pass in the Launcher-managed AstrBot environment",
-      "AstrBot 4.27.3 and 4.27.4 model-card Video/lifecycle CI passes",
-      "restarted Launcher instance still shows one Video option on each owned model card and none on foreign cards",
-      "the exact reviewed candidate is approved for merge and its merge plan leaves the historical runtime branch untouched"
+    "current_stage": "stable_projection_for_exact_merge",
+    "blocking_acceptance": [],
+    "merge_conditions": [
+      "commit and push this stable projection without runtime-code changes",
+      "the exact committed stable-projection PR head passes check_main_install_source.py --require-releaseable and every triggered GitHub check",
+      "remote main remains at the reviewed base until the exact PR head is merged",
+      "merge and tag only that reviewed head while leaving the historical runtime branch untouched"
     ],
     "observed": [
       "runtime 0.1.32 is the last complete functional payload and is used only as a path-by-path recovery reference",
       "main 0.1.33 omitted _conf_schema.json, image/limits/cache modules, and the corresponding production integrations",
       "AstrBot 4.27.4 changed the minified model-builder shape by omitting an optional reasoning fragment",
-      "all 15 deterministic top-level regression scripts pass in the Launcher-managed AstrBot 4.27.4 environment",
+      "all 15 deterministic top-level regression scripts pass in the Launcher-managed AstrBot 4.27.4 environment and a clean AstrBot 4.27.3 source environment",
       "real AstrBot 4.27.4 MediaResolver plus the plugin normalized AMR and Tencent Silk payloads misnamed as .wav into canonical Ark WAV without a paid request",
-      "pre-restart authenticated Dashboard evidence showed exactly one Video option on each owned card and none on foreign cards; post-restart authenticated UI recheck remains pending"
+      "PR 23 head e95fd52e79c35e59284304c4b52faa484ea85019 passed the AstrBot 4.27.3 and 4.27.4 real Dashboard and lifecycle jobs plus the compatibility evidence job",
+      "after restarting Launcher instance 91165875-d293-4efe-b36a-e2d2c33b33d1, both enabled volcengine-ark model cards showed exactly one checked Video option and one Video Quality row; the Source form had no retired video switch",
+      "the current Launcher profile had no configured foreign model card; the same PR head passed real OpenAI, xAI, and Gemini foreign-card isolation matrices without persisted video or volcengine fields",
+      "two independent read-only reviews found no release blocker, and the merge plan leaves the historical runtime branch untouched"
     ]
   },
   "stable_boundaries": [
@@ -92,5 +86,5 @@
     "cold_archive": "docs/archive/",
     "test_ledger": "docs/TEST_HISTORY.md"
   },
-  "warning": "0.1.34 is validating. Until all blockers pass and the reviewed commit is merged, do not present it as published or marketplace-available."
+  "warning": "0.1.34 functional and restarted-UI acceptance passed. This stable projection may be merged only after its exact committed SHA passes the releaseable checker and every triggered check; AstrBot marketplace availability remains unclaimed until Cloud review and indexing are observed."
 }
