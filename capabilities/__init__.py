@@ -1,5 +1,21 @@
 """Stable entry point for Volcengine model-card settings and feedback."""
 
+from .cache_insight import (
+    cache_log_enabled,
+    channel_name,
+    configure_cache_log,
+    is_context_length_error,
+    log_cache_usage,
+)
+from .dashboard_asset_bridge import (
+    acquire_dashboard_asset_bridge,
+    release_dashboard_asset_bridge,
+    transform_dashboard_javascript,
+)
+from .dashboard_runtime_bridge import (
+    acquire_dashboard_runtime_bridge,
+    release_dashboard_runtime_bridge,
+)
 from .model_fields import (
     ALL_MODEL_FIELD_KEYS,
     FREQUENCY_PENALTY_KEY,
@@ -26,15 +42,6 @@ from .model_fields import (
 from .model_fields_bridge import (
     acquire_model_fields_bridge,
     release_model_fields_bridge,
-)
-from .dashboard_asset_bridge import (
-    acquire_dashboard_asset_bridge,
-    release_dashboard_asset_bridge,
-    transform_dashboard_javascript,
-)
-from .dashboard_runtime_bridge import (
-    acquire_dashboard_runtime_bridge,
-    release_dashboard_runtime_bridge,
 )
 from .model_scope import (
     AGENT_PLAN_PROVIDER_TYPE,
@@ -90,18 +97,23 @@ __all__ = [
     "acquire_dashboard_runtime_bridge",
     "acquire_model_fields_bridge",
     "apply_request_overrides",
+    "cache_log_enabled",
+    "channel_name",
     "cleanup_owned_settings_on_source_change",
     "clear_source_model_hints",
+    "configure_cache_log",
     "consume_source_model_hints",
+    "is_context_length_error",
     "legacy_model_video_ui_key",
+    "log_cache_usage",
     "migrate_legacy_video_settings",
     "normalize_model_fields_for_save",
     "normalize_owned_model_card_for_save",
     "owned_source_type_for_card",
     "project_model_fields",
-    "release_model_fields_bridge",
     "release_dashboard_asset_bridge",
     "release_dashboard_runtime_bridge",
+    "release_model_fields_bridge",
     "remember_source_model_hint",
     "source_scope_id",
     "source_types",

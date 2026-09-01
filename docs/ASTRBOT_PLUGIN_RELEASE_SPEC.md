@@ -1,175 +1,124 @@
-# AstrBot Plugin Runtime Release Specification
+# AstrBot Plugin Release Specification
 
-Status: project release policy for `astrbot_plugin_volcengine_provider`.
+Status: current project release policy for `astrbot_plugin_volcengine_provider`.
 
-## 0. Branch discipline: no parallel trees; a small version is a publish
+## 1. One installation source
 
-The repository maintains exactly two permanent branches:
-
-- `main` — development default branch (docs, tests, CI, evidence);
-- `runtime` — the stable AstrBot installation source.
-
-**No parallel tree may exist.** A version-named branch (e.g. `release/0.1.xx`,
-`fix/0.1.xx`, `agent/0.1.xx-*`, `runtime-rollback-0.1.xx`, or any other
-per-version branch) is forbidden: it cannot be maintained, and AstrBot's
-plugin market can only download the `runtime` branch ZIP, so a parallel tree is
-dead weight that also misleads every future reader.
-
-A small version (0.1.x) is not a branch; it is a publish. Delivering one means:
-
-1. update the tree and bump `metadata.yaml` `version` to the strictly newer
-   value;
-2. push directly to `runtime` (after the release gate);
-3. sync the equivalent user-facing state into `main`.
-
-A bad release is fixed by a direct `runtime` revert with a strict version bump,
-never by creating a rollback or per-version branch.
-
-## 1. Product separation
-
-The GitHub development repository is not the AstrBot installation package.
-
-- Development state optimizes for maintainability, testability, evidence, AI onboarding, and engineering history.
-- Runtime state optimizes for minimum sufficient information, installability, portability, privacy, and execution reliability.
-
-The release system must transform the former into the latter; it must never simply rename the repository archive as a product package.
-
-## 2. AstrBot-compatible distribution sources
-
-AstrBot plugin-market records support a GitHub `repo` pointing to a branch using:
-
-`https://github.com/{owner}/{repo}/tree/{branch}`
-
-AstrBot resolves that branch to a ZIP archive for direct installation. This project uses the stable generated branch `runtime` for that path.
-
-AstrBot Cloud publication is a second surface. The 2026-08-14 `0.1.19` release snapshot was observed to freeze the default-branch commit rather than the branch named in `metadata.repo`. The project therefore does not infer Cloud package identity from the metadata URL: before publication, the default-branch export must be exactly equivalent to the allow-list runtime package; after publication, the real frozen Cloud ZIP must be downloaded and compared again.
-
-The installed archive must contain a valid `metadata.yaml` at the plugin archive root (or its single top-level repository directory), with non-empty `name`, `desc`, `version`, and `author` fields.
-
-## 3. Size policy
-
-AstrBot's published plugin-market guidance limits plugin ZIP packages to 16 MB unless maintainers explicitly bypass the limit.
-
-This project uses a stricter default runtime budget of **2 MiB** because its actual runtime is source code plus one logo. Crossing this budget is a review trigger, not an invitation to delete required functionality.
-
-## 4. Runtime manifest
-
-The runtime branch is generated from an explicit allow-list:
+The repository default branch, `main`, is the only active installation and
+version authority. Its root must always contain a complete AstrBot plugin:
 
 ```text
 metadata.yaml
-__init__.py
 main.py
+__init__.py
+_conf_schema.json
 providers.py
 registry.py
+adapters/**
+capabilities/**
+compatibility/**
+metadata/**
 logo.png
-LICENSE
-CHANGELOG.md
-adapters/*.py
-capabilities/*.py
-compatibility/*.py
-metadata/*.py
-```
-
-Only files required by Python imports, AstrBot plugin discovery/configuration, runtime UI identity, licensing, or the post-update changelog display belong here. `CHANGELOG.md` is a runtime necessity because AstrBot's plugin service reads it from the installed plugin directory to render the update-log popup; it must remain the same file as the development changelog.
-
-The manifest version is derived from the packaged `metadata.yaml`. Active
-build, candidate, and native-install workflows must compare against that
-manifest rather than embedding the current plugin version independently. This
-keeps one version bump from leaving a stale validator behind. Versions use an
-unsigned three-part numeric format. A changed runtime tree must carry a version
-strictly newer than the currently published runtime; an identical tree is a
-no-op.
-
-## 5. Development-only classes
-
-The following are excluded even if public in the development repository:
-
-```text
-.github/**
-tests/**
-docs/**
-evidence/**
-governance/**
-strategy/**
-model_cards/**
-assets/** test/experiment media
-AGENTS.md
-ARCHITECTURE.md
 README.md
-.gitignore
+CHANGELOG.md
+LICENSE
 ```
 
-A future file remains development-only by default. To add it to runtime, the change must identify the runtime consumer/import or user-facing necessity.
+The historical `runtime` branch is recovery evidence only. It must not receive
+new versions, appear in `metadata.repo`, or become a second marketplace source.
+Temporary review branches are allowed, but every published byte is merged into
+`main`.
 
-## 6. Confidentiality and garbage-information policy
+This follows AstrBot's current plugin publishing model: the official Collection
+validator clones the repository default branch and loads the plugin from its
+root. The canonical repository URL is:
 
-The runtime artifact must not contain information merely because it helped development. In particular it must not distribute:
+`https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider`
 
-- CI/CD implementation details;
-- internal AI prompts/onboarding;
-- debugging or benchmark output;
-- experiment evidence or research data;
-- test media or private samples;
-- credentials, tokens, secrets, account state, private configuration, or conversation data;
-- dead files with no runtime consumer.
+## 2. Version and identity
 
-Public development material can still be inappropriate for the runtime package: disclosure risk and runtime noise are separate from repository visibility.
+- `metadata.yaml` is the version source for an installable checkout.
+- Versions use unsigned SemVer, for example `0.1.34`; Git tags may add `v`.
+- Any changed runtime behavior or installation payload requires a strictly
+  newer version. Never rewrite an already exposed version in place.
+- `name` and `author` form the marketplace identity and must remain stable.
+- `repo` must be the HTTPS repository root, never a branch, subdirectory,
+  Issue, PR, or Release page.
+- `astrbot_version` uses PEP 440. The declared floor is `>=4.26.1`; tested host
+  versions are evidence, not a reason to add an unapproved future-version load
+  gate.
+- `README.md`, `CHANGELOG.md`, and `docs/PROJECT_STATE.json` must agree with
+  the metadata version and its candidate/stable lifecycle state.
 
-## 7. Artifact and promotion gates
+## 3. Public repository boundary
 
-The runtime distribution gate runs for every pull request and every push to
-`main`. It must validate:
+AstrBot may download the default-branch archive, so every tracked file is
+public distribution material even when Python never imports it. The repository
+must not contain credentials, private configuration, private or identifiable
+account state, chat data, local captures, cache files, build output, or
+development secrets. De-identified historical measurements that were already
+intentionally published may remain as audit evidence, but must not contain
+secret values, personal identifiers, or credential-bearing URLs.
 
-- manifest-only file inventory;
-- required metadata/entry files present;
-- no forbidden development paths;
-- no high-confidence secret patterns;
-- package size within policy;
-- exported default-branch inventory and bytes equal the allow-list runtime artifact;
-- all packaged Python files compile;
-- the package loads against supported AstrBot versions;
-- packaged Provider/Dashboard behavior contracts pass.
+Tests, CI, ADRs, and evidence may coexist with runtime code. Production modules
+must not import or depend on them. Required runtime modules must never live only
+in another branch or an untracked local directory.
 
-Publication is serialized and consumes the exact artifact accepted by the
-successful `main` push gate. An unchanged runtime tree is a no-op. A changed
-tree becomes one uniquely named temporary candidate, which must pass this
-native-install matrix before `runtime` changes:
+The source ZIP must stay below AstrBot's 16 MB publication limit. Large test
+media and generated artifacts remain outside the tracked installation source.
 
-```text
-AstrBot 4.26.1 × repo_branch
-AstrBot 4.26.1 × download_url
-AstrBot 4.27.2 × repo_branch
-AstrBot 4.27.2 × download_url
-```
+## 4. Release gates
 
-The publisher must reject a stale source SHA and update `runtime` only with an
-exact lease against the previously observed runtime SHA. After a real
-promotion, the same publication run must block on the same four-cell matrix
-against the promoted `runtime` branch and archive. Candidate validation
-authorizes promotion; the post-promotion matrix verifies the actual
-user-facing source and is not a substitute for candidate validation.
+Every candidate must pass both static and running checks:
 
-## 8. Update invariant
+1. `tools/release/check_main_install_source.py` verifies metadata, root runtime
+   closure, configuration schema, version ledgers, logo shape, Python syntax,
+   tracked-path hygiene, high-confidence secret patterns, and the size budget.
+2. All deterministic top-level regression scripts run in the Launcher-managed
+   AstrBot environment.
+3. The model-card Video and lifecycle contracts run against AstrBot 4.27.3 and
+   4.27.4. Owned Ark and Agent Plan cards must each expose exactly one Video
+   option; foreign cards must remain clean; save/reopen and unload must work.
+4. A real restarted Launcher instance must serve the repaired Dashboard bundle.
+   Reading source or passing a mocked test is not a substitute for that visual
+   and persistence evidence.
+5. The candidate diff and tracked history are scanned for credentials and
+   unexpected large files. Real Ark/DeepSeek paid workflows are not dispatched
+   unless a change affects those protocol edges and the maintainer authorizes
+   the external call.
 
-A version update means:
+## 5. Publication flow
 
-```text
-all-PR/main-push runtime gate passes
-        +
-exact accepted artifact is unchanged and publication ends as a no-op
-        OR
-changed artifact becomes a uniquely named candidate
-        +
-candidate passes the four-cell native installer matrix
-        +
-source is still current and runtime advances with an exact lease
-        +
-promoted runtime passes the same four-cell matrix
-        +
-default-branch export equals generated runtime bytes
-        +
-version metadata matches
-```
+1. Start from the current remote `main`; never force-push over unseen work.
+2. Prepare one review branch, bump the patch version, update the release ledger,
+   mark it as `validating` / `releaseable: false`, and complete the local gates
+   that do not depend on the PR or authenticated restarted Dashboard.
+3. Push with an explicit refspec, open a PR to `main`, and wait for every
+   expected non-paid check to finish successfully.
+4. Complete the authenticated restarted-Launcher UI check and final code/release
+   review. Every blocking acceptance condition must now have an observed pass.
+5. Convert the exact PR head into the final stable merge tree: set
+   `stable_release` to the new version, clear `active_release_candidate`, project
+   the stable state into README, run `check_main_install_source.py
+   --require-releaseable`, push that state-only commit, and wait for the expected
+   checks again on that exact SHA. This projection is merge-ready, not a claim
+   that the commit is already present on public `main`.
+6. Merge the exact reviewed stable-projection commit. Do not update `runtime`;
+   verify that remote `main` contains the reviewed tree.
+7. Optionally tag the merged commit as `v<version>` and create a GitHub Release
+   for traceability. The tag does not replace `metadata.yaml` or update the
+   AstrBot market by itself.
+8. For marketplace publication, submit the root repository through AstrBot
+   Cloud's plugin publishing page. After approval/indexing, confirm the public
+   marketplace record and perform a clean install/update from the repository.
 
-Adding development files to `main` must not change the exported package or the contents/size of `runtime` unless those files become explicitly necessary for execution.
+If a public release is bad, publish a reviewed higher patch version containing
+the correction or revert. Do not reset public history or reuse the old version.
+
+## 6. Evidence boundaries
+
+A green GitHub Release proves only that GitHub accepted a tag/release. A green
+load test proves only loading. Neither proves marketplace refresh, model-card
+persistence, a real Ark response, or a QQ/NapCat end-to-end path. Record each
+receipt at the layer it actually observed in `docs/TEST_HISTORY.md` and keep
+unmeasured cells explicit.

@@ -22,6 +22,7 @@ import asyncio
 import contextlib
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,7 +31,10 @@ sys.path.insert(0, str(ROOT / "AstrBot" / "data" / "plugins"))
 
 from astrbot_plugin_volcengine_provider.adapters import audio as audio_adapter
 from astrbot_plugin_volcengine_provider.adapters import video as video_adapter
-from astrbot_plugin_volcengine_provider.adapters.errors import AdapterInputTransportError
+from astrbot_plugin_volcengine_provider.adapters.errors import (
+    AdapterInputTransportError,
+)
+from astrbot_plugin_volcengine_provider.adapters.limits import get_limits, set_limits
 
 
 class FakeTranscodeProcess:
@@ -92,6 +96,16 @@ def _write_bytes(path: Path, size: int) -> None:
     path.write_bytes(b"v" * size)
 
 
+@contextlib.contextmanager
+def _temporary_limits(**changes):
+    original = get_limits()
+    set_limits(replace(original, **changes))
+    try:
+        yield
+    finally:
+        set_limits(original)
+
+
 def test_data_url_payload_ceiling() -> None:
     within = video_adapter._data_url_payload_within_limit
     # max_bytes=3 -> capacity ceil(3/3)*4 = 4 base64 chars.
@@ -108,9 +122,7 @@ async def test_original_mode_passes_small_data_url_through() -> None:
 
 
 async def test_original_mode_rejects_oversized_data_url() -> None:
-    original_max = video_adapter.ARK_CHAT_VIDEO_MAX_BYTES
-    video_adapter.ARK_CHAT_VIDEO_MAX_BYTES = 4
-    try:
+    with _temporary_limits(video_max_bytes=4):
         try:
             await video_adapter.resolve_video_reference(
                 "data:video/mp4;base64," + "A" * 12  # decodes to 9 bytes > 4
@@ -120,17 +132,13 @@ async def test_original_mode_rejects_oversized_data_url() -> None:
             assert exc.reached_model is False
         else:
             raise AssertionError("oversized data URL must be rejected")
-    finally:
-        video_adapter.ARK_CHAT_VIDEO_MAX_BYTES = original_max
 
 
 async def test_original_mode_rejects_oversized_local_file_before_base64() -> None:
     with tempfile.TemporaryDirectory(prefix="volcengine-guard-test-") as tmp:
         source = Path(tmp) / "clip.mp4"
         _write_bytes(source, 2048)
-        original_max = video_adapter.ARK_CHAT_VIDEO_MAX_BYTES
-        video_adapter.ARK_CHAT_VIDEO_MAX_BYTES = 1024
-        try:
+        with _temporary_limits(video_max_bytes=1024):
             async with _fake_resolver(source):
                 try:
                     await video_adapter.resolve_video_reference(str(source))
@@ -139,8 +147,6 @@ async def test_original_mode_rejects_oversized_local_file_before_base64() -> Non
                     assert exc.reached_model is False
                 else:
                     raise AssertionError("oversized local video must be rejected")
-        finally:
-            video_adapter.ARK_CHAT_VIDEO_MAX_BYTES = original_max
 
 
 async def test_original_mode_rejects_empty_local_file() -> None:
@@ -165,21 +171,18 @@ async def test_original_mode_materializes_small_local_file() -> None:
         assert result.startswith("data:video/mp4;base64,")
 
 
-def _install_fake_spawn(adapter_module, fake_process) -> None:
+def _install_fake_spawn(adapter_module, fake_process):
+    original = adapter_module.asyncio.create_subprocess_exec
+
     async def fake_spawn(*args, **kwargs):
         return fake_process
 
-    adapter_module._fake_spawn_original = getattr(
-        adapter_module, "_fake_spawn_original", None
-    )
     adapter_module.asyncio.create_subprocess_exec = fake_spawn
+    return original
 
 
-def _restore_spawn(adapter_module) -> None:
-    if adapter_module._fake_spawn_original is not None:
-        adapter_module.asyncio.create_subprocess_exec = (
-            adapter_module._fake_spawn_original
-        )
+def _restore_spawn(adapter_module, original) -> None:
+    adapter_module.asyncio.create_subprocess_exec = original
 
 
 async def test_compressed_timeout_kills_ffmpeg() -> None:
@@ -188,26 +191,24 @@ async def test_compressed_timeout_kills_ffmpeg() -> None:
         _write_bytes(source, 64)
         fake = FakeTranscodeProcess()
         original_which = video_adapter.shutil.which
-        original_timeout = video_adapter.ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS
         video_adapter.shutil.which = lambda _: "/fake/ffmpeg"
-        video_adapter.ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS = 0.05
-        _install_fake_spawn(video_adapter, fake)
+        original_spawn = _install_fake_spawn(video_adapter, fake)
         try:
-            async with _fake_resolver(source):
-                try:
-                    await video_adapter.resolve_video_reference(
-                        str(source), mode=video_adapter.VIDEO_MODE_COMPRESSED
-                    )
-                except AdapterInputTransportError as exc:
-                    assert exc.stage == "compress_media"
-                    assert "超时" in str(exc)
-                else:
-                    raise AssertionError("stuck ffmpeg must time out")
+            with _temporary_limits(video_transcode_timeout_seconds=0.05):
+                async with _fake_resolver(source):
+                    try:
+                        await video_adapter.resolve_video_reference(
+                            str(source), mode=video_adapter.VIDEO_MODE_COMPRESSED
+                        )
+                    except AdapterInputTransportError as exc:
+                        assert exc.stage == "compress_media"
+                        assert "超时" in str(exc)
+                    else:
+                        raise AssertionError("stuck ffmpeg must time out")
             assert fake.killed is True
         finally:
             video_adapter.shutil.which = original_which
-            video_adapter.ARK_CHAT_VIDEO_TRANSCODE_TIMEOUT_SECONDS = original_timeout
-            _restore_spawn(video_adapter)
+            _restore_spawn(video_adapter, original_spawn)
 
 
 async def test_compressed_cancellation_kills_ffmpeg() -> None:
@@ -217,7 +218,7 @@ async def test_compressed_cancellation_kills_ffmpeg() -> None:
         fake = FakeTranscodeProcess()
         original_which = video_adapter.shutil.which
         video_adapter.shutil.which = lambda _: "/fake/ffmpeg"
-        _install_fake_spawn(video_adapter, fake)
+        original_spawn = _install_fake_spawn(video_adapter, fake)
         try:
             async with _fake_resolver(source):
                 task = asyncio.ensure_future(
@@ -236,12 +237,12 @@ async def test_compressed_cancellation_kills_ffmpeg() -> None:
             assert fake.killed is True
         finally:
             video_adapter.shutil.which = original_which
-            _restore_spawn(video_adapter)
+            _restore_spawn(video_adapter, original_spawn)
 
 
 async def test_audio_cancellation_kills_ffmpeg() -> None:
     fake = FakeTranscodeProcess()
-    _install_fake_spawn(audio_adapter, fake)
+    original_spawn = _install_fake_spawn(audio_adapter, fake)
     try:
         task = asyncio.ensure_future(
             audio_adapter._ffmpeg_to_ark_chat_wav(
@@ -259,10 +260,11 @@ async def test_audio_cancellation_kills_ffmpeg() -> None:
             raise AssertionError("cancelled audio transcode must propagate CancelledError")
         assert fake.killed is True
     finally:
-        _restore_spawn(audio_adapter)
+        _restore_spawn(audio_adapter, original_spawn)
 
 
 def main() -> None:
+    original_spawn = asyncio.create_subprocess_exec
     test_data_url_payload_ceiling()
     asyncio.run(test_original_mode_passes_small_data_url_through())
     asyncio.run(test_original_mode_rejects_oversized_data_url())
@@ -272,6 +274,7 @@ def main() -> None:
     asyncio.run(test_compressed_timeout_kills_ffmpeg())
     asyncio.run(test_compressed_cancellation_kills_ffmpeg())
     asyncio.run(test_audio_cancellation_kills_ffmpeg())
+    assert asyncio.create_subprocess_exec is original_spawn
     print("VIDEO_TRANSPORT_GUARDS_0_1_25=OK")
 
 

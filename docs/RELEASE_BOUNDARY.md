@@ -1,117 +1,62 @@
-# Release Boundary
+# Release and Repository Boundary
 
-## Core rule
+Lifecycle role: **WARM design boundary**. Current release/version state remains
+in `docs/PROJECT_STATE.json`.
 
-The development repository and the user distribution package are different products with different audiences and constraints.
+## Default branch is the product source
 
-- `main` is a **development state**: it may contain tests, CI, evidence, AI onboarding, ADRs, experiments, benchmark material, and other information useful to maintainers.
-- `runtime` is a **distribution state**: it contains only the minimum runtime closure required for AstrBot to install and execute the plugin, plus legally/operationally required user-facing assets.
+AstrBot's current publication and Collection validation path clones the GitHub
+repository's default branch. Therefore `main` must be a complete installable
+plugin at its root. The project does not generate or promote a second runtime
+branch.
 
-Development explainability must not be implemented by shipping the development knowledge base to users.
+The old `runtime` branch is historical recovery evidence. Its contents may help
+repair a proven regression, but it has no current installation, metadata, or
+publication authority.
 
-## Observed failure pattern
+## Runtime dependency boundary
 
-A previous store package was built from the repository archive directly. Development files such as `.github/workflows/**` entered the user package. On Windows, extraction failed partway through on long workflow paths, leaving a partial plugin directory; the next install then reported a directory/file-name conflict.
+The installed Python closure is rooted at `main.py` and `__init__.py` and may
+depend only on runtime modules and assets in the repository root, `adapters/`,
+`capabilities/`, `compatibility/`, and `metadata/`.
 
-The same pattern also creates an information-boundary failure even when extraction succeeds: CI logic, internal test assets, evidence, experiments, and future confidential development material can be exposed to non-developers for no runtime benefit.
+Development material may coexist in the public repository:
 
-## Required topology
+- `.github/`, `tests/`, `docs/`, `evidence/`, `governance/`, `strategy/`, and
+  `model_cards/` explain, verify, or record the product;
+- production modules must not import those paths;
+- removing development material must never be required to make the plugin load.
 
-```text
-Development repository (main)
-  ├─ runtime source code
-  ├─ tests / CI / benchmarks
-  ├─ docs / ADR / AI hooks / evidence
-  └─ private-or-development-only assets (never intentionally committed if secret)
-              |
-              | explicit allow-list build
-              v
-Runtime package / runtime branch
-  ├─ metadata.yaml
-  ├─ plugin Python runtime
-  ├─ required logo/resource files
-  └─ LICENSE
-```
+This distinction protects runtime independence without inventing a second tree.
 
-The release process is **allow-list based**, not deny-list based. A new development file is excluded by default until its runtime necessity is demonstrated.
+## Public-information boundary
 
-`metadata.yaml` is the release-version source for the active distribution
-chain. The builder copies that value into the runtime manifest; candidate and
-installed-package validators compare their own `metadata.yaml` with that exact
-manifest. Active release workflows must not duplicate the current plugin
-version as a numeric literal. Release versions use three unsigned numeric
-parts. If the generated runtime tree differs from the current `runtime` tree,
-its version must be strictly newer; identical trees remain a no-op.
+Every tracked file can enter a GitHub source archive. Never track:
 
-## Runtime allow-list for this plugin
+- API keys, tokens, passwords, private keys, or credential-bearing URLs;
+- local AstrBot configuration, private or identifiable account state,
+  chat/conversation data, or logs;
+- screenshots or media containing private information;
+- `.env`, cache directories, bytecode, build output, downloaded dependencies,
+  or temporary release archives.
 
-Root files:
+The repository archive must remain under AstrBot's 16 MB limit. Large evidence
+belongs in short-lived CI artifacts or an explicitly approved external store,
+not in the plugin repository.
 
-- `metadata.yaml`
-- `__init__.py`
-- `main.py`
-- `providers.py`
-- `registry.py`
-- `logo.png`
-- `LICENSE`
+De-identified historical measurements already intentionally published may
+remain as audit evidence only when they contain no secret values, personal
+identifiers, or credential-bearing URLs. They are not runtime dependencies.
 
-Runtime Python packages:
+## Identity and rollback boundary
 
-- `adapters/*.py`
-- `capabilities/*.py`
-- `compatibility/*.py`
-- `metadata/*.py`
+`metadata.yaml` at the `main` root is the installation identity. Its `repo`
+points to the repository root and its version increases for every changed
+public payload. A Git tag or Release is a snapshot, not a second authority.
 
-Files such as `capabilities/README.md` and `docs/contracts/SEMANTICS.json` are development/explanatory assets unless production code begins to load them explicitly.
+Rollback is forward-moving: restore the last known-good behavior in a strictly
+higher patch version. Never force-reset public `main`, reuse an exposed version,
+or resume publication from the historical `runtime` branch.
 
-## Never distribute by default
-
-The runtime artifact must not contain:
-
-- `.git/`, `.github/`, workflows, or repository administration files;
-- `tests/`, benchmark code, probes, CI harnesses, or test fixtures;
-- `docs/`, ADRs, AI onboarding/rules, project state, evidence, governance, or development strategy;
-- experiment/model-card research material and non-runtime test media;
-- caches, temporary output, logs, coverage files, editor state, or build intermediates;
-- credentials, `.env` files, tokens, API keys, passwords, private account data, private conversations, or confidential test data.
-
-## Validation before publication
-
-A release is not complete until the **artifact itself** and the exact user-facing
-source have been checked.
-
-1. Run the runtime distribution gate for every pull request and every push to
-   `main`.
-2. Build the exact source SHA from the explicit allow-list; verify required
-   files, forbidden-path absence, secret boundaries, size policy, compilation,
-   plugin loading, and the packaged behavior contracts.
-3. Compare the generated tree with the current `runtime` tree. If identical,
-   finish as a no-op.
-4. If content changed, publish that exact tree to one uniquely named temporary
-   candidate branch.
-5. Before `runtime` changes, install the candidate with the AstrBot 4.26.1 and
-   4.27.2 native updaters through both `repo_branch` and `download_url`.
-6. Serialize publication, reject a gate whose source is no longer the current
-   `main`, and promote only the candidate commit using an exact
-   `force-with-lease` against the previously observed `runtime` SHA.
-7. After promotion, block the same publication run on the same four-cell native
-   installer matrix against the real `runtime` branch and archive.
-8. Delete only the unchanged temporary candidate ref created by that run.
-9. Keep external marketplace refresh and real Windows Store observations
-   separate; repository success cannot assert those external states.
-
-Publication must never mutate `runtime` first and use a later validation as
-permission for the already-visible state. A successful development checkout or
-unrelated CI run is not evidence that a distribution artifact is safe or
-installable.
-
-## Repository/source binding
-
-AstrBot accepts GitHub repository URLs with `/tree/{branch}` for direct plugin installation, so this project keeps `runtime` as its generated stable installation branch. However, the AstrBot Cloud release observed on 2026-08-14 froze the repository's default-branch archive even though `metadata.repo` named `/tree/runtime`. A branch-shaped metadata URL is therefore not proof of which bytes Cloud froze.
-
-The project treats two distribution surfaces separately:
-
-1. direct AstrBot/GitHub installation from generated `runtime`;
-2. AstrBot Cloud's frozen default-branch archive.
-
-Before publication, the exported default-branch archive must be path-and-byte equivalent to the allow-list runtime artifact. After publication, the downloaded Cloud ZIP must be compared again with promoted `runtime`. The `runtime` branch remains generated and must not become the place where development decisions, tests, or documentation are authored.
+The executable release procedure and gates are defined in
+`docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md`.

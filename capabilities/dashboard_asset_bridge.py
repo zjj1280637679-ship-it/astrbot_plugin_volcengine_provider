@@ -77,8 +77,11 @@ _MODEL_BUILDER_BOUNDARY = re.compile(
     r'model\s*:\s*(?P=model)\s*,'
     r'modalities\s*:\s*(?P<modalities>[A-Za-z_$][\w$]*)\s*,'
     r'custom_extra_body\s*:\s*\{\}\s*,'
-    r'max_context_tokens\s*:\s*(?P<context>[A-Za-z_$][\w$]*)\s*,'
-    r'reasoning\s*:\s*(?P<reasoning>[A-Za-z_$][\w$]*\([^{};]*?\))'
+    r'max_context_tokens\s*:\s*(?P<context>[A-Za-z_$][\w$]*)\s*'
+    # AstrBot 4.27.4 moved reasoning to model metadata and removed this member
+    # from new provider-card objects. Keep the 4.27.3 shape compatible without
+    # making reasoning part of the structural identity of the card builder.
+    r'(?:,\s*reasoning\s*:\s*(?P<reasoning>[A-Za-z_$][\w$]*\([^{};]*?\)))?'
     r'(?P<object_close>\})'
     r')'
 )

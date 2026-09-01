@@ -8,9 +8,9 @@ Lifecycle role: **WARM entry point**. This file provides stable ownership and na
 
 This repository implements Volcengine Ark providers for AstrBot. It adapts Volcengine-specific protocols and media payloads to AstrBot's existing provider lifecycle. It does **not** own AstrBot routing, fallback, retry, or a second model-capability database.
 
-## Branch discipline: no parallel trees
+## Branch discipline: one installation truth
 
-Only two permanent branches exist: `main` (development) and `runtime` (the AstrBot installation source). A small version (0.1.x) is a **publish**, not a branch: bump `metadata.yaml` version and push directly to `runtime`. **Never create a version-named or rollback branch** — AstrBot can only download the `runtime` ZIP, and parallel trees are unmaintainable, misleading dead weight.
+`main` is both the default development branch and AstrBot's installation source. The old `runtime` branch is retained only as historical recovery evidence and must never receive new releases. A patch version is published by merging one reviewed, fully installable tree into `main` with a strictly newer `metadata.yaml` version. Temporary review branches are allowed; permanent version-named, runtime-candidate, or rollback trees are not.
 
 ## Read in this order
 
@@ -25,7 +25,7 @@ Do not bulk-read every historical document before identifying the affected objec
 ## Status and evidence identity
 
 - **Stable release**, **active candidate**, **external observation**, and **experiment** are different objects. Never combine their pass/fail receipts into one verdict.
-- A feature branch remains an experiment until every blocking acceptance condition passes and `PROJECT_STATE.verdict.active_release_candidate` names it explicitly.
+- A feature branch is an experiment unless `PROJECT_STATE.verdict.active_release_candidate` explicitly names it as a `validating` candidate. A validating candidate remains `releaseable: false`; it may become `ready` only after every blocking acceptance condition passes, and must not merge, tag, or publish before that transition.
 - A workflow file has one evidence identity. A new experiment must add a clearly named `EXPERIMENT` workflow; it must not repurpose a stable workflow and inherit its historical name.
 - A green runtime-load job proves loading only. A green create-dialog check does not prove save/reopen persistence. A GitHub release result does not prove marketplace refresh.
 - Stopped experiments move to `docs/archive/` and remain non-action-driving unless their recorded resume condition is satisfied.
@@ -42,8 +42,8 @@ Do not bulk-read every historical document before identifying the affected objec
 - The plugin must not recreate AstrBot routing, fallback, retry, provider lifecycle, or global model capability ownership.
 - Provider-specific Dashboard fields must not leak into foreign providers.
 - Migration preserves user intent/configuration, not model facts.
-- Development explainability is not runtime payload: tests, CI, ADRs, evidence, experiments, internal research, and lifecycle documents stay outside the generated runtime artifact unless a concrete runtime consumer requires them.
-- The marketplace artifact is generated from an allow-list. Never publish the development repository archive as the user package.
+- Development files may coexist in the default repository, but production modules must never import tests, evidence, governance, or lifecycle documents. Secrets, private configuration, cache files, and local artifacts never belong in the repository.
+- AstrBot and the official Collection validator clone the default repository branch. Before publication, prove that the `main` root itself contains the complete runtime closure; never hide required code in a second generated branch.
 
 ## Dashboard scope rule — recovered 0.1.22 invariant
 

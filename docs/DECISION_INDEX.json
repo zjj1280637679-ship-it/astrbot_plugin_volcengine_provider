@@ -49,10 +49,10 @@
       "lifecycle": "active_constraint",
       "topic": "knowledge lifecycle and drift control",
       "question": "How does the project retain rich history without letting old goals/frontiers remain current authority?",
-      "decision": "PROJECT_STATE is the single HOT authority. Other documents are WARM/COLD references, completed frontiers are demoted, rejected/superseded strategies retain lifecycle metadata, and CI guards version/frontier consistency.",
+      "decision": "PROJECT_STATE is the single HOT authority. Other documents are WARM/COLD references, completed frontiers are demoted, rejected/superseded strategies retain lifecycle metadata, and CI guards version plus default-main installation consistency.",
       "doc": "docs/ADR/ADR-0005-knowledge-lifecycle-and-drift-control.md",
-      "code": ["tools/release/check_knowledge_state.py"],
-      "tests": [".github/workflows/runtime-distribution-gate.yml"]
+      "code": ["tools/release/check_main_install_source.py"],
+      "tests": [".github/workflows/model-card-video-contract.yml"]
     },
     {
       "id": "KB-0001",
