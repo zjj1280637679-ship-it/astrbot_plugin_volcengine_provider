@@ -1,10 +1,4 @@
-"""Current release lifecycle acceptance for real AstrBot processes and Dashboard.
-
-This version-neutral entrypoint reuses the mature lifecycle implementation while
-making the current release assertions explicit: checked Video, complete owned
-request rows including custom_extra_body, foreign isolation, restart persistence,
-same-version replacement, and uninstall cleanup.
-"""
+"""Current release lifecycle acceptance for real AstrBot processes and Dashboard."""
 
 from __future__ import annotations
 
@@ -16,7 +10,7 @@ from typing import Any
 
 from playwright.async_api import Page, expect
 
-import lifecycle_matrix_0_1_24 as base
+import lifecycle_browser_core as base
 
 ARTIFACT_DIR = Path(os.environ.get("ASTRBOT_E2E_ARTIFACT_DIR", "e2e-artifacts")) / "current-lifecycle"
 base.ARTIFACT_DIR = ARTIFACT_DIR
@@ -59,9 +53,6 @@ async def verify_installed_stage(page: Page, *, stage: str) -> dict[str, Any]:
         stage=f"{stage}/owned-reopen",
     )
 
-    # Destroy the old document between owned and foreign assertions. This avoids
-    # treating a host Vuetify overlay-cleanup artifact as a plugin failure while
-    # preserving all product assertions and the same browser login context.
     await page.goto("about:blank", wait_until="load")
     await base.open_providers(page)
     await base.select_source(page, str(state["openai_source_id"]))

@@ -1,9 +1,4 @@
-"""Current release UI acceptance: real AstrBot Dashboard, real visible model-card state.
-
-This is the only active browser entrypoint used by release CI. Historical test
-modules are imported only as regression implementation; their old version names
-are not release authority.
-"""
+"""Current release UI acceptance: real AstrBot Dashboard, real visible model-card state."""
 
 from __future__ import annotations
 
@@ -12,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-import browser_matrix_0_1_19 as baseline
+import model_card_browser_core as baseline
 
 ARTIFACT_DIR = Path(os.environ.get("ASTRBOT_E2E_ARTIFACT_DIR", "e2e-artifacts")) / "current-release-ui"
 baseline.ARTIFACT_DIR = ARTIFACT_DIR
@@ -86,9 +81,6 @@ async def assert_owned_edit_rows(dialog):
     return rows
 
 
-# The historical run_case resolves these functions from its module globals at
-# execution time. Replace only the active product assertions; its real user
-# click, save, reopen and typed-field persistence sequence remains unchanged.
 baseline.assert_create_dialog_scope = assert_create_dialog_scope
 baseline.assert_owned_edit_rows = assert_owned_edit_rows
 

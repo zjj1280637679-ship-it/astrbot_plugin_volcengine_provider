@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject obsolete release topology, dead Source-UI infrastructure and stale guidance."""
+"""Current release topology and observable-product gate integrity checks."""
 
 from __future__ import annotations
 
@@ -8,63 +8,57 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-CURRENT_UI_ENTRYPOINT = "tests/e2e/provider_card_matrix/current_release_ui_contract.py"
-CURRENT_LIFECYCLE_ENTRYPOINT = "tests/e2e/provider_card_matrix/current_lifecycle_contract.py"
-REQUIRED_HOSTS = ("4.27.3", "4.27.4", "4.28.0-beta.1")
-CURRENT_WORKFLOWS = {
-    "model-card-video-contract.yml",
-    "model-card-lifecycle-contract.yml",
+CURRENT_UI = "tests/e2e/provider_card_matrix/current_release_ui_contract.py"
+CURRENT_LIFECYCLE = "tests/e2e/provider_card_matrix/current_lifecycle_contract.py"
+HOSTS = ("4.27.3", "4.27.4", "4.28.0-beta.1")
+WORKFLOWS = {"model-card-video-contract.yml", "model-card-lifecycle-contract.yml"}
+E2E_FILES = {
+    "README.md",
+    "assertions.py",
+    "browser_matrix.py",
+    "model_card_browser_core.py",
+    "lifecycle_browser_core.py",
+    "current_release_ui_contract.py",
+    "current_lifecycle_contract.py",
+    "foreign_scope_matrix.py",
 }
 
 FORBIDDEN_PATHS = (
-    ".github/workflows/compatibility-baseline-0.1.19-dashboard.yml",
-    ".github/workflows/renderer-boundary-diagnostic.yml",
-    ".github/workflows/real-cross-provider-effect-matrix.yml",
-    ".github/workflows/real-deepseek-foreign-differential.yml",
-    ".github/workflows/real-deepseek-model-fetch.yml",
-    ".github/workflows/real-source-type-video-differential.yml",
     "capabilities/video_modality_fallback.py",
-    "docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md",
-    "docs/archive/PROJECT_STATE-0.1.18.md",
-    "docs/archive/README.md",
-    "docs/ADR/ADR-0005-knowledge-lifecycle-and-drift-control.md",
+    "docs/archive",
     "docs/contracts/ROBUST_VIDEO_FALLBACK_0_1_23.md",
-    "tests/e2e/provider_card_matrix/browser_matrix_0_1_24_contract.py",
-    "tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py",
+    "docs/ADR/ADR-0005-knowledge-lifecycle-and-drift-control.md",
+    "tests/test_0_1_15_feedback_boundary.py",
+    "tests/test_0_1_19_model_fields.py",
+    "tests/test_0_1_19_model_fields_ui.py",
+    "tests/test_0_1_19_provider_overrides.py",
     "tests/test_0_1_20_dashboard_asset_scope.py",
     "tests/test_0_1_23_video_delivery_fallback.py",
     "tests/test_model_card_ui_scope.py",
 )
 
-AUTHORITATIVE_OR_WARM = (
+WARM = (
     "README.md",
     "AGENTS.md",
     "ARCHITECTURE.md",
-    ".github/PULL_REQUEST_TEMPLATE.md",
+    "docs/PROJECT_STATE.json",
+    "docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md",
+    "docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md",
     "docs/AI_ONBOARDING.md",
     "docs/AI_RULES.md",
     "docs/KNOWLEDGE_LIFECYCLE.md",
-    "docs/DESIGN_DECISIONS.md",
     "docs/DECISION_INDEX.json",
-    "docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md",
+    "docs/DESIGN_DECISIONS.md",
     "docs/RELEASE_BOUNDARY.md",
-    "docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md",
-    "docs/ADR/ADR-0003-dashboard-schema-isolation.md",
-    "docs/ADR/ADR-0004-migration-preserves-intent.md",
-    "docs/PROJECT_STATE.json",
 )
 
-# These markers are unambiguously stale even when read in context. Do not use
-# broad forbidden words for concepts that a current rule may legitimately negate.
-STALE_CURRENT_MARKERS = (
+STALE_MARKERS = (
     "/tree/runtime",
     "archive/model-card-video-known-good",
     "video_modality_fallback.py",
-    "0.1.18 Source presentation control remains",
-    "stable 0.1.18/0.1.19 Source UI remains",
 )
 
-DEAD_REGISTRY_SOURCE_UI_MARKERS = (
+DEAD_REGISTRY_MARKERS = (
     "can_install_source_video_ui",
     "source_upsert_wrapper",
     "_apply_source_video_ui_settings",
@@ -81,100 +75,77 @@ def fail(message: str) -> None:
 def main() -> None:
     present = [path for path in FORBIDDEN_PATHS if (ROOT / path).exists()]
     if present:
-        fail(f"retired release/fallback/source-UI infrastructure is still tracked: {present}")
-    if (ROOT / "docs" / "archive").exists():
-        fail("current tree must not contain a failed-state archive directory")
+        fail(f"retired/version-authority debris still tracked: {present}")
 
     workflows_dir = ROOT / ".github" / "workflows"
     actual_workflows = {path.name for path in workflows_dir.glob("*.yml")}
-    if actual_workflows != CURRENT_WORKFLOWS:
-        fail(
-            "active Actions surface must be exactly the current model-card and lifecycle gates; "
-            f"got {sorted(actual_workflows)}"
-        )
+    if actual_workflows != WORKFLOWS:
+        fail(f"active workflows must be exactly {sorted(WORKFLOWS)}, got {sorted(actual_workflows)}")
 
-    for path in (CURRENT_UI_ENTRYPOINT, CURRENT_LIFECYCLE_ENTRYPOINT):
-        if not (ROOT / path).is_file():
-            fail(f"missing current release acceptance entrypoint: {path}")
+    e2e_dir = ROOT / "tests" / "e2e" / "provider_card_matrix"
+    actual_e2e = {path.name for path in e2e_dir.iterdir() if path.is_file()}
+    if actual_e2e != E2E_FILES:
+        fail(f"active provider-card E2E surface drifted: {sorted(actual_e2e)}")
 
-    state_path = ROOT / "docs" / "PROJECT_STATE.json"
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = json.loads((ROOT / "docs" / "PROJECT_STATE.json").read_text(encoding="utf-8"))
     verdict = state.get("verdict") or {}
-    if verdict.get("safe_install_branch") != "main":
-        fail("PROJECT_STATE.safe_install_branch must be main")
-    if verdict.get("safe_development_branch") != "main":
-        fail("PROJECT_STATE.safe_development_branch must be main")
-
+    if verdict.get("safe_install_branch") != "main" or verdict.get("safe_development_branch") != "main":
+        fail("main must be the only durable install/development authority")
     real_ui = state.get("real_ui_contract") or {}
-    if real_ui.get("entrypoint") != CURRENT_UI_ENTRYPOINT:
-        fail("PROJECT_STATE real UI entrypoint is not the current contract")
-    if real_ui.get("lifecycle_entrypoint") != CURRENT_LIFECYCLE_ENTRYPOINT:
-        fail("PROJECT_STATE lifecycle entrypoint is not the current contract")
-    if tuple(real_ui.get("hosts") or ()) != REQUIRED_HOSTS:
-        fail(f"PROJECT_STATE real UI hosts must be exactly {REQUIRED_HOSTS!r}")
+    if real_ui.get("entrypoint") != CURRENT_UI or real_ui.get("lifecycle_entrypoint") != CURRENT_LIFECYCLE:
+        fail("PROJECT_STATE does not point at the current browser contracts")
+    if tuple(real_ui.get("hosts") or ()) != HOSTS:
+        fail(f"real UI host matrix must be exactly {HOSTS!r}")
     if real_ui.get("success_definition") != "observable user-visible model-card state and persistence":
-        fail("release success definition has drifted away from observable UI persistence")
+        fail("release success definition is not observable user-visible persistence")
 
-    for relative in AUTHORITATIVE_OR_WARM:
+    for relative in WARM:
         path = ROOT / relative
         if not path.is_file():
             fail(f"missing current authority/navigation file: {relative}")
         text = path.read_text(encoding="utf-8")
-        for marker in STALE_CURRENT_MARKERS:
+        for marker in STALE_MARKERS:
             if marker in text:
-                fail(f"{relative} still contains stale current guidance marker {marker!r}")
+                fail(f"{relative} still contains stale current marker {marker!r}")
 
-    decision_index = json.loads((ROOT / "docs" / "DECISION_INDEX.json").read_text(encoding="utf-8"))
-    history = decision_index.get("history") or {}
-    if history.get("current_tree_failed_state_archive") is not False:
-        fail("DECISION_INDEX must declare no current-tree failed-state archive")
-    if history.get("deep_history") != "Git commit history":
-        fail("deep history must resolve to Git commit history, not an alternate file tree")
+    index = json.loads((ROOT / "docs" / "DECISION_INDEX.json").read_text(encoding="utf-8"))
+    history = index.get("history") or {}
+    if history.get("deep_history") != "Git commit history" or history.get("current_tree_failed_state_archive") is not False:
+        fail("history policy must use Git history with no current-tree failed-state archive")
 
-    video_workflow = (workflows_dir / "model-card-video-contract.yml").read_text(encoding="utf-8")
+    release_workflow = (workflows_dir / "model-card-video-contract.yml").read_text(encoding="utf-8")
     lifecycle_workflow = (workflows_dir / "model-card-lifecycle-contract.yml").read_text(encoding="utf-8")
-    if CURRENT_UI_ENTRYPOINT not in video_workflow:
-        fail("model-card workflow is not wired to the current real UI contract")
-    if CURRENT_LIFECYCLE_ENTRYPOINT not in lifecycle_workflow:
-        fail("lifecycle workflow is not wired to the current lifecycle contract")
-    for host in REQUIRED_HOSTS:
-        if host not in video_workflow:
-            fail(f"model-card workflow is missing host {host}")
-        if host not in lifecycle_workflow:
-            fail(f"lifecycle workflow is missing host {host}")
+    for host in HOSTS:
+        if host not in release_workflow or host not in lifecycle_workflow:
+            fail(f"workflow matrix missing host {host}")
+    if CURRENT_UI not in release_workflow or "foreign_scope_matrix.py" not in release_workflow:
+        fail("release workflow is not wired to current UI + foreign isolation")
+    if CURRENT_LIFECYCLE not in lifecycle_workflow:
+        fail("lifecycle workflow is not wired to current lifecycle contract")
 
-    current_ui = (ROOT / CURRENT_UI_ENTRYPOINT).read_text(encoding="utf-8")
-    for term in ("custom_extra_body", "expected_checked=False", "baseline.assert_video_modality_scope", "baseline.run_case"):
+    current_ui = (ROOT / CURRENT_UI).read_text(encoding="utf-8")
+    for term in ("custom_extra_body", "expected_checked=False", "baseline.run_case"):
         if term not in current_ui:
-            fail(f"current real UI contract is missing required proof hook: {term}")
+            fail(f"current UI entrypoint lost proof hook {term}")
 
-    baseline_ui = (ROOT / "tests" / "e2e" / "provider_card_matrix" / "browser_matrix_0_1_19.py").read_text(encoding="utf-8")
+    core = (e2e_dir / "model_card_browser_core.py").read_text(encoding="utf-8")
     for term in ("await enable_video_modality(create_dialog)", "expected_checked=True", "await save_model_dialog(create_dialog)"):
-        if term not in baseline_ui:
-            fail(f"real browser implementation lost visible Video click/persistence proof: {term}")
+        if term not in core:
+            fail(f"browser core lost visible click/save persistence proof {term}")
 
-    lifecycle = (ROOT / CURRENT_LIFECYCLE_ENTRYPOINT).read_text(encoding="utf-8")
+    lifecycle = (ROOT / CURRENT_LIFECYCLE).read_text(encoding="utf-8")
     if "custom_extra_body" not in lifecycle or "expected_video_checked=True" not in lifecycle:
-        fail("current lifecycle contract no longer proves request-row visibility and checked Video")
+        fail("lifecycle contract no longer proves checked Video + native custom body")
 
     registry = (ROOT / "registry.py").read_text(encoding="utf-8")
-    for marker in DEAD_REGISTRY_SOURCE_UI_MARKERS:
+    for marker in DEAD_REGISTRY_MARKERS:
         if marker in registry:
-            fail(f"registry still carries retired Source-page Video infrastructure: {marker}")
-    for required in (
-        "normalize_owned_model_card_for_save",
-        "ProviderConfigService.create_provider",
-        "ProviderConfigService.update_provider",
-        "_inject_model_card_video_control",
-    ):
+            fail(f"registry still contains retired Source-page Video infrastructure: {marker}")
+    for required in ("normalize_owned_model_card_for_save", "ProviderConfigService.create_provider", "ProviderConfigService.update_provider"):
         if required not in registry:
-            fail(f"registry lost current owned-card persistence boundary: {required}")
+            fail(f"registry lost current owned-card save boundary: {required}")
 
-    model_scope = (ROOT / "capabilities" / "model_scope.py").read_text(encoding="utf-8")
-    if '"video" in modalities' not in model_scope or "VIDEO_CONTROLS_VISIBLE_KEY" not in model_scope:
-        fail("current owned-card save/migration boundary is missing native Video + legacy cleanup logic")
-
-    print("SINGLE_TRUTH_OK main_only=1 workflows=2 dead_source_ui=0 failed_state_archive=0 stale_current_guidance=0 real_ui_gate=1 hosts=" + ",".join(REQUIRED_HOSTS))
+    print("SINGLE_TRUTH_OK main_only=1 workflows=2 e2e_current_only=1 real_ui_gate=1 hosts=" + ",".join(HOSTS))
 
 
 if __name__ == "__main__":

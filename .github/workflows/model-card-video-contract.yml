@@ -57,7 +57,7 @@ jobs:
           ffmpeg -hide_banner -version
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        uses: pnpm/action-setup@0ebf47130e4866e75b540449e92b4886f43607fa02 # v6.0.9
         with:
           version: 10.28.2
 
@@ -150,7 +150,7 @@ jobs:
           ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
           ASTRBOT_E2E_CONFIG_PATH: ${{ github.workspace }}/AstrBot/data/cmd_config.json
-        run: python tests/e2e/provider_card_matrix/foreign_scope_matrix_0_1_24.py
+        run: python tests/e2e/provider_card_matrix/foreign_scope_matrix.py
 
       - name: Capture AstrBot log
         if: always()
