@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -72,7 +73,21 @@ async def verify_installed_stage(page: Page, *, stage: str) -> dict[str, Any]:
 
 async def run(stage: str) -> None:
     base.verify_installed_stage = verify_installed_stage
-    await base.run(stage)
+    try:
+        await base.run(stage)
+    except Exception as exc:
+        ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+        base.write_json(
+            ARTIFACT_DIR / f"{stage}-failure.json",
+            {
+                "stage": stage,
+                "success": False,
+                "exception_type": type(exc).__name__,
+                "message": str(exc),
+                "traceback": traceback.format_exc(),
+            },
+        )
+        raise
 
 
 def parse_args() -> argparse.Namespace:
