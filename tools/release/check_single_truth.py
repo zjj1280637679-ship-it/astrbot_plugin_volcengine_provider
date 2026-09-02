@@ -54,9 +54,10 @@ AUTHORITATIVE_OR_WARM = (
     "docs/PROJECT_STATE.json",
 )
 
+# These markers are unambiguously stale even when read in context. Do not use
+# broad forbidden words for concepts that a current rule may legitimately negate.
 STALE_CURRENT_MARKERS = (
     "/tree/runtime",
-    "docs/archive/",
     "archive/model-card-video-known-good",
     "video_modality_fallback.py",
     "0.1.18 Source presentation control remains",
@@ -81,6 +82,8 @@ def main() -> None:
     present = [path for path in FORBIDDEN_PATHS if (ROOT / path).exists()]
     if present:
         fail(f"retired release/fallback/source-UI infrastructure is still tracked: {present}")
+    if (ROOT / "docs" / "archive").exists():
+        fail("current tree must not contain a failed-state archive directory")
 
     workflows_dir = ROOT / ".github" / "workflows"
     actual_workflows = {path.name for path in workflows_dir.glob("*.yml")}
@@ -171,7 +174,7 @@ def main() -> None:
     if '"video" in modalities' not in model_scope or "VIDEO_CONTROLS_VISIBLE_KEY" not in model_scope:
         fail("current owned-card save/migration boundary is missing native Video + legacy cleanup logic")
 
-    print("SINGLE_TRUTH_OK main_only=1 workflows=2 dead_source_ui=0 stale_current_guidance=0 real_ui_gate=1 hosts=" + ",".join(REQUIRED_HOSTS))
+    print("SINGLE_TRUTH_OK main_only=1 workflows=2 dead_source_ui=0 failed_state_archive=0 stale_current_guidance=0 real_ui_gate=1 hosts=" + ",".join(REQUIRED_HOSTS))
 
 
 if __name__ == "__main__":
