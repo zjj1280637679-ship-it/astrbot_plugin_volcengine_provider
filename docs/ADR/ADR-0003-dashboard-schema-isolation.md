@@ -1,46 +1,45 @@
-# ADR-0003: Dashboard schema must isolate provider-owned UI
+# ADR-0003: Concrete model-card scope is the Dashboard isolation boundary
 
 ## Status
 
-Accepted for 0.1.15; amended for the 0.1.18 Source-page selector and durable rollback design.
+Accepted/current.
 
 ## Context
 
-AstrBot model-card schema is shared. Adding an unconditional Volcengine-specific field to the shared schema can cause that field to appear on unrelated providers. Conversely, conditioning it on Provider identity that the generic model-card component does not actually own can hide it everywhere. AstrBot provider types also use different Dashboard layouts, so schema visibility is part of product correctness, not merely presentation.
+AstrBot's provider/model configuration schema is shared across Provider types. A Volcengine-specific field or fifth modality added unconditionally to that shared surface can leak into unrelated Provider cards. At the same time, hiding the field before a concrete card's Source identity is known can make the required control disappear everywhere.
 
-The Provider Source form owns the current Source identity and type. It is therefore the reliable isolation boundary for a provider-owned configuration surface, even though the saved runtime truth remains per model card.
+The reliable identity is the concrete model card's `provider_source_id`, resolved against `provider_sources[].type`.
 
 ## Decision
 
-Do not expose the canonical `volcengine_video_input_enabled` field as an unconditional shared model-card schema item.
+Provider-specific model-card UI is adapted only after concrete ownership is known.
 
-Do not expose a video control in the generic model-card projection. For each owned Volcengine Source, expose on the Source page:
+For cards whose Source type is `volcengine_ark_chat_completion` or `volcengine_agent_plan_chat_completion`:
 
-- persistent `volcengine_video_controls_visible`, whose only authority is whether the model-selection area is shown;
-- a temporary checkbox selector built from model-card IDs belonging to that exact Source and guarded by the persistent display preference.
+- the card-local/private `modalities` metadata may expose exactly one additional native `video` option;
+- the card-local request metadata may expose the typed Volcengine request fields;
+- AstrBot's native `custom_extra_body` remains present.
 
-The selector key uses a reversible UTF-8-to-hex encoding of the Source ID so identity is not truncated or probabilistically hashed. When the selector is visible and submitted, the Source save boundary writes the chosen IDs to each matching card's canonical `volcengine_video_input_enabled`, then removes the temporary selector before Source persistence. When the display preference is false, or the hidden selector is omitted, existing per-card values are left untouched. Closing the UI therefore hides configuration only; it does not clear selections or disable runtime video transport.
+For every foreign Provider card:
 
-Before translating a selector, the bridge snapshots the complete Source and model-card lists. If the host Source upsert raises after translation, it restores those lists and the manager's config mirrors in memory. AstrBot 4.26/4.27 can persist the full config before reloading the affected Provider, so an exception does not prove that nothing reached disk; when the host config exposes `save_config()`, the bridge calls it to persist the restored snapshot as a compensating rollback. It then best-effort reloads every old model card belonging to the original Source, because a multi-card host reload may have partially applied before the exception. The original host exception is always re-raised. A rollback write or old-instance reload failure is attached as a note to that original exception; no unobserved layer is claimed restored after a secondary failure.
+- no plugin Video option;
+- no `volcengine_*` request rows;
+- no plugin fields persisted.
 
-Foreign Sources receive neither field. A stale already-open 0.1.17 model dialog may still use the retired model-card temporary key at create/update save time, but this is compatibility behavior rather than the current visible UI.
+A Provider Source master switch or model selector is not a substitute for the concrete-card control. A process-global/shared-schema Video fallback that can visually appear on foreign cards is forbidden.
 
-If the host lacks the complete `get_provider_schema` + `upsert_provider_source` API set needed to preserve the Source save contract, the UI enhancement is not exposed. Other independently safe bridge hooks may still operate.
+The compiled-asset bridge and runtime-component bridge are complementary implementations of the same concrete-object rule. They must be reversible and fail closed when the required ownership/boundary cannot be identified safely.
 
-## Required invariants
+## Saved truth
 
-- foreign providers do not display the Volcengine field;
-- generic model cards display neither the canonical nor retired temporary Volcengine field;
-- `volcengine_video_controls_visible=false` preserves every per-card transport value;
-- the selector lists and updates only cards owned by the exact Source, using card IDs rather than model names;
-- temporary Source selector keys do not persist;
-- a forged temporary key on a foreign Source cannot create Volcengine state;
-- Source/model-card field ownership remains distinct;
-- Source-save semantics are tested on both AstrBot 4.26.1 and 4.27.2;
-- host Source-upsert failure restores the complete pre-call Source/model-card state and manager mirrors, attempts to persist that snapshot through host `save_config()`, best-effort reloads the old Source's cards, and propagates the original host error;
-- if compensating persistence or old-instance reload fails, the original host error remains primary and carries a rollback-failure note rather than falsely claiming full restoration;
-- layout correctness must be checked against the real AstrBot Dashboard Source layout, not schema/service data alone.
+For an owned card, native `modalities` membership is the user-facing Video state. `volcengine_video_input_enabled` is only a compatibility/runtime mirror.
 
-## Consequences
+## Acceptance
 
-The implementation is more explicit than one global schema field, but it avoids cross-provider UI pollution and preserves one per-card runtime truth. The real 4.26.1/4.27.2 service matrix supplies L3 save-boundary evidence. Focused regressions reproduce AstrBot's “save full config, then Provider reload raises” ordering, including a Source rename: Source/cards, persisted snapshots, manager mirrors, and calls to reload the old cards return to the tested pre-call contract. A separate 2026-08-12 real AstrBot 4.27.2 Dashboard DOM run supplies L4 presentation evidence: Ark/Plan each had one master and a selector scoped to their own 2/1 cards; closing hid it, reopening preserved the selection with zero API requests; foreign had 0/0; every Ark/Plan/foreign generic model dialog omitted canonical, retired temporary, and new temporary video fields; `pageErrors=[]`.
+The exact release candidate must prove in a real AstrBot Dashboard that Ark and Agent Plan cards each show one Video checkbox, a visible-label click checks it, save/reopen and process restart preserve it, request rows remain visible/persistent, foreign cards stay clean, and uninstall removes plugin-owned UI residue.
+
+Static schema inspection or successful bridge installation alone is insufficient.
+
+## Historical note
+
+Earlier Source-page and shared-schema fallback strategies are superseded. Their exact text remains in Git history and is not current design authority.

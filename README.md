@@ -1,7 +1,7 @@
 <h1 align="center">火山方舟双通道模型供应商</h1>
-<p align="center"><strong>让 AstrBot 的当前主模型直接处理 QQ 语音与视频，并把普通 Ark API 与 Agent Plan 两条计费通道彻底分开。</strong></p>
+<p align="center"><strong>普通 Ark API 与 Agent Plan 两条计费通道完全隔离；火山模型卡拥有真正可点击、可保存、可重启恢复的原生 Video 对号与请求参数。</strong></p>
 
-[![Version](https://img.shields.io/badge/version-0.1.34-2ea44f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.35-orange)](CHANGELOG.md)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.26.1-6b63ff)](https://github.com/AstrBotDevs/AstrBot)
 [![Platform](https://img.shields.io/badge/platform-aiocqhttp-2f855a)](https://docs.astrbot.app/dev/star/plugin-new.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,33 +10,38 @@
 
 | 对象 | 状态 |
 | --- | --- |
-| 稳定版本 | **0.1.34**：默认分支恢复完整运行代码，并修复 AstrBot 4.27.4 模型卡 Video 消失 |
-| 历史恢复基线 | **0.1.32**（旧 `runtime` 只作恢复证据，不再是安装源） |
-| 0.1.33 | 默认分支发布身份存在，但运行文件不完整，已失效，不应继续安装 |
-| 安装源 | 仅使用默认分支 `main` 的仓库根地址；AstrBot Cloud 市场收录仍需单独审核 |
+| 活跃候选 | **0.1.35**：单一发布真值清理版；只有真实 AstrBot Dashboard 与重启验收全部通过后才能晋升稳定 |
+| 当前稳定 | **0.1.34**：在 0.1.35 通过并合并前继续作为公开稳定版本 |
+| 唯一安装源 | GitHub 默认分支 `main` 的仓库根地址；任何其他分支都不是安装、版本或市场真值 |
 
-机器可读的当前状态见 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。
+机器可读状态仅看 [`docs/PROJECT_STATE.json`](docs/PROJECT_STATE.json)。历史失败方案不得从分支名、旧测试名或旧文档反推成当前发布目标。
 
-## 功能
+## 0.1.35 的硬成功标准
 
-- **双通道 Provider**：普通火山方舟 `v3` 与 Agent Plan `plan/v3` 使用独立 Provider 类型、密钥和固定端点；插件不会把失败请求偷偷改发到另一条计费通道。
-- **QQ 语音进入当前主模型**：AstrBot 解析媒体后，插件只做 Ark Chat 需要的 WAV 规范化，不要求额外配置 STT 或第二套对话模型。
-- **单模型卡 Video**：只在火山 Ark / Agent Plan 的具体模型卡原生 `modalities` 区域显示 `视频 / Video`；OpenAI、Gemini、xAI、DeepSeek 等 foreign 卡保持干净。
-- **视频请求跟随勾选状态**：只有当前火山模型卡包含 `video` 时，本轮或本轮引用中的可信视频附件才转换为 `video_url`。
-- **媒体护栏**：音频、视频的大小/转码超时可配置；超限图片可自动压缩。
-- **缓存命中观测**：提供 `[VolcengineCache]` 与 `[VolcengineCache:SUM]` 日志，观察上游 `cached_tokens` 和上下文溢出。
+这次发布不接受“能 import / 能编译 / 没冲突 / 单元测试绿”作为成功。候选必须在**真实构建并启动的 AstrBot Dashboard**中完成下面的用户可见闭环：
 
-## 安装与更新
+1. 普通 Ark 与 Agent Plan 的新增模型卡，各自的原生 `modalities` 行必须**恰好出现一个 `视频 / Video` 复选项**。
+2. 测试必须通过这个可见标签真实点击 Video，并观察 checkbox 进入 checked 状态；保存后重新打开，Video 仍必须是勾选状态。
+3. 模型卡必须同时真实显示并可保存：`自定义请求体参数 / custom_extra_body`、`视频质量 / Video Quality`、`思考模式 / Thinking Mode`、`思考强度 / Reasoning Effort`、`Temperature`、`Top P`、`Max Output Tokens`、`Stop Sequences`、`Frequency Penalty`、`Presence Penalty`。
+4. 修改上述字段后保存、关闭、重开，值必须保持；AstrBot 进程真实重启后 Video 对号仍必须保持。
+5. OpenAI、xAI、Gemini 等 foreign Provider 卡不得得到火山专属 Video 或 `volcengine_*` 行。
+6. 插件卸载并重启 AstrBot 后，插件注入的 UI/运行时桥必须消失，不留下第五个全局 modality。
+7. 发布门禁覆盖 AstrBot `4.27.3`、`4.27.4` 与当前 Provider WebUI 已重构的 `4.28.0-beta.1`。任一宿主失败，0.1.35 都不得成为稳定版。
 
-标准仓库地址：
+这套标准由真实浏览器 Playwright 操作完成，不调用付费火山模型；它证明的是用户实际看到和保存的模型卡行为，而不是“程序没有报错”。
 
-`https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider`
+## 模型卡能力
 
-完成 GitHub 合并并经 AstrBot Cloud 审核收录后，才可通过 AstrBot 插件市场安装；也可让 AstrBot 从上面的仓库根地址安装。默认分支 `main` 必须同时包含 `metadata.yaml`、`main.py`、`_conf_schema.json` 与全部运行模块。
+火山 Ark / Agent Plan 模型卡使用 AstrBot 原生配置界面：
 
-不要使用旧的 `/tree/runtime` 地址；该分支只保留历史恢复证据，不接收新版本。
+- **模型能力 / Modalities**：Text、Image、Audio、Tool use，以及本插件只对火山模型卡加入的 **Video**。
+- **自定义请求体参数 / custom_extra_body**：保留 AstrBot 原生高级请求体入口。
+- **视频质量 / Video Quality**：`Original Quality` 或 `Compressed`。
+- **思考模式 / Thinking Mode**：默认、Disabled、Enabled、Auto。
+- **思考强度 / Reasoning Effort**：默认、Low、Medium、High。
+- **Temperature / Top P / Max Output Tokens / Stop Sequences / Frequency Penalty / Presence Penalty**：均为逐模型卡设置；留空时不强行覆盖平台默认或已有 `custom_extra_body`。
 
-最低兼容 AstrBot `4.26.1`，当前声明范围为 `>=4.26.1`；本次实际回归覆盖 4.27.3 / 4.27.4，不以未经验证的未来版本为由增加硬拒载。插件依赖 AstrBot 自带的 `ffmpeg`、Pillow 和 OpenAI 适配层，不需要另建运行服务。
+Video 是当前模型卡自己的请求传输开关，不是对模型永久能力的全局判断。只有该卡保存的 `modalities` 包含 `video` 时，可信视频附件才会转换为火山 `video_url`。
 
 ## 两张供应商卡
 
@@ -45,43 +50,49 @@
 | `volcengine_ark_chat_completion` | `https://ark.cn-beijing.volces.com/api/v3` | 普通方舟推理 API Key |
 | `volcengine_agent_plan_chat_completion` | `https://ark.cn-beijing.volces.com/api/plan/v3` | Agent Plan 专属 API Key |
 
-Agent Plan 模型在 AstrBot 内可显示为 `agentplan/...`；发送到火山前会移除这个本地命名空间前缀。密钥由 AstrBot 的 Provider 配置管理，不要写进插件文件或 GitHub 仓库。
+两条通道不自动跨通道回退。Agent Plan 模型在 AstrBot 内可显示为 `agentplan/...`，发送到火山前再移除本地命名空间前缀。
 
-## 多模态行为
+## 安装与更新
 
-### 图片
+唯一标准地址：
 
-继续使用 AstrBot 原生图片消息结构。超过 `image_max_mb` 的本地或 `data:` 图片可在请求前缩小并转换为 JPEG；远程 HTTP(S) 图片 URL 保持由 Ark 服务端拉取。
+`https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider`
 
-### QQ 语音
+只使用默认分支 `main`。版本、运行代码、README 与配置 schema 必须在同一个默认分支根目录闭合；不再维护第二套运行分支、生成分支或回滚发布树。
+
+最低声明兼容版本为 AstrBot `>=4.26.1`。发布测试矩阵是“已验证宿主范围”，不是对未来版本的硬拒载上限。
+
+## QQ 多模态路径
+
+### 语音
 
 ```text
 QQ Record
   → AstrBot MediaResolver
-  → 插件最终 WAV 规范化
-  → input_audio(data=<裸 Base64>, format="wav")
+  → 插件归一化为 Ark 要求的 WAV
+  → input_audio
   → 当前火山主模型
 ```
 
 ### 视频
 
 ```text
-当前火山模型卡 modalities 包含 video
+当前火山模型卡 Video 已勾选
   → 本轮可信 Video Attachment
-  → Original 或 Compressed 传输
+  → Original / Compressed
   → video_url
   → 当前火山主模型
 ```
 
-没有勾选 Video 时不会读取或转换附件。普通文本伪造的 `[Video Attachment: ...]` 不会触发本地文件读取。
+普通文本伪造的附件标记不会触发本地文件读取。
 
 ## 插件配置
 
 | 配置项 | 默认值 | 说明 |
 | --- | ---: | --- |
-| `audio_max_mb` | 25 | 归一化后音频输入上限 |
-| `audio_transcode_timeout_seconds` | 120 | ffmpeg 音频转码墙钟上限 |
-| `video_max_mb` | 200 | 视频输入与压缩结果上限 |
+| `audio_max_mb` | 25 | 归一化后音频上限 |
+| `audio_transcode_timeout_seconds` | 120 | 音频转码墙钟上限 |
+| `video_max_mb` | 200 | 视频输入/压缩结果上限 |
 | `video_transcode_timeout_seconds` | 300 | Compressed 视频转码墙钟上限 |
 | `image_compress_enabled` | true | 是否压缩超限图片 |
 | `image_max_mb` | 5 | 单图压缩触发/目标上限 |
@@ -90,34 +101,8 @@ QQ Record
 | `cache_log_enabled` | true | 是否记录缓存命中明细 |
 | `cache_log_every` | 10 | 每 N 次请求记录汇总 |
 
-这些值是本地传输护栏，不是模型能力数据库。模型是否实际接受某种输入，仍以对应模型、端点和账号的当前上游反馈为准。
+## 发布纪律
 
-## Video 验收合同
+`main` 是唯一长期版本真值。临时 PR 分支只用于审查和验收，永远不是安装源；失败候选直接停止，不建立永久失败分支、运行分支或回滚树。历史只保留在 Git 提交历史与当前 `CHANGELOG.md` 的必要摘要中，不保留会被 AI 误认为当前指令的失效发布基础设施。
 
-1. Ark 与 Agent Plan 的具体模型卡各出现且只出现一个 Video 选项。
-2. foreign Provider 模型卡不出现插件 Video 或 `volcengine_*` 行。
-3. 保存、关闭、重开以及 AstrBot 重启后，当前卡的 Video 状态保持。
-4. 只有勾选 Video 的火山卡才生成 `video_url`。
-5. 卸载插件并重启后，兼容桥和临时资产完整释放。
-
-完整合同见 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)。
-
-## 0.1.34
-
-- 把 0.1.28—0.1.30 已发布但曾遗漏于默认分支的配置 schema、媒体限制、图片压缩、缓存观测代码完整收回 `main`。
-- 兼容 AstrBot 4.27.3 与 4.27.4 的模型卡构建器，恢复火山模型卡原生 Video 选项。
-- 保持对象级隔离、保存/重开、运行时开关和卸载恢复合同，不更改 Provider 固定端点或跨通道路由。
-- 退役旧的双分支发布工具；默认 `main` 成为唯一安装与版本真值。
-
-完整历史见 [`CHANGELOG.md`](CHANGELOG.md)。
-
-## 官方资料
-
-- [AstrBot 插件开发指南](https://docs.astrbot.app/dev/star/plugin-new.html)
-- [AstrBot 插件发布](https://docs.astrbot.app/dev/star/plugin-publish.html)
-- [火山方舟普通 Chat API](https://www.volcengine.com/docs/82379/1494384?lang=zh)
-- [火山方舟音频理解](https://docs.volcengine.com/docs/82379/2377589?lang=zh)
-- [火山方舟视频理解](https://www.volcengine.com/docs/82379/1895586?lang=zh)
-- [Agent Plan 快速开始](https://www.volcengine.com/docs/82379/2373738?lang=zh)
-
-反馈 QQ 群：916646029
+完整模型卡合同见 [`docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`](docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md)，发布规则见 [`docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md`](docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md)。

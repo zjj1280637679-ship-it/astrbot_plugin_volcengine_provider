@@ -1,19 +1,11 @@
-name: Model-card Lifecycle Contract
+name: Current Model-card Lifecycle Contract
 
 on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/model-card-lifecycle-contract.yml
-      - tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24.py
-      - tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py
-      - tests/e2e/provider_card_matrix/browser_matrix.py
-      - main.py
-      - registry.py
-      - providers.py
-      - adapters/**
-      - capabilities/**
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -28,20 +20,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  refresh-restart-update-uninstall:
-    name: AstrBot ${{ matrix.astrbot-version }} lifecycle
+  restart-replace-uninstall:
+    name: AstrBot ${{ matrix.astrbot-version }} real lifecycle
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        astrbot-version: ['4.27.3', '4.27.4']
+        astrbot-version: ['4.27.3', '4.27.4', '4.28.0-beta.1']
     env:
       ASTRBOT_E2E_URL: http://127.0.0.1:6185
       ASTRBOT_E2E_USERNAME: e2e-admin
       ASTRBOT_E2E_PASSWORD: E2e-password-123
       ASTRBOT_E2E_ARTIFACT_DIR: ${{ github.workspace }}/e2e-artifacts
       ASTRBOT_E2E_CONFIG_PATH: ${{ github.workspace }}/AstrBot/data/cmd_config.json
+
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -63,7 +56,7 @@ jobs:
       - name: Install exact AstrBot runtime
         run: uv sync --directory AstrBot
 
-      - name: Setup pnpm exactly as AstrBot Dashboard CI
+      - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
           version: 10.28.2
@@ -87,7 +80,7 @@ jobs:
           mkdir -p AstrBot/astrbot/dashboard/dist/assets
           printf '${{ matrix.astrbot-version }}' > AstrBot/astrbot/dashboard/dist/assets/version
 
-      - name: Initialize one persistent AstrBot data directory and install candidate
+      - name: Initialize persistent AstrBot state and install exact candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -109,78 +102,62 @@ jobs:
           python -m pip install playwright
           python -m playwright install --with-deps chromium
 
-      - name: Start AstrBot for initial create and Dashboard-refresh stage
+      - name: Start AstrBot for setup
         shell: bash
         run: |
           set -euo pipefail
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-lifecycle.log 2>&1 &
-          echo $! >/tmp/astrbot-lifecycle.pid
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-current-lifecycle.log 2>&1 &
+          echo $! >/tmp/astrbot-current-lifecycle.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then ready=1; break; fi
-            if ! kill -0 "$(cat /tmp/astrbot-lifecycle.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-lifecycle.log
-              exit 1
-            fi
+            if ! kill -0 "$(cat /tmp/astrbot-current-lifecycle.pid)" 2>/dev/null; then cat /tmp/astrbot-current-lifecycle.log; exit 1; fi
             sleep 1
           done
           test "$ready" = '1'
-          grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
+          grep -q 'Volcengine providers registered' /tmp/astrbot-current-lifecycle.log
 
-      - name: Create owned and foreign cards, save Video, and prove Dashboard refresh
-        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage setup
+      - name: Create cards, click Video, save and prove Dashboard refresh
+        run: python tests/e2e/provider_card_matrix/current_lifecycle_contract.py --stage setup
 
-      - name: Stop AstrBot before process-restart stage
+      - name: Stop AstrBot before process restart
         shell: bash
         run: |
           set -euo pipefail
-          pid=$(cat /tmp/astrbot-lifecycle.pid)
+          pid=$(cat /tmp/astrbot-current-lifecycle.pid)
           kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-          for i in $(seq 1 40); do
-            kill -0 "$pid" 2>/dev/null || break
-            sleep 0.2
-          done
-          if kill -0 "$pid" 2>/dev/null; then
-            kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-          fi
+          for i in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
+          if kill -0 "$pid" 2>/dev/null; then kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true; fi
 
-      - name: Restart the same AstrBot process state with the same plugin checkout
+      - name: Restart same AstrBot state
         shell: bash
         run: |
           set -euo pipefail
-          : >/tmp/astrbot-lifecycle.log
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-lifecycle.log 2>&1 &
-          echo $! >/tmp/astrbot-lifecycle.pid
+          : >/tmp/astrbot-current-lifecycle.log
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-current-lifecycle.log 2>&1 &
+          echo $! >/tmp/astrbot-current-lifecycle.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then ready=1; break; fi
-            if ! kill -0 "$(cat /tmp/astrbot-lifecycle.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-lifecycle.log
-              exit 1
-            fi
+            if ! kill -0 "$(cat /tmp/astrbot-current-lifecycle.pid)" 2>/dev/null; then cat /tmp/astrbot-current-lifecycle.log; exit 1; fi
             sleep 1
           done
           test "$ready" = '1'
-          grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
+          grep -q 'Volcengine providers registered' /tmp/astrbot-current-lifecycle.log
 
-      - name: Prove the saved single-card state after a real AstrBot restart
-        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage after-restart
+      - name: Prove checked Video and request rows after real process restart
+        run: python tests/e2e/provider_card_matrix/current_lifecycle_contract.py --stage after-restart
 
-      - name: Stop AstrBot before same-version plugin replacement
+      - name: Stop AstrBot before same-version replacement
         shell: bash
         run: |
           set -euo pipefail
-          pid=$(cat /tmp/astrbot-lifecycle.pid)
+          pid=$(cat /tmp/astrbot-current-lifecycle.pid)
           kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-          for i in $(seq 1 40); do
-            kill -0 "$pid" 2>/dev/null || break
-            sleep 0.2
-          done
-          if kill -0 "$pid" 2>/dev/null; then
-            kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-          fi
+          for i in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
+          if kill -0 "$pid" 2>/dev/null; then kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true; fi
 
-      - name: Replace plugin directory with the exact same candidate version
+      - name: Replace plugin directory with exact same candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -195,84 +172,70 @@ jobs:
           test -f "$target/main.py"
           test -f "$target/metadata.yaml"
 
-      - name: Restart AstrBot after same-version plugin replacement
+      - name: Restart after same-version replacement
         shell: bash
         run: |
           set -euo pipefail
-          : >/tmp/astrbot-lifecycle.log
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-lifecycle.log 2>&1 &
-          echo $! >/tmp/astrbot-lifecycle.pid
+          : >/tmp/astrbot-current-lifecycle.log
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-current-lifecycle.log 2>&1 &
+          echo $! >/tmp/astrbot-current-lifecycle.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then ready=1; break; fi
-            if ! kill -0 "$(cat /tmp/astrbot-lifecycle.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-lifecycle.log
-              exit 1
-            fi
+            if ! kill -0 "$(cat /tmp/astrbot-current-lifecycle.pid)" 2>/dev/null; then cat /tmp/astrbot-current-lifecycle.log; exit 1; fi
             sleep 1
           done
           test "$ready" = '1'
-          grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log
+          grep -q 'Volcengine providers registered' /tmp/astrbot-current-lifecycle.log
 
-      - name: Prove the same model-card state after same-version plugin replacement
-        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage after-same-version-update
+      - name: Prove model-card state after same-version replacement
+        run: python tests/e2e/provider_card_matrix/current_lifecycle_contract.py --stage after-same-version-update
 
-      - name: Stop AstrBot and remove the plugin directory
+      - name: Stop AstrBot and uninstall candidate
         shell: bash
         run: |
           set -euo pipefail
-          pid=$(cat /tmp/astrbot-lifecycle.pid)
+          pid=$(cat /tmp/astrbot-current-lifecycle.pid)
           kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-          for i in $(seq 1 40); do
-            kill -0 "$pid" 2>/dev/null || break
-            sleep 0.2
-          done
-          if kill -0 "$pid" 2>/dev/null; then
-            kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-          fi
+          for i in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
+          if kill -0 "$pid" 2>/dev/null; then kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true; fi
           rm -rf AstrBot/data/plugins/astrbot_plugin_volcengine_provider
           test ! -e AstrBot/data/plugins/astrbot_plugin_volcengine_provider
 
-      - name: Restart AstrBot without the plugin
+      - name: Restart AstrBot without plugin
         shell: bash
         run: |
           set -euo pipefail
-          : >/tmp/astrbot-lifecycle.log
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-lifecycle.log 2>&1 &
-          echo $! >/tmp/astrbot-lifecycle.pid
+          : >/tmp/astrbot-current-lifecycle.log
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-current-lifecycle.log 2>&1 &
+          echo $! >/tmp/astrbot-current-lifecycle.pid
           ready=0
           for i in $(seq 1 90); do
             if curl -fsS "$ASTRBOT_E2E_URL/" >/dev/null 2>&1; then ready=1; break; fi
-            if ! kill -0 "$(cat /tmp/astrbot-lifecycle.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-lifecycle.log
-              exit 1
-            fi
+            if ! kill -0 "$(cat /tmp/astrbot-current-lifecycle.pid)" 2>/dev/null; then cat /tmp/astrbot-current-lifecycle.log; exit 1; fi
             sleep 1
           done
           test "$ready" = '1'
-          if grep -q 'Volcengine providers registered' /tmp/astrbot-lifecycle.log; then
-            echo 'plugin unexpectedly loaded after directory removal'
-            cat /tmp/astrbot-lifecycle.log
+          if grep -q 'Volcengine providers registered' /tmp/astrbot-current-lifecycle.log; then
+            echo 'plugin unexpectedly loaded after uninstall'
+            cat /tmp/astrbot-current-lifecycle.log
             exit 1
           fi
 
-      - name: Prove no plugin-owned public UI remains after uninstall and restart
-        run: python tests/e2e/provider_card_matrix/lifecycle_matrix_0_1_24_stable.py --stage uninstalled
+      - name: Prove no plugin-owned public UI remains after uninstall
+        run: python tests/e2e/provider_card_matrix/current_lifecycle_contract.py --stage uninstalled
 
-      - name: Capture lifecycle logs
+      - name: Capture lifecycle log
         if: always()
-        shell: bash
-        run: |
-          mkdir -p e2e-artifacts/lifecycle-0.1.24
-          cp /tmp/astrbot-lifecycle.log e2e-artifacts/lifecycle-0.1.24/final-startup.log 2>/dev/null || true
+        run: cp /tmp/astrbot-current-lifecycle.log e2e-artifacts/final-startup.log 2>/dev/null || true
 
       - name: Final process cleanup
         if: always()
         shell: bash
         run: |
           set +e
-          if [ -s /tmp/astrbot-lifecycle.pid ]; then
-            pid=$(cat /tmp/astrbot-lifecycle.pid)
+          if [ -s /tmp/astrbot-current-lifecycle.pid ]; then
+            pid=$(cat /tmp/astrbot-current-lifecycle.pid)
             kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
             sleep 1
             kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
@@ -282,7 +245,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: model-card-lifecycle-${{ matrix.astrbot-version }}
-          path: e2e-artifacts/lifecycle-0.1.24
+          name: current-lifecycle-${{ matrix.astrbot-version }}
+          path: e2e-artifacts/current-lifecycle
           if-no-files-found: error
           retention-days: 14

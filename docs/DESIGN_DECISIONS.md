@@ -1,172 +1,78 @@
 # Design Decisions
 
-Lifecycle role: **WARM stable constraints + rejected-strategy memory**.
+Role: durable current constraints. Current release identity lives only in `docs/PROJECT_STATE.json`.
 
-This file does **not** define the current release goal or active validation frontier. Read `docs/PROJECT_STATE.json` for HOT state and `docs/KNOWLEDGE_LIFECYCLE.md` for lifecycle rules.
+## 1. Scope
 
-## Purpose
+The plugin provides two Volcengine Ark chat Provider types for AstrBot: ordinary Ark API and Agent Plan. It adapts provider-specific protocol/media/request details to AstrBot's existing provider lifecycle.
 
-Record objective conditions, durable design constraints, and rejected strategies so future maintainers/AI do not reconstruct intent from old field names or accidentally revive a previously falsified approach.
+It is not a second router, fallback engine, retry system, provider lifecycle, global capability database or independent Dashboard framework.
 
-## Stable project scope
+## 2. One durable repository truth
 
-The plugin is an AstrBot provider integration for Volcengine Ark and Agent Plan. It may adapt provider-specific request/response protocols and media payloads that AstrBot does not natively express.
+`main` is the only durable install/version/publication tree. Required runtime code may not live only in another branch. A temporary PR branch is review-only.
 
-It is not intended to become:
+## 3. Concrete owned model card is the UI boundary
 
-- a second AstrBot provider lifecycle;
-- a second fallback/retry/router;
-- a global model-capability database;
-- a permanent model-ID capability oracle;
-- an independent Dashboard configuration system.
+AstrBot's shared provider/model schema does not by itself encode “show this field only after this concrete card resolves to one of our Source types.” Therefore provider-specific UI must be scoped after concrete card ownership is known.
 
-## Durable objective conditions
+Current rule:
 
-### Volcengine provider identity does not imply model identity
+- resolve `provider_source_id -> provider_sources[].type`;
+- if the type is Ark or Agent Plan owned by this plugin, the private/current card may gain exactly one native `video` modality option and the typed Volcengine request rows;
+- foreign cards are unchanged;
+- Source-level master switches/selectors are not an acceptable substitute;
+- a shared-schema Video fallback that can appear on foreign cards is forbidden.
 
-Ark serves both first-party Doubao/Seed and third-party/open models. Provider identity cannot safely imply a complete model capability set.
+## 4. Native modalities owns Video state
 
-### Capability facts have scope and lifetime
+For an owned card, `modalities` membership is the user-visible Video truth. `volcengine_video_input_enabled` may exist as a compatibility/runtime mirror only.
 
-Model behavior can drift because of model revisions, aliases, serving changes, account/region availability, provider API changes, and third-party packaging. Static `model_id -> capability` priors can become stale false certainty.
+The plugin does not reinterpret that checkbox as permanent proof that the upstream model supports video; it controls whether the adapter attempts the video transport path for that card.
 
-### AstrBot already owns mature lifecycle/policy layers
+## 5. Model-card request fields are a product surface
 
-AstrBot owns provider source/model-card management, provider lifecycle, routing/fallback/retry, metadata display, Dashboard rendering, and relevant media resolution. The plugin should integrate rather than duplicate.
+Owned cards preserve AstrBot's `custom_extra_body` and expose the plugin's typed request settings. Empty typed values do not force overrides. Explicit typed values are validated and applied according to `capabilities/model_fields.py`.
 
-### Feedback is evidence, not permanent truth
+Deleting these visible rows while keeping backend request support is a product regression.
 
-A badge or `/models` field is useful but incomplete. Missing feedback is not `false`; positive feedback does not prove the complete QQ product path.
+## 6. Reversible Dashboard integration
 
-### Runtime failure provenance matters
+The plugin may use exact compiled-asset and runtime-component adapters only when ownership/boundaries are known and reversible.
 
-Local media/payload transport failure, upstream explicit rejection, test-harness failure, and workflow teardown failure are distinct categories. One must not overwrite another's verdict.
+- exact compiled-asset transformation must fail closed on partial/ambiguous pattern matches;
+- runtime-component adaptation mutates only the currently visible concrete owned card after Source type resolution;
+- unload/uninstall restores host methods/assets and must not leave a global fifth modality.
 
-### Interaction does not grant judgment authority
+## 7. Capability evidence has scope and lifetime
 
-A component may have enough information to receive/translate/send/display something without authority to make a global capability judgment.
+Ark can serve first-party and third-party/open models. Model names, provider identity, aliases and transient `/models` feedback can drift. Missing feedback is not negative proof, and an observed success/failure does not become permanent global capability truth.
 
-### Historical validation is impact-scoped
+## 8. Failure provenance
 
-Historical QQ-oriented media success remains evidence until a dependency edge in `REGRESSION_SCOPE` changes. A direct WAV/MP4 fixture is not a substitute for the QQ/NapCat/AstrBot path.
+Distinguish:
 
-## Dashboard boundary — corrected scope
+- local media/request construction failure;
+- AstrBot host/config/UI failure;
+- upstream provider rejection;
+- model response;
+- test-harness failure.
 
-### What ADR-0003 actually rejects
+Do not change production behavior based on a failure attributed to another layer.
 
-AstrBot 4.26/4.27's **shared top capability/modalities rendering path** does not provide a reliable provider-specific identity boundary for adding a fifth Volcengine video capability checkbox/icon. Earlier attempts could make that control appear for every provider or none.
+## 9. Test hierarchy
 
-For that specific 0.1.18 problem, the exact Provider Source owns the reliable Source id/type, so the visible top-video selection workflow lives on the owned Source while per-card `volcengine_video_input_enabled` remains runtime/config truth.
+For model-card releases:
 
-### What ADR-0003 does not reject
+1. deterministic tests protect code invariants;
+2. real built Dashboard automation proves visible create/edit behavior;
+3. save/reopen and process restart prove persistence;
+4. uninstall proves reversibility;
+5. raw provider calls, when needed, prove downstream protocol only;
+6. QQ/NapCat end-to-end runs prove the full product path.
 
-It does **not** mean every model-edit field is globally rigid.
+A lower layer cannot substitute for an explicit higher-layer acceptance requirement.
 
-Ordinary saved-model edit-body rows are rendered from keys actually present on the model object. Therefore provider-owned horizontal request fields can be projected onto owned model-card copies without modifying the shared top capability row. 0.1.19 uses this narrower path.
+## 10. Historical handling
 
-This distinction prevents an old correct statement from drifting into a false global rule:
-
-```text
-Rejected generalization:
-"generic model cards cannot have provider-specific settings"
-
-Correct scope:
-"the shared top capability/modalities expansion is not a reliable provider-specific extension boundary;
-ordinary owned model-edit body rows can be projected safely when the current model/source identity is known"
-```
-
-See ADR-0005.
-
-## Stable strategy constraints
-
-These constrain the current strategy in `PROJECT_STATE`; they do not replace it.
-
-### Request/config versus capability
-
-Provider-specific request settings may control how a request is sent. They must not be written into AstrBot `modalities` or promoted into permanent model capability truth.
-
-### Dynamic Ark feedback
-
-Ordinary Ark `/models` feedback remains Source-scoped, current-response-only, single-use, async-context isolated, and non-persistent in plugin-owned global metadata. Explicit current `false`, empty lists, integer `0`, and unknown/future modality tokens remain information when upstream returns them.
-
-### 0.1.18 Source video UI contract
-
-The released 0.1.18 Source presentation control remains a stable compatibility contract:
-
-- `volcengine_video_controls_visible` is presentation-only;
-- the selector is exact-current-Source scoped;
-- saved truth remains per-card `volcengine_video_input_enabled`;
-- hiding the selector preserves choices/runtime state;
-- foreign Sources do not receive the UI;
-- AstrBot `modalities` remain unchanged;
-- Source-save rollback preserves the original host error and only claims layers actually restored.
-
-This is a stable compatibility constraint, not the current release goal.
-
-### Migration
-
-Migration preserves user configuration intent, not model facts. Wrong-Source/foreign debris must not be promoted. Historical precedence and 0.1.18 transaction behavior remain documented in ADR-0004 and `TEST_HISTORY`.
-
-### Testing
-
-- contract/unit tests judge plugin-owned invariants;
-- AstrBot service tests judge host integration;
-- real Dashboard automation judges presentation/interaction only;
-- raw Ark tests judge downstream protocol attribution;
-- QQ compatibility requires the QQ-equivalent product path;
-- workflow teardown/cache failures are harness failures unless they prevent the product evidence from running.
-
-## Rejected strategies / 假策略墓地
-
-These remain COLD/rejected unless an explicit reconsideration condition fires.
-
-### Static model-ID capability completion — rejected
-
-Reason: third-party/open models, aliases, serving changes, and future revisions provide legitimate counterexamples.
-
-Reconsider only if Ark exposes an authoritative, scoped, freshness-defined capability protocol that the plugin can consume without inventing permanent priors.
-
-### Provider-wide video capability flag — rejected
-
-Reason: one Source can host multiple models; provider-wide runtime truth polluted unrelated cards and conflicted with host semantics.
-
-Do not confuse this with `volcengine_video_controls_visible`, which is presentation-only.
-
-### Writing transient provider feedback into global `LLM_METADATAS[model_id]` — rejected
-
-Reason: model IDs are not globally unique provider identities and stale data can cross Source/provider boundaries.
-
-### Treating missing feedback as `false` — rejected
-
-Reason: absence is not a negative observation and can conceal transport/account/provider causes.
-
-### Plugin-local fallback/routing — rejected
-
-Reason: AstrBot already owns routing/fallback/retry; duplicate state machines conflict.
-
-### Extending the shared top capability row as the general provider-specific field mechanism — rejected
-
-Reason: the top capability/modalities path lacks the reliable provider identity needed for isolated fifth-checkbox behavior.
-
-Important: this does **not** reject ordinary saved-model edit-body fields.
-
-### Making fine UI automation a capability or release truth oracle — rejected
-
-Reason: selectors/DOM can drift while service/runtime behavior remains valid. UI automation is presentation evidence and should not overwrite stronger layer-specific verdicts.
-
-### Broadening media code to satisfy non-equivalent fixtures — rejected
-
-Reason: a green direct-provider fixture can coexist with a broken QQ path, and a red synthetic fixture can be irrelevant to unchanged product behavior.
-
-### Duplicating current release state across documentation — rejected by ADR-0005
-
-Reason: independent present-tense copies accumulate drift. `PROJECT_STATE` is the single HOT authority; other docs retain constraints/history only.
-
-## Validation philosophy
-
-A correct rule must survive both directions:
-
-- positive path: legitimate supported behavior remains reachable;
-- counterexample path: the rule must not destroy another legitimate path.
-
-Every conclusion should be traceable to an interface that can actually support it, and every historical conclusion should have a lifecycle role. If it is not HOT in `PROJECT_STATE`, it must not silently drive the next implementation step.
+Superseded Source-level Video controls, shared-schema fallbacks, failed candidate branches and old release pipelines are not retained as present-tense current design. Their exact text remains available through Git history. Current docs state only the surviving rule and the lesson that prevents recurrence.

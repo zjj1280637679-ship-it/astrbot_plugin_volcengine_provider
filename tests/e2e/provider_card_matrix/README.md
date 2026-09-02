@@ -1,32 +1,14 @@
-# Provider Card Matrix E2E
+# Current Provider-card E2E contracts
 
-This directory validates product paths that unit tests cannot prove: provider-card layout, create/edit/save/reload reachability, provider isolation, and later real Volcengine API execution.
+This directory contains only the browser code used by the **current** release gates.
 
-Read `docs/E2E_MATRIX.md` before extending this suite.
+- `current_release_ui_contract.py` — release entrypoint: real AstrBot Dashboard, Ark + Agent Plan Video checkbox, visible click/check, save/reopen, typed request fields, foreign isolation.
+- `current_lifecycle_contract.py` — lifecycle entrypoint: real process restart, same-version replacement and uninstall cleanup.
+- `model_card_browser_core.py` — shared user-interaction core for the release entrypoint.
+- `lifecycle_browser_core.py` — shared lifecycle implementation.
+- `foreign_scope_matrix.py` — xAI/Gemini foreign-card isolation.
+- `browser_matrix.py`, `assertions.py` — common browser helpers.
 
-## Layers
+A version number in a historical filename is not needed here. Superseded/manual/paid-provider matrices live in Git history, not the current release surface.
 
-1. `matrix.json` — declarative provider/card/UI path inventory.
-2. `runner.py` — validates matrix integrity and emits a deterministic plan.
-3. `assertions.py` — structural assertions shared by service-level and browser-level tests.
-4. future browser harness — collects DOM/layout snapshots and screenshots from real AstrBot Dashboard.
-5. future real-API harness — executes ordinary Ark and Agent Plan paths with repository secrets.
-
-## Design constraints
-
-- A skipped path must include a reason; it is never counted as pass.
-- Foreign providers are first-class test cases, not incidental negatives.
-- UI correctness includes Source ownership, immediate conditional visibility,
-  per-model selection by card ID, and hide/save/reopen preservation. The generic
-  model-card form must not expose Volcengine video fields.
-- Runtime failures are classified by provenance; the suite must not convert every failure into a model-capability verdict.
-- Browser screenshots are review evidence, while structural snapshots carry the stable assertions.
-- Secrets must never be written into snapshots, logs, or artifacts.
-
-## Local dry run
-
-```bash
-python tests/e2e/provider_card_matrix/runner.py
-```
-
-The dry run requires no AstrBot process and no API key. It verifies that the declared matrix is internally consistent before expensive E2E stages are added.
+The success definition is **observable model-card state and persistence**. No Volcengine paid request is required by these UI contracts.

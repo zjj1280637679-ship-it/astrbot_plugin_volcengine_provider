@@ -1,84 +1,74 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "role": "warm_navigation_only",
   "hot_state": "docs/PROJECT_STATE.json",
-  "lifecycle_policy": "docs/KNOWLEDGE_LIFECYCLE.md",
   "entries": [
     {
-      "id": "ADR-0001",
+      "id": "RELEASE-0001",
       "lifecycle": "active_constraint",
-      "topic": "provider capability authority",
-      "question": "May the plugin infer permanent model capability from provider/model identity?",
-      "decision": "No unscoped inference. Provider plugin owns protocol adaptation; future discovery needs explicit source/lifetime/scope authority.",
-      "doc": "docs/ADR/ADR-0001-provider-is-not-capability-authority.md",
-      "code": ["metadata/agent_plan.py", "metadata/ark.py", "capabilities/source_hints.py"],
-      "tests": ["tests/test_0_1_15_feedback_boundary.py", "tests/test_live_feedback_presence.py"]
+      "topic": "single publication truth",
+      "decision": "main is the only durable installation/version/publication truth; temporary PR branches are review-only and stale non-main refs may not carry alternate trees or versions.",
+      "doc": "docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md",
+      "tests": ["tools/release/check_single_truth.py"]
     },
     {
-      "id": "ADR-0002",
+      "id": "UI-0001",
       "lifecycle": "active_constraint",
-      "topic": "feedback lifetime",
-      "question": "May dynamic provider feedback be stored as permanent capability truth?",
-      "decision": "No. Current dynamic feedback is evidence with a scope and lifetime; missing feedback is not false and stale feedback must not defeat current feedback.",
-      "doc": "docs/ADR/ADR-0002-feedback-is-not-truth.md",
-      "code": ["metadata/ark.py", "capabilities/source_hints.py"],
-      "tests": ["tests/test_live_feedback_presence.py", "tests/test_0_1_15_feedback_boundary.py"]
+      "topic": "owned model-card Video",
+      "decision": "Video is exactly one native modalities checkbox on a concrete owned Ark/Agent Plan model card. Source-level selectors/master switches and shared-schema foreign-visible fallbacks are forbidden.",
+      "doc": "docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md",
+      "code": [
+        "capabilities/model_scope.py",
+        "capabilities/model_fields_bridge.py",
+        "capabilities/dashboard_asset_bridge.py",
+        "capabilities/dashboard_runtime_bridge.py"
+      ],
+      "tests": [
+        "tests/e2e/provider_card_matrix/current_release_ui_contract.py",
+        "tests/e2e/provider_card_matrix/current_lifecycle_contract.py"
+      ]
     },
     {
-      "id": "ADR-0003",
-      "lifecycle": "active_constraint_scope_narrowed_by_ADR_0005",
-      "topic": "dashboard schema isolation",
-      "question": "How can provider-specific video controls avoid leaking through AstrBot's shared top capability/modalities surface?",
-      "decision": "Keep the 0.1.18 top/video capability presentation on exact owned Provider Sources, with per-card volcengine_video_input_enabled as runtime truth. This decision governs the unreliable shared top capability/modalities extension surface; it does not prohibit owned saved-model edit-body rows added by 0.1.19.",
-      "doc": "docs/ADR/ADR-0003-dashboard-schema-isolation.md",
-      "code": ["registry.py", "capabilities/model_scope.py"],
-      "tests": ["tests/test_model_card_ui_scope.py", "tests/test_dashboard_save_boundary.py", "tests/test_dashboard_bridge_compat.py", "tests/e2e/provider_card_matrix/service_matrix.py", "tests/e2e/provider_card_matrix/browser_matrix.py"]
+      "id": "UI-0002",
+      "lifecycle": "active_constraint",
+      "topic": "owned request-field surface",
+      "decision": "Owned Volcengine cards preserve AstrBot custom_extra_body and expose typed Video Quality, thinking and sampling/output/penalty rows; visibility and persistence are part of release correctness.",
+      "doc": "docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md",
+      "code": ["capabilities/model_fields.py", "capabilities/model_fields_bridge.py"],
+      "tests": ["tests/e2e/provider_card_matrix/current_release_ui_contract.py"]
     },
     {
-      "id": "ADR-0004",
+      "id": "EVIDENCE-0001",
       "lifecycle": "active_constraint",
-      "topic": "legacy migration precedence",
-      "question": "What does migration preserve?",
-      "decision": "Preserve user configuration intent, not a model capability fact. Wrong-Source and foreign fields never promote; temporary/wrong-layer debris is removed and modalities remain host-owned.",
-      "doc": "docs/ADR/ADR-0004-migration-preserves-intent.md",
-      "code": ["capabilities/model_scope.py", "capabilities/source_migration.py"],
-      "tests": ["tests/test_0_1_15_feedback_boundary.py"]
+      "topic": "real UI acceptance",
+      "decision": "Compile/import/no-conflict/unit-only evidence cannot publish a model-card UI release. The exact candidate must pass visible checkbox click, save/reopen, process restart, foreign isolation and uninstall cleanup on the current host matrix.",
+      "doc": "AGENTS.md",
+      "tests": [
+        ".github/workflows/model-card-video-contract.yml",
+        ".github/workflows/model-card-lifecycle-contract.yml"
+      ]
     },
     {
-      "id": "ADR-0005",
+      "id": "CAPABILITY-0001",
       "lifecycle": "active_constraint",
-      "topic": "knowledge lifecycle and drift control",
-      "question": "How does the project retain rich history without letting old goals/frontiers remain current authority?",
-      "decision": "PROJECT_STATE is the single HOT authority. Other documents are WARM/COLD references, completed frontiers are demoted, rejected/superseded strategies retain lifecycle metadata, and CI guards version plus default-main installation consistency.",
-      "doc": "docs/ADR/ADR-0005-knowledge-lifecycle-and-drift-control.md",
-      "code": ["tools/release/check_main_install_source.py"],
-      "tests": [".github/workflows/model-card-video-contract.yml"]
+      "topic": "capability authority",
+      "decision": "Provider/model identity and transient feedback are scoped evidence, not permanent global model-capability truth. Missing feedback is not false.",
+      "doc": "docs/AI_RULES.md",
+      "code": ["metadata/ark.py", "capabilities/source_hints.py"]
     },
     {
-      "id": "KB-0001",
+      "id": "OWNERSHIP-0001",
       "lifecycle": "active_constraint",
-      "topic": "interaction versus judgment",
-      "question": "Does successful or failed interaction grant authority to make a global capability verdict?",
-      "decision": "No. Interaction is lower-level evidence; judgment requires sufficient conditions, scope, and decision authority.",
-      "doc": "docs/KNOWLEDGE_BOUNDARY.md",
-      "code": ["adapters/errors.py", "metadata/ark.py"],
-      "tests": ["tests/test_0_1_15_feedback_boundary.py", "tests/e2e/real_volcengine_runtime_matrix.py"]
-    },
-    {
-      "id": "REG-0001",
-      "lifecycle": "active_constraint",
-      "topic": "impact-based media regression",
-      "question": "Must every release repeat the full QQ audio/video E2E?",
-      "decision": "No. Historical product-path evidence remains evidence until a relevant dependency edge changes; full QQ-equivalent revalidation is impact-triggered.",
-      "doc": "docs/REGRESSION_SCOPE.md",
-      "code": ["adapters/audio.py", "adapters/video.py", "providers.py"],
-      "tests": ["docs/TEST_HISTORY.md"]
+      "topic": "AstrBot ownership",
+      "decision": "AstrBot owns provider lifecycle, routing, retry and fallback. The plugin owns only Volcengine-specific protocol/media adaptation and its scoped model-card request-field projection.",
+      "doc": "docs/DESIGN_DECISIONS.md",
+      "code": ["main.py", "providers.py", "adapters/", "capabilities/"]
     }
   ],
-  "historical_state": {
-    "release_snapshots": "docs/archive/",
-    "test_history": "docs/TEST_HISTORY.md",
-    "release_history": "CHANGELOG.md"
+  "history": {
+    "release_summary": "CHANGELOG.md",
+    "deep_history": "Git commit history",
+    "current_tree_failed_state_archive": false
   },
-  "warning": "Navigation only. Do not add release/current_goal/active_evidence/current_frontier copies here; read docs/PROJECT_STATE.json for HOT state."
+  "warning": "Navigation only. Never infer current release state from this index; read docs/PROJECT_STATE.json."
 }

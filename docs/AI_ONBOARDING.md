@@ -1,93 +1,62 @@
 # AI Onboarding
 
-Lifecycle role: **WARM entry point**. This document explains stable project structure and working method. It is **not** the current release/goal authority.
+Role: **current navigation only**. This file never defines the active release state by itself.
 
-**Read the `verdict` object in `docs/PROJECT_STATE.json` first.** It tells you separately which release is stable, whether a release candidate exists, which external states remain unmeasured, and which experiments are stopped. Read `docs/KNOWLEDGE_LIFECYCLE.md` before treating older present-tense text as action-driving.
+## Read order
 
-## Purpose
+1. `docs/PROJECT_STATE.json` — the only HOT/current release authority.
+2. `AGENTS.md` — non-negotiable branch, ownership and real-UI acceptance rules.
+3. `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md` — exact owned model-card Video/request-field product contract.
+4. `docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md` — release and publication policy.
+5. Only then inspect the production module or regression relevant to the change.
 
-This document lets an AI or new maintainer reconstruct the project quickly without treating historical conversation context, test output, screenshots, one successful interaction, or a completed release goal as hidden authority.
+Do not reconstruct current intent from old version numbers, branch names, old workflow names, historical test helper names or Git history. Git history is audit material, not a second control plane.
 
-## Project map
+## Current project map
 
-| Area | Purpose | Start here |
-|---|---|---|
-| HOT current state | Current version, goal, strategy, blockers/frontier | `docs/PROJECT_STATE.json` |
-| Knowledge lifecycle | HOT/WARM/COLD, superseded/rejected/invalidated handling | `docs/KNOWLEDGE_LIFECYCLE.md` |
-| AI modification rules | Ownership and safe-edit boundaries | `docs/AI_RULES.md` |
-| Knowledge boundary | Interaction vs evidence vs judgment | `docs/KNOWLEDGE_BOUNDARY.md` |
-| Engineering method | Epistemic pipeline, interface-existence rule, bounded iteration | `docs/ENGINEERING_METHODOLOGY.md` |
-| Evidence semantics | What each kind of result can and cannot prove | `docs/EVIDENCE_LEVELS.md` |
-| Test ownership | Which layer each test may judge | `docs/TEST_BOUNDARIES.md` |
-| Historical validation | Important successful paths and what they proved | `docs/TEST_HISTORY.md` |
-| Regression impact | When historical evidence becomes stale and must be rerun | `docs/REGRESSION_SCOPE.md` |
-| Stable design decisions | Objective conditions, constraints, rejected strategies | `docs/DESIGN_DECISIONS.md`, `docs/ADR/` |
-| Decision navigation | WARM index only; never current-state authority | `docs/DECISION_INDEX.json` |
-| Cold state | Completed/superseded release-state summaries | `docs/archive/` |
-| Stopped 0.1.20 Video-checkbox experiment | Partial passes, blocking failure, stop condition | `docs/archive/EXPERIMENT-0.1.20-source-scoped-video.md` |
-| Provider runtime | AstrBot provider integration and Ark/Agent Plan calls | `providers.py`, `main.py` |
-| Media adapters | Last-mile audio/video payload construction | `adapters/audio.py`, `adapters/video.py` |
-| Input failure provenance | Distinguish local transport failure from upstream/model response | `adapters/errors.py` |
-| Dynamic model feedback | Translate current Ark `/models` response for the current Source response only | `metadata/ark.py`, `capabilities/source_hints.py` |
-| Agent Plan model listing | Agent Plan model-name discovery without model-ID capability priors | `metadata/agent_plan.py` |
-| Model-card request config | Volcengine-owned per-model request fields and migration | `capabilities/model_fields.py`, `capabilities/model_fields_bridge.py`, `capabilities/model_scope.py` |
-| 0.1.18 Source UI bridge | Owned-Source video presentation and Source-save translation | `registry.py` |
-| Machine semantics | Development/audit meanings for capability/feedback/config fields; never runtime truth | `docs/contracts/SEMANTICS.json` |
-| Persistent regressions | Current contract tests | `tests/test_*` |
-| Product-path evidence | Host integration, UI evidence, real API attribution | `docs/E2E_MATRIX.md` |
-| Historical model/video research | Preserved observations and decisions; no active workflow authority | `evidence/`, `governance/`, `strategy/` |
+| Object | Current owner |
+| --- | --- |
+| Stable/candidate identity and blocking gates | `docs/PROJECT_STATE.json` |
+| Single publication truth | `main` |
+| Provider registration/lifecycle | `main.py`, `registry.py`, AstrBot host |
+| Ark / Agent Plan protocol | `providers.py`, `metadata/` |
+| Audio/video/image last mile | `adapters/` |
+| Owned model-card request fields | `capabilities/model_fields.py`, `capabilities/model_fields_bridge.py` |
+| Owned model-card UI adaptation | `capabilities/dashboard_asset_bridge.py`, `capabilities/dashboard_runtime_bridge.py` |
+| Concrete Source/card ownership | `capabilities/model_scope.py` |
+| Current real browser gate | `tests/e2e/provider_card_matrix/current_release_ui_contract.py` |
+| Current restart/update/uninstall gate | `tests/e2e/provider_card_matrix/current_lifecycle_contract.py` |
 
-## Stable objective conditions
+## The core object distinction
 
-These conditions survive individual release goals unless a later ADR explicitly invalidates them:
+A Provider Source is not a concrete model card.
 
-- Volcengine Ark can expose first-party Doubao/Seed models and third-party/open models through the same provider platform.
-- Model/platform behavior can change over time; model-ID capability inference is not permanent truth.
-- AstrBot owns provider lifecycle, routing/fallback/retry, provider-source/model-card management, metadata display, and shared Dashboard rendering.
-- Capability icons/metadata are incomplete feedback surfaces, not a complete model-capability truth table.
-- A model may support a modality while the complete QQ/NapCat/AstrBot/provider transport path is broken; a raw synthetic fixture is not equivalent to the product path.
-- The shared **top capability/modalities** surface is not a safe provider-specific extension boundary for the fifth Volcengine video capability control. The stable 0.1.18/0.1.19 Source UI remains the released solution for that specific problem.
-- The stopped 0.1.20 private-dialog-clone experiment made `Video` visible only on owned create dialogs, but the saved owned cards lost the matching video mode row after reopen. Do not cite its create-dialog pass as a complete feature or resume it without satisfying its archived reconsideration condition.
-- This does **not** imply that ordinary saved-model edit-body rows are impossible. 0.1.19 uses a narrower owned-model projection path for ordinary horizontal request settings; see ADR-0005 and `PROJECT_STATE`.
-- Historical QQ-oriented media validation is retained and re-run by dependency impact, not by release number alone.
+The current Video feature belongs to one concrete owned model card's native AstrBot `modalities` checklist. It must not be replaced by a Source-level master switch, Source selector, hidden boolean, model metadata icon or process-global shared-schema Video option.
 
-## The five questions to answer before editing
+The same concrete owned card must preserve AstrBot's `custom_extra_body` and expose the plugin's typed request rows. Those rows are product UI, not optional debugging metadata.
 
-1. **Objective condition:** What has actually been observed rather than assumed?
-2. **Expected outcome:** What user-visible or protocol-visible behavior is required by the HOT goal?
-3. **Current owner:** Which layer owns that behavior: QQ/NapCat, AstrBot, this adapter, the user, or upstream?
-4. **Counterexample:** What legitimate path would break if this rule generalized too far?
-5. **Regression edge:** Which historical evidence becomes stale if this dependency changes?
+## Release evidence hierarchy
 
-Then classify the strongest evidence using `docs/EVIDENCE_LEVELS.md` and verify that the proposed action is still HOT rather than historical/superseded.
+For a UI/release change:
 
-## Stable strategy constraints
+- compile/import/no-conflict evidence is necessary but weak;
+- deterministic unit/contract tests are necessary but still insufficient;
+- the blocking product evidence is a real built AstrBot Dashboard driven through visible controls;
+- saved state must survive reopen and real AstrBot restart;
+- unload must remove public UI residue.
 
-These are not a replacement for the current strategy in `PROJECT_STATE`; they constrain future strategies:
+Do not promote a release because a lower evidence layer is green while the visible model-card contract is red or unmeasured.
 
-- Keep runtime/request transport configuration distinct from AstrBot `modalities` capability truth.
-- Keep Volcengine-specific fields isolated from foreign providers.
-- Keep ordinary Ark `/models` feedback transient, Source-scoped, single-use, and async-context isolated.
-- Preserve explicit `false`, empty lists, integer `0`, and unknown future modality tokens when upstream explicitly provides them.
-- Preserve migration intent without promoting wrong-Source/foreign debris into authority.
-- Keep routing/fallback/retry ownership in AstrBot unless a new explicit architecture decision transfers ownership.
-- Attribute failures by layer before changing production code.
-- Use `TEST_HISTORY` + `REGRESSION_SCOPE` before deciding whether expensive QQ-equivalent media validation is required.
-- Never broaden production media code merely to make a non-equivalent raw fixture pass.
+## Stable ownership boundaries
 
-## Safe AI workflow
+- AstrBot owns provider lifecycle, routing, retry and fallback.
+- The plugin owns Volcengine-specific protocol/media translation and its own per-card request-field projection.
+- Provider identity is not permanent model-capability truth.
+- Missing upstream feedback is not `false`.
+- A local transport failure is not proof that a model lacks a modality.
+- Foreign Provider cards must remain free of plugin UI/config fields.
+- Runtime secrets, chat/account state and generated local artifacts never belong in Git.
 
-1. Read `PROJECT_STATE.verdict` first, then this project map. Load only the relevant lifecycle/rule/ADR/test documents for the affected object.
-2. Inspect the current branch and changed-file impact before proposing abstractions.
-3. For every arrow in a proposed flow, identify the concrete host/plugin/upstream interface that carries it. If unknown, run a minimal existence experiment first.
-4. Search AstrBot-native precedent before inventing a plugin-side mechanism.
-5. For a bug, record symptom -> failing layer -> preconditions -> what it proves -> what it does not prove -> whether it generalizes.
-6. Construct at least one legitimate counterexample and one non-regression path before broadening a rule.
-7. Run the narrowest relevant test first, then the owning integration suite, then real E2E only when the evidence level/regression impact requires it.
-8. When a new discovery materially changes the current strategy, update `PROJECT_STATE` once; add an ADR only if the rule should survive the current release.
-9. When a goal completes or is replaced, demote it to history/cold storage instead of leaving a second present-tense frontier.
-10. Continue routine observe -> attribute -> minimally modify -> re-test -> record loops without repeated confirmation.
+## Working rule
 
-## Stop conditions
-
-Stop and request a design decision only when a change would deliberately transfer ownership between AstrBot, this plugin, the user, QQ/NapCat, and the upstream provider/model, or when two legitimate strategies have materially different product semantics. Routine implementation, testing, documentation synchronization, harness correction, regression fixes, lifecycle demotion, and release preparation should continue automatically.
+When you discover a conflict between an old document and `PROJECT_STATE` + `AGENTS` + the current model-card contract, the old document is stale. Update or remove it in the same change; do not preserve contradictory present-tense guidance in a new archive folder.

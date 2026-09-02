@@ -1,48 +1,11 @@
-name: Model-card Video Contract
+name: Current Model-card Release Contract
 
 on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/model-card-video-contract.yml
-      - AGENTS.md
-      - CHANGELOG.md
-      - README.md
-      - _conf_schema.json
-      - adapters/image.py
-      - adapters/limits.py
-      - adapters/video.py
-      - capabilities/**
-      - main.py
-      - metadata.yaml
-      - providers.py
-      - registry.py
-      - docs/PROJECT_STATE.json
-      - tools/release/check_main_install_source.py
-      - docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md
-      - tests/test_*.py
-      - tests/e2e/provider_card_matrix/**
   push:
     branches: [main]
-    paths:
-      - .github/workflows/model-card-video-contract.yml
-      - CHANGELOG.md
-      - README.md
-      - _conf_schema.json
-      - adapters/image.py
-      - adapters/limits.py
-      - adapters/video.py
-      - capabilities/**
-      - main.py
-      - metadata.yaml
-      - providers.py
-      - registry.py
-      - docs/PROJECT_STATE.json
-      - tools/release/check_main_install_source.py
-      - docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md
-      - tests/test_*.py
-      - tests/e2e/provider_card_matrix/**
 
 permissions:
   contents: read
@@ -57,14 +20,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  astrbot-real-dashboard:
-    name: AstrBot ${{ matrix.astrbot-version }} real Dashboard
+  real-dashboard-model-card:
+    name: AstrBot ${{ matrix.astrbot-version }} real model-card
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        astrbot-version: ['4.27.3', '4.27.4']
+        astrbot-version: ['4.27.3', '4.27.4', '4.28.0-beta.1']
+
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -86,14 +50,13 @@ jobs:
       - name: Install exact AstrBot runtime
         run: uv sync --directory AstrBot
 
-      - name: Install media contract dependency
+      - name: Install media contract dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends ffmpeg libavcodec-extra
           ffmpeg -hide_banner -version
-          ffmpeg -hide_banner -encoders 2>&1 | grep -F libopencore_amrnb
 
-      - name: Setup pnpm exactly as the verified Dashboard baseline
+      - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
           version: 10.28.2
@@ -108,31 +71,6 @@ jobs:
         working-directory: AstrBot/dashboard
         run: pnpm install --frozen-lockfile && pnpm run build
 
-      - name: Print bounded model-builder bundle shape for this exact host
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          matches = []
-          for path in Path('AstrBot/dashboard/dist/assets').glob('*.js'):
-              text = path.read_text(encoding='utf-8', errors='ignore')
-              for needle in ('max_context_tokens', 'googlegenai_chat_completion'):
-                  if needle not in text:
-                      break
-              else:
-                  for m in re.finditer(r'max_context_tokens', text):
-                      start = max(0, m.start() - 1200)
-                      end = min(len(text), m.end() + 1200)
-                      snippet = text[start:end]
-                      if 'provider_source_id' in snippet and 'custom_extra_body' in snippet:
-                          matches.append((path.name, snippet))
-          print(f'BOUND_MODEL_BUILDER_SNIPPETS={len(matches)}')
-          for name, snippet in matches[:3]:
-              print(f'--- {name} ---')
-              print(snippet)
-          PY
-
       - name: Install built Dashboard into AstrBot package
         shell: bash
         run: |
@@ -142,7 +80,7 @@ jobs:
           mkdir -p AstrBot/astrbot/dashboard/dist/assets
           printf '${{ matrix.astrbot-version }}' > AstrBot/astrbot/dashboard/dist/assets/version
 
-      - name: Initialize AstrBot and install this exact plugin checkout
+      - name: Initialize AstrBot and install exact candidate checkout
         shell: bash
         run: |
           set -euo pipefail
@@ -158,7 +96,7 @@ jobs:
           uv run --directory AstrBot astrbot conf set dashboard.username e2e-admin
           uv run --directory AstrBot astrbot conf set dashboard.password E2e-password-123
 
-      - name: Prove runtime selection, robust delivery, and unload contracts
+      - name: Prove single-truth tree and deterministic contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -169,6 +107,7 @@ jobs:
             release_args+=(--require-releaseable)
           fi
           uv run --directory AstrBot python ../tools/release/check_main_install_source.py "${release_args[@]}"
+          uv run --directory AstrBot python ../tools/release/check_single_truth.py
           for test in tests/test_*.py; do
             uv run --directory AstrBot python "../$test"
           done
@@ -178,78 +117,62 @@ jobs:
           python -m pip install playwright
           python -m playwright install --with-deps chromium
 
-      - name: Start AstrBot with the exact plugin checkout
+      - name: Start real AstrBot with exact candidate checkout
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p e2e-artifacts
-          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-video-contract.log 2>&1 &
-          echo $! >/tmp/astrbot-video-contract.pid
+          nohup setsid uv run --directory AstrBot astrbot run --port 6185 >/tmp/astrbot-current-model-card.log 2>&1 &
+          echo $! >/tmp/astrbot-current-model-card.pid
           ready=0
           for i in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:6185/ >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            if ! kill -0 "$(cat /tmp/astrbot-video-contract.pid)" 2>/dev/null; then
-              cat /tmp/astrbot-video-contract.log
+            if curl -fsS http://127.0.0.1:6185/ >/dev/null 2>&1; then ready=1; break; fi
+            if ! kill -0 "$(cat /tmp/astrbot-current-model-card.pid)" 2>/dev/null; then
+              cat /tmp/astrbot-current-model-card.log
               exit 1
             fi
             sleep 1
           done
-          cp /tmp/astrbot-video-contract.log e2e-artifacts/startup.log || true
           test "$ready" = '1'
-          grep -q 'Volcengine providers registered' /tmp/astrbot-video-contract.log
+          grep -q 'Volcengine providers registered' /tmp/astrbot-current-model-card.log
 
-      - name: Run current object-scoped real Dashboard matrix
+      - name: Real user-visible Video checkbox and request-field acceptance
         env:
           ASTRBOT_E2E_URL: http://127.0.0.1:6185
           ASTRBOT_E2E_USERNAME: e2e-admin
           ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
-        run: python tests/e2e/provider_card_matrix/browser_matrix_0_1_24_contract.py
+        run: python tests/e2e/provider_card_matrix/current_release_ui_contract.py
 
-      - name: Run xAI and Gemini foreign model-card isolation matrix
+      - name: xAI and Gemini foreign-card isolation
         env:
           ASTRBOT_E2E_URL: http://127.0.0.1:6185
           ASTRBOT_E2E_USERNAME: e2e-admin
           ASTRBOT_E2E_PASSWORD: E2e-password-123
           ASTRBOT_E2E_ARTIFACT_DIR: e2e-artifacts
           ASTRBOT_E2E_CONFIG_PATH: ${{ github.workspace }}/AstrBot/data/cmd_config.json
-        run: python tests/e2e/provider_card_matrix/foreign_scope_matrix_0_1_24.py
+        run: python tests/e2e/provider_card_matrix/foreign_scope_matrix.py
 
-      - name: Capture final AstrBot log
+      - name: Capture AstrBot log
         if: always()
-        run: cp /tmp/astrbot-video-contract.log e2e-artifacts/startup.log || true
+        run: cp /tmp/astrbot-current-model-card.log e2e-artifacts/startup.log || true
 
-      - name: Stop AstrBot evidence server
+      - name: Stop evidence server
         if: always()
         shell: bash
         run: |
           set +e
-          if [ -s /tmp/astrbot-video-contract.pid ]; then
-            pid=$(cat /tmp/astrbot-video-contract.pid)
-            if kill -0 "$pid" 2>/dev/null; then
-              kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-              for i in $(seq 1 25); do
-                kill -0 "$pid" 2>/dev/null || break
-                sleep 0.2
-              done
-              if kill -0 "$pid" 2>/dev/null; then
-                kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-              fi
-            fi
+          if [ -s /tmp/astrbot-current-model-card.pid ]; then
+            pid=$(cat /tmp/astrbot-current-model-card.pid)
+            kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+            sleep 1
+            kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
           fi
           pkill -f 'astrbot run --port 6185' 2>/dev/null || true
-
-      - name: Show AstrBot log on failure
-        if: failure()
-        run: cat /tmp/astrbot-video-contract.log || true
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: model-card-video-contract-${{ matrix.astrbot-version }}
+          name: current-model-card-${{ matrix.astrbot-version }}
           path: e2e-artifacts
           if-no-files-found: warn
           retention-days: 14

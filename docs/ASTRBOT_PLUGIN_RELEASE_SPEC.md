@@ -1,124 +1,89 @@
 # AstrBot Plugin Release Specification
 
-Status: current project release policy for `astrbot_plugin_volcengine_provider`.
+Status: current release policy for `astrbot_plugin_volcengine_provider`.
 
-## 1. One installation source
+## 1. One durable publication truth
 
-The repository default branch, `main`, is the only active installation and
-version authority. Its root must always contain a complete AstrBot plugin:
+The default branch `main` is the only durable installation, version and marketplace authority. The root of `main` must always contain a complete AstrBot plugin, including `metadata.yaml`, `main.py`, `_conf_schema.json`, provider/runtime modules, logo, README, CHANGELOG and license.
 
-```text
-metadata.yaml
-main.py
-__init__.py
-_conf_schema.json
-providers.py
-registry.py
-adapters/**
-capabilities/**
-compatibility/**
-metadata/**
-logo.png
-README.md
-CHANGELOG.md
-LICENSE
-```
+A temporary PR branch is allowed only as a review object. It must never become an install URL, marketplace source, generated runtime tree, rollback tree or alternate version line. After merge, stale non-main refs must be deleted when tooling permits; if a connector cannot delete a ref, it must be force-collapsed to the exact final `main` release commit so it carries no alternate history, tree or version.
 
-The historical `runtime` branch is recovery evidence only. It must not receive
-new versions, appear in `metadata.repo`, or become a second marketplace source.
-Temporary review branches are allowed, but every published byte is merged into
-`main`.
+Do not create a second packaging/publishing branch. If `main` is not a complete installable plugin, the release is broken.
 
-This follows AstrBot's current plugin publishing model: the official Collection
-validator clones the repository default branch and loads the plugin from its
-root. The canonical repository URL is:
+Canonical repository URL:
 
 `https://github.com/zjj1280637679-ship-it/astrbot_plugin_volcengine_provider`
 
-## 2. Version and identity
+## 2. Version identity
 
-- `metadata.yaml` is the version source for an installable checkout.
-- Versions use unsigned SemVer, for example `0.1.34`; Git tags may add `v`.
-- Any changed runtime behavior or installation payload requires a strictly
-  newer version. Never rewrite an already exposed version in place.
-- `name` and `author` form the marketplace identity and must remain stable.
-- `repo` must be the HTTPS repository root, never a branch, subdirectory,
-  Issue, PR, or Release page.
-- `astrbot_version` uses PEP 440. The declared floor is `>=4.26.1`; tested host
-  versions are evidence, not a reason to add an unapproved future-version load
-  gate.
-- `README.md`, `CHANGELOG.md`, and `docs/PROJECT_STATE.json` must agree with
-  the metadata version and its candidate/stable lifecycle state.
+- `metadata.yaml` is the installable checkout version source.
+- Every publication uses a strictly newer unsigned three-part version such as `0.1.35`.
+- Never rewrite a bad exposed version in place; fix it with a higher version.
+- `repo` is always the repository root, never a branch or subdirectory URL.
+- README, CHANGELOG and `docs/PROJECT_STATE.json` must describe the same candidate/stable identity.
+- Failed candidates are not preserved as alternate live trees. Git history is sufficient for deep audit.
 
-## 3. Public repository boundary
+## 3. Release success is a running UI fact
 
-AstrBot may download the default-branch archive, so every tracked file is
-public distribution material even when Python never imports it. The repository
-must not contain credentials, private configuration, private or identifiable
-account state, chat data, local captures, cache files, build output, or
-development secrets. De-identified historical measurements that were already
-intentionally published may remain as audit evidence, but must not contain
-secret values, personal identifiers, or credential-bearing URLs.
+Static checks are necessary but insufficient. A release that compiles but gives users a broken model card is a failed release.
 
-Tests, CI, ADRs, and evidence may coexist with runtime code. Production modules
-must not import or depend on them. Required runtime modules must never live only
-in another branch or an untracked local directory.
+For model-card or release-topology changes, all of the following are blocking:
 
-The source ZIP must stay below AstrBot's 16 MB publication limit. Large test
-media and generated artifacts remain outside the tracked installation source.
+1. Build the exact AstrBot host Dashboard from source and install that built Dashboard into the exact host runtime.
+2. Start AstrBot with the exact plugin candidate checkout.
+3. Drive the actual Dashboard with Playwright using normal user-visible controls.
+4. On both Volcengine Ark and Agent Plan model cards, observe exactly one native `Video` checkbox in `modalities`.
+5. Click the visible Video label; verify the checkbox is checked.
+6. Save, close and reopen the model card; verify Video is still checked.
+7. Verify the model card visibly contains AstrBot's `custom_extra_body` plus Video Quality, Thinking Mode, Reasoning Effort, Temperature, Top P, Max Output Tokens, Stop Sequences, Frequency Penalty and Presence Penalty.
+8. Change the typed request fields, save, reopen and verify their values persisted.
+9. Verify foreign OpenAI/xAI/Gemini cards contain no plugin Video or `volcengine_*` rows.
+10. Restart the real AstrBot process and verify the owned saved Video checkbox remains checked.
+11. Replace the plugin with the exact same candidate version and verify state again.
+12. Uninstall the plugin, restart AstrBot, and verify no plugin-owned public UI residue remains.
 
-## 4. Release gates
+A passing import, syntax check, unit suite, DOM-free bridge test, or “bridge installed” status cannot replace any required visible browser observation above.
 
-Every candidate must pass both static and running checks:
+## 4. Host matrix
 
-1. `tools/release/check_main_install_source.py` verifies metadata, root runtime
-   closure, configuration schema, version ledgers, logo shape, Python syntax,
-   tracked-path hygiene, high-confidence secret patterns, and the size budget.
-2. All deterministic top-level regression scripts run in the Launcher-managed
-   AstrBot environment.
-3. The model-card Video and lifecycle contracts run against AstrBot 4.27.3 and
-   4.27.4. Owned Ark and Agent Plan cards must each expose exactly one Video
-   option; foreign cards must remain clean; save/reopen and unload must work.
-4. A real restarted Launcher instance must serve the repaired Dashboard bundle.
-   Reading source or passing a mocked test is not a substitute for that visual
-   and persistence evidence.
-5. The candidate diff and tracked history are scanned for credentials and
-   unexpected large files. Real Ark/DeepSeek paid workflows are not dispatched
-   unless a change affects those protocol edges and the maintainer authorizes
-   the external call.
+The current 0.1.35 gate covers:
 
-## 5. Publication flow
+- AstrBot 4.27.3
+- AstrBot 4.27.4
+- AstrBot 4.28.0-beta.1, whose Provider WebUI was redesigned
 
-1. Start from the current remote `main`; never force-push over unseen work.
-2. Prepare one review branch, bump the patch version, update the release ledger,
-   mark it as `validating` / `releaseable: false`, and complete the local gates
-   that do not depend on the PR or authenticated restarted Dashboard.
-3. Push with an explicit refspec, open a PR to `main`, and wait for every
-   expected non-paid check to finish successfully.
-4. Complete the authenticated restarted-Launcher UI check and final code/release
-   review. Every blocking acceptance condition must now have an observed pass.
-5. Convert the exact PR head into the final stable merge tree: set
-   `stable_release` to the new version, clear `active_release_candidate`, project
-   the stable state into README, run `check_main_install_source.py
-   --require-releaseable`, push that state-only commit, and wait for the expected
-   checks again on that exact SHA. This projection is merge-ready, not a claim
-   that the commit is already present on public `main`.
-6. Merge the exact reviewed stable-projection commit. Do not update `runtime`;
-   verify that remote `main` contains the reviewed tree.
-7. Optionally tag the merged commit as `v<version>` and create a GitHub Release
-   for traceability. The tag does not replace `metadata.yaml` or update the
-   AstrBot market by itself.
-8. For marketplace publication, submit the root repository through AstrBot
-   Cloud's plugin publishing page. After approval/indexing, confirm the public
-   marketplace record and perform a clean install/update from the repository.
+A host is considered verified only when the real Dashboard and required lifecycle jobs pass on that exact candidate SHA. Tested hosts are evidence, not an artificial upper bound on `astrbot_version`.
 
-If a public release is bad, publish a reviewed higher patch version containing
-the correction or revert. Do not reset public history or reuse the old version.
+## 5. Static and deterministic gates
 
-## 6. Evidence boundaries
+Before browser acceptance, the candidate must also pass:
 
-A green GitHub Release proves only that GitHub accepted a tag/release. A green
-load test proves only loading. Neither proves marketplace refresh, model-card
-persistence, a real Ark response, or a QQ/NapCat end-to-end path. Record each
-receipt at the layer it actually observed in `docs/TEST_HISTORY.md` and keep
-unmeasured cells explicit.
+- `tools/release/check_main_install_source.py`
+- `tools/release/check_single_truth.py`
+- all top-level deterministic `tests/test_*.py`
+- secret/path/size checks already enforced by the main install-source checker
+
+No paid Ark/DeepSeek request is required for a UI/release-topology-only version. Paid provider calls are separate protocol evidence and must not be used to mask a broken UI gate.
+
+## 6. Publication flow
+
+1. Start from the current remote `main`.
+2. Create one temporary review branch.
+3. Bump to a strictly newer version and mark it `validating`, `releaseable: false` in `docs/PROJECT_STATE.json`.
+4. Remove obsolete publication/fallback/failed-state infrastructure from the candidate tree.
+5. Open a PR to `main` and run the full three-host real-Dashboard and lifecycle matrix.
+6. If any blocking gate fails, fix the same candidate branch or abandon it. Do not declare the version stable and do not create an alternate publication branch.
+7. After every blocking gate passes, update the exact candidate to `ready`, `releaseable: true`; rerun every required check on that exact SHA.
+8. Merge only that reviewed ready SHA into `main`.
+9. Project `docs/PROJECT_STATE.json` and README to stable `0.1.35` on `main`; rerun the stable push gates.
+10. Collapse/delete stale non-main refs so none carries an alternate tree/version.
+11. A GitHub tag/Release may be added for traceability, but `metadata.yaml` on `main` remains the installation truth.
+12. Marketplace approval/indexing is a separate external state and must not be claimed until observed.
+
+## 7. Evidence boundaries
+
+- Real Dashboard checkbox/persistence evidence proves UI/config behavior only; it does not prove every upstream model accepts video.
+- Provider API evidence proves the downstream protocol edge only; it does not prove the QQ/NapCat/AstrBot product path.
+- Marketplace visibility proves indexing only; it does not replace repository/runtime acceptance.
+
+Each claim must stay at the layer actually observed.

@@ -1,95 +1,63 @@
 # AI Modification Rules
 
-## Purpose
+`docs/PROJECT_STATE.json` is the only HOT/current release authority. `AGENTS.md` and `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md` define the durable product/release boundaries.
 
-This document is a fast safety boundary for AI coding agents and maintainers. It makes the project easier to extend without turning explanatory metadata, test output, or one observed interaction into hidden runtime authority.
+## 1. One durable branch truth
 
-**HOT-state authority:** `docs/PROJECT_STATE.json`. Read it before using any present-tense goal, release, strategy, blocker, or validation-frontier statement from another document. Lifecycle rules are in `docs/KNOWLEDGE_LIFECYCLE.md`.
+`main` is the only durable development, installation and publication truth. Temporary PR branches are review objects only. Never create a second runtime/generated/version/rollback publication tree.
 
-## Core rules
+A failed candidate stays non-releaseable and is fixed or abandoned; it is not promoted merely because a version number exists.
 
-### 1. Interaction is not judgment
+## 2. Observable product behavior beats structural success
 
-A component may have enough information to receive, translate, send, or display something without having enough information or authority to decide what that thing means globally.
+For model-card UI work, success means the real AstrBot Dashboard behaves correctly:
 
-- A successful request proves only that the observed path worked under the observed conditions.
-- A failed request proves only that the observed path failed at some layer until attribution identifies which one.
-- A UI badge or `/models` field is current feedback, not permanent model truth.
+- owned Ark and Agent Plan cards each show exactly one native Video checkbox;
+- a visible-label click actually checks it;
+- save/reopen and real process restart keep it checked;
+- `custom_extra_body` and the typed Volcengine request rows are visible;
+- request rows persist after save/reopen;
+- foreign cards stay clean;
+- uninstall removes plugin-owned public UI.
+
+Import, compile, no-conflict, unit-only, mocked DOM or “bridge installed” results cannot substitute for that sequence.
+
+## 3. Keep object ownership exact
+
+- Provider Source identity is used to decide whether a concrete card is owned.
+- Video state belongs to the concrete owned card's native `modalities` list.
+- Do not build a Source-level Video selector/master switch.
+- Do not add a process-global/shared-schema Video fallback that can appear on foreign cards.
+- Do not infer ownership from endpoint URL, model name, card order or brand label.
+
+## 4. Preserve request-field product surface
+
+Owned model cards keep AstrBot's native `custom_extra_body` and the plugin's typed request rows. Do not remove those rows merely because a raw request can still be sent.
+
+Empty typed fields preserve platform/custom-body defaults. Explicit typed values are validated and applied according to `capabilities/model_fields.py`.
+
+## 5. Interaction is not permanent capability truth
+
+- Successful interaction proves only the observed path under observed conditions.
+- Failure must be attributed to local transport, host, upstream or model before drawing a capability conclusion.
 - Missing feedback is not `false`.
+- Provider/model names are not permanent capability facts.
+- Raw provider API evidence is not proof of the complete QQ/NapCat/AstrBot path.
 
-See `docs/KNOWLEDGE_BOUNDARY.md`.
+## 6. Respect host ownership
 
-### 2. Provider scope must be preserved
+AstrBot owns provider lifecycle, routing, retry, fallback, provider/source persistence and shared Dashboard rendering. The plugin adapts Volcengine-specific protocol/media behavior and its scoped model-card fields; it must not duplicate AstrBot policy state machines.
 
-This plugin adapts Volcengine Ark protocol differences. It must not replace AstrBot responsibilities such as:
+## 7. Historical data must not look current
 
-- conversation lifecycle;
-- routing and fallback policy;
-- retry policy;
-- API-key rotation;
-- QQ/NapCat media lifecycle;
-- global model capability authority.
+Deep history lives in Git. Current-tree documentation should contain only still-valid constraints and concise release summaries.
 
-### 3. Prefer evidence over assumptions
+When a strategy is superseded or a candidate fails:
 
-Before changing behavior, identify:
+- remove/update present-tense instructions that describe it;
+- do not create a current-tree archive snapshot that future AI can mistake for active guidance;
+- keep the necessary lesson in the higher-version CHANGELOG, Git history or a clearly current rule.
 
-1. observation;
-2. evidence source and lifetime;
-3. inference;
-4. decision authority;
-5. at least one legitimate counterexample.
+## 8. Secrets and local artifacts
 
-Do not convert an unverified assumption into runtime behavior.
-
-### 4. Preserve future compatibility
-
-Unknown fields and future modality tokens should be preserved when they carry information. Today's adapter vocabulary must not delete information that a future Ark or AstrBot version may understand.
-
-### 5. Test the product interface at the right layer
-
-Raw provider API tests are useful for Ark protocol attribution, but they do not prove QQ compatibility.
-
-The product media path is approximately:
-
-```text
-QQ event
-  -> NapCat / OneBot
-  -> AstrBot media lifecycle / MediaResolver
-  -> Volcengine adapter last mile
-  -> Provider request
-  -> model/provider response
-```
-
-A synthetic WAV or MP4 sent directly to a Provider is not equivalent to a QQ event. A test should not make production code more permissive merely to make a non-equivalent fixture pass.
-
-### 6. Historical validated behavior is evidence, not amnesia
-
-Do not treat "not re-run in this release" as "never worked". Check `docs/TEST_HISTORY.md` and `docs/REGRESSION_SCOPE.md` first. Re-run the full QQ-equivalent media path when the media path, host media contract, or payload contract changes; otherwise use the narrowest regression that covers the changed layer.
-
-### 7. Current state must not be duplicated
-
-`docs/PROJECT_STATE.json` is the only HOT/current state authority.
-
-- `AGENTS.md`, `AI_ONBOARDING.md`, `DESIGN_DECISIONS.md`, ADRs, test history, and decision indexes may explain constraints/history, but they must not keep an independent current release goal or active validation frontier.
-- When a release goal changes, demote the old HOT frontier to `docs/archive/` or another historical ledger instead of leaving both in present tense.
-- Superseded and rejected strategies must remain identifiable as such; do not let two versions look equally current.
-- When an invalidator fires, old evidence becomes a baseline to re-check, not automatic current authority.
-- Before implementing a historical requirement or strategy, verify that `PROJECT_STATE` still makes it action-driving.
-
-See `docs/KNOWLEDGE_LIFECYCLE.md` and ADR-0005.
-
-## Safe extension pattern
-
-New capabilities should normally add one or more of:
-
-- a new evidence source;
-- a new adapter translation;
-- a new regression test;
-- a new explanatory hook or ADR.
-
-They should not add a parallel lifecycle, hidden capability database, duplicate routing state machine, or plugin-owned fallback policy.
-
-## Program annotations are explanatory hooks
-
-Machine-readable files such as `docs/contracts/SEMANTICS.json`, `docs/PROJECT_STATE.json`, and `docs/DECISION_INDEX.json` are navigation and explanation aids. Production runtime must not read them as capability truth or control policy unless a future explicit design decision changes that boundary.
+Never commit API keys, credentials, private config, chat/account state, local captures, caches, generated media or CI artifacts. Production modules must not import documentation, governance or tests.
