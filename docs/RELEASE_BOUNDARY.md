@@ -1,62 +1,40 @@
 # Release and Repository Boundary
 
-Lifecycle role: **WARM design boundary**. Current release/version state remains
-in `docs/PROJECT_STATE.json`.
+Lifecycle role: current WARM boundary. Current version/candidate state lives only in `docs/PROJECT_STATE.json`.
 
-## Default branch is the product source
+## One durable product source
 
-AstrBot's current publication and Collection validation path clones the GitHub
-repository's default branch. Therefore `main` must be a complete installable
-plugin at its root. The project does not generate or promote a second runtime
-branch.
+The GitHub default branch `main` is the only durable installation, version and publication source. Its repository root must itself be a complete AstrBot plugin.
 
-The old `runtime` branch is historical recovery evidence. Its contents may help
-repair a proven regression, but it has no current installation, metadata, or
-publication authority.
+There is no supported secondary runtime/generated/rollback/version publication branch. A temporary PR branch exists only for review and validation; it is never an install URL or marketplace authority. After release, stale non-main refs must be deleted when possible or force-collapsed to the exact released `main` commit so they cannot contain an alternate plugin tree/version.
 
 ## Runtime dependency boundary
 
-The installed Python closure is rooted at `main.py` and `__init__.py` and may
-depend only on runtime modules and assets in the repository root, `adapters/`,
-`capabilities/`, `compatibility/`, and `metadata/`.
+Production Python is rooted at `main.py` / `__init__.py` and may depend only on runtime modules/assets in the repository root, `adapters/`, `capabilities/`, `compatibility/`, and `metadata/`.
 
-Development material may coexist in the public repository:
-
-- `.github/`, `tests/`, `docs/`, `evidence/`, `governance/`, `strategy/`, and
-  `model_cards/` explain, verify, or record the product;
-- production modules must not import those paths;
-- removing development material must never be required to make the plugin load.
-
-This distinction protects runtime independence without inventing a second tree.
+Tests and current documentation may coexist in the repository, but production code must not import them. Historical experiments do not need a second branch or current-tree state archive; Git history preserves them.
 
 ## Public-information boundary
 
-Every tracked file can enter a GitHub source archive. Never track:
+Never track:
 
-- API keys, tokens, passwords, private keys, or credential-bearing URLs;
-- local AstrBot configuration, private or identifiable account state,
-  chat/conversation data, or logs;
-- screenshots or media containing private information;
-- `.env`, cache directories, bytecode, build output, downloaded dependencies,
-  or temporary release archives.
+- API keys, tokens, passwords, private keys, credential-bearing URLs;
+- private AstrBot config, account/chat state or identifiable logs;
+- private screenshots/media;
+- `.env`, caches, bytecode, build output, dependencies or generated release archives.
 
-The repository archive must remain under AstrBot's 16 MB limit. Large evidence
-belongs in short-lived CI artifacts or an explicitly approved external store,
-not in the plugin repository.
+Large runtime evidence belongs in short-lived CI artifacts rather than the plugin tree.
 
-De-identified historical measurements already intentionally published may
-remain as audit evidence only when they contain no secret values, personal
-identifiers, or credential-bearing URLs. They are not runtime dependencies.
+## Identity and rollback
 
-## Identity and rollback boundary
+`metadata.yaml` on `main` is the installation identity and uses a strictly increasing three-part version. Its `repo` is always the repository root.
 
-`metadata.yaml` at the `main` root is the installation identity. Its `repo`
-points to the repository root and its version increases for every changed
-public payload. A Git tag or Release is a snapshot, not a second authority.
+A bad exposed version is never repaired by making an older/broken tree “latest” or rewriting the same version. Restore known-good behavior in a **higher** version and pass the current real-browser/lifecycle gates before publication.
 
-Rollback is forward-moving: restore the last known-good behavior in a strictly
-higher patch version. Never force-reset public `main`, reuse an exposed version,
-or resume publication from the historical `runtime` branch.
+A Git tag/Release is only a traceable snapshot and cannot override a different `metadata.yaml` on `main`.
 
-The executable release procedure and gates are defined in
-`docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md`.
+## Observable release gate
+
+For a model-card release, the blocking product proof is user-visible state in a real running AstrBot Dashboard: owned Ark + Agent Plan cards show exactly one native Video checkbox, visible click checks it, save/reopen/restart retain it, advanced request rows including `custom_extra_body` remain usable, foreign cards remain clean, and uninstall removes plugin UI.
+
+See `docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md` and `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`.
