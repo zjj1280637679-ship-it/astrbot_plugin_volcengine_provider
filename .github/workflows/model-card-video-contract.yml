@@ -57,7 +57,7 @@ jobs:
           ffmpeg -hide_banner -version
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e75b540449e92b4886f43607fa02 # v6.0.9
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
           version: 10.28.2
 
