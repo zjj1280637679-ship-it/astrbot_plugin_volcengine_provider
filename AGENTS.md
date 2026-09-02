@@ -1,96 +1,77 @@
 # AI / Agent Project Entry Point
 
-Lifecycle role: **WARM entry point**. This file provides stable ownership and navigation rules only.
+`docs/PROJECT_STATE.json` is the only HOT/current release-state authority. Read it before README history, tests, PR text, branch names, or old commits.
 
-**HOT/current state authority: `docs/PROJECT_STATE.json`.** Read its `verdict` first. If `active_release_candidate` is `null`, no branch, PR, local package, green sub-job, or historical workflow is a release candidate. Do not reconstruct the current release goal from README, CHANGELOG, PR text, branch names, or isolated test output.
+## Project identity
 
-## What this project is
+This repository implements two Volcengine Ark chat providers for AstrBot: ordinary Ark API and Agent Plan. It adapts Volcengine request/media details to AstrBot's existing provider lifecycle. It does not own AstrBot routing, fallback, retries, or a second global model-capability database.
 
-This repository implements Volcengine Ark providers for AstrBot. It adapts Volcengine-specific protocols and media payloads to AstrBot's existing provider lifecycle. It does **not** own AstrBot routing, fallback, retry, or a second model-capability database.
+## Branch discipline: exactly one durable truth
 
-## Branch discipline: one installation truth
+`main` is the only durable development, installation, version, and marketplace truth.
 
-`main` is both the default development branch and AstrBot's installation source. The old `runtime` branch is retained only as historical recovery evidence and must never receive new releases. A patch version is published by merging one reviewed, fully installable tree into `main` with a strictly newer `metadata.yaml` version. Temporary review branches are allowed; permanent version-named, runtime-candidate, or rollback trees are not.
+- A temporary PR branch may exist only while a concrete change is being reviewed and validated.
+- No permanent runtime branch, generated publication branch, version branch, rollback branch, candidate branch, or archive branch is allowed.
+- A non-`main` branch must never appear in `metadata.yaml.repo`, README installation instructions, marketplace metadata, or release automation as an installation source.
+- After a release is merged, stale branch refs must be deleted when possible or at minimum collapsed to the exact `main` release commit so they cannot carry a different plugin tree or version.
+- Failed candidates are stopped, not preserved as alternate live trees. Git history is sufficient historical evidence.
 
-## Read in this order
+Do not recreate a second publication pipeline even if it seems safer. The repository root on `main` must itself be the complete AstrBot plugin.
 
-1. `docs/PROJECT_STATE.json` — current verdict, stable release, active candidate, frontier, and stopped experiments.
-2. **For any model-card / Video / modalities / Provider Source UI task, read `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md` before changing code.** This is the non-negotiable product boundary recovered in 0.1.22.
-3. `docs/AI_ONBOARDING.md` — choose the one subsystem relevant to the task.
-4. `docs/AI_RULES.md` and `docs/KNOWLEDGE_LIFECYCLE.md` — modification and lifecycle rules.
-5. Only then read the specific ADR, test, release rule, or runtime module linked by the project map.
+## Release truth is user-visible behavior, not code cleanliness
 
-Do not bulk-read every historical document before identifying the affected object. More context is not automatically more authority.
+A release is **not successful** merely because Python compiles, unit tests pass, Git has no conflicts, a provider loads, or a Dashboard bridge installs without raising an exception.
 
-## Status and evidence identity
+For any release touching the model-card UI or release infrastructure, the blocking acceptance is the real running AstrBot Dashboard contract:
 
-- **Stable release**, **active candidate**, **external observation**, and **experiment** are different objects. Never combine their pass/fail receipts into one verdict.
-- A feature branch is an experiment unless `PROJECT_STATE.verdict.active_release_candidate` explicitly names it as a `validating` candidate. A validating candidate remains `releaseable: false`; it may become `ready` only after every blocking acceptance condition passes, and must not merge, tag, or publish before that transition.
-- A workflow file has one evidence identity. A new experiment must add a clearly named `EXPERIMENT` workflow; it must not repurpose a stable workflow and inherit its historical name.
-- A green runtime-load job proves loading only. A green create-dialog check does not prove save/reopen persistence. A GitHub release result does not prove marketplace refresh.
-- Stopped experiments move to `docs/archive/` and remain non-action-driving unless their recorded resume condition is satisfied.
+1. Create a Volcengine Ark model card in the actual Dashboard.
+2. Its native `modalities` row contains exactly one `视频 / Video` checkbox.
+3. Click the visible Video label like a user and observe the checkbox become checked.
+4. Save, close, reopen, and verify Video remains checked.
+5. Repeat for Agent Plan.
+6. Confirm the same model card exposes `custom_extra_body` plus the Volcengine request rows: Video Quality, Thinking Mode, Reasoning Effort, Temperature, Top P, Max Output Tokens, Stop Sequences, Frequency Penalty, Presence Penalty.
+7. Edit and save the request rows; reopen and verify persistence.
+8. Restart the real AstrBot process and verify the owned card still shows a checked Video option.
+9. Verify foreign Provider cards have no plugin Video or `volcengine_*` rows.
+10. Uninstall the plugin, restart AstrBot, and verify no plugin-owned public UI residue remains.
 
-## Non-negotiable ownership boundaries
+The current release matrix must include the currently supported verified hosts named in `docs/PROJECT_STATE.json`. A new AstrBot Provider-WebUI generation must be added before claiming compatibility with it.
 
-- Adapter capability means “this plugin can express/transport a request shape”; it is not a claim that a model supports it.
-- Runtime feedback is scoped evidence, not permanent model truth.
-- Interaction is not judgment: receiving/translating/sending/displaying information does not grant authority for a global capability verdict.
-- Missing feedback is not `false`.
-- Historical feedback must not override current feedback.
-- A local media/input transport failure is not evidence that the model lacks the modality.
-- A raw provider API result is downstream protocol evidence; it is not by itself proof of the QQ/NapCat/AstrBot product path.
-- The plugin must not recreate AstrBot routing, fallback, retry, provider lifecycle, or global model capability ownership.
-- Provider-specific Dashboard fields must not leak into foreign providers.
-- Migration preserves user intent/configuration, not model facts.
-- Development files may coexist in the default repository, but production modules must never import tests, evidence, governance, or lifecycle documents. Secrets, private configuration, cache files, and local artifacts never belong in the repository.
-- AstrBot and the official Collection validator clone the default repository branch. Before publication, prove that the `main` root itself contains the complete runtime closure; never hide required code in a second generated branch.
+## Model-card invariant
 
-## Dashboard scope rule — recovered 0.1.22 invariant
+Video belongs to the **single owned model card's native `modalities` checklist**, beside AstrBot's own Text/Image/Audio/Tool options. It is not a Provider Source master switch, source-level selector, hidden boolean presented as success, or a global fifth modality.
 
-Do **not** confuse the Provider Source page with one configured model card.
+The shared backend schema cannot safely expose Video globally. The implementation may adapt only a concrete model dialog after its `provider_source_id` resolves to one of this plugin's owned Source types. Foreign Provider cards must remain untouched.
 
-The recovered product requirement is exact:
+Saved `modalities` membership is the current UI truth for video transport. Request-time video conversion follows that saved value. Plugin unload must restore the host boundary.
 
-- the native `Video` / `视频` option belongs beside Text, Image, Audio, and Tool use in the **single model card's native `modalities` checklist**;
-- it appears only after the Dashboard has selected an owned Volcengine Ark or Agent Plan Source and cloned the shared schema into that model dialog's **private schema copy**;
-- it must not appear in OpenAI, xAI, Gemini, or any other foreign Provider model card;
-- it must not be replaced by a Provider Source master switch, Source-page model selector, custom request field, explanatory row, hidden value, or create-only decoration;
-- the saved `modalities` membership is the current model-card UI truth and must survive save/reopen;
-- request-time video conversion must follow that current card value;
-- unload/release must restore the host UI/service boundary without a fifth global modality residue.
+See `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md` for the permanent product contract.
 
-A **backend-only mutation of the shared `provider.items.modalities` schema is forbidden**. At that layer a plugin cannot safely express “only these two selected Source types” without risking global leakage. The known-good implementation therefore adapts the model dialog after its private clone has access to `selectedProviderSource.type`.
+## Request-field invariant
 
-The historical 0.1.20 branch is useful evidence, but its old final verdict must not override the recovered 0.1.22 result: the correct source-scoped native Video implementation was recovered, validated, and merged under the 0.1.22 identity. The permanent acceptance definition is `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`, not an obsolete requirement for retired Source controls or `_volcengine_video_input_mode_ui`.
+The owned model card must preserve AstrBot's native `custom_extra_body` row and may additionally expose the plugin's typed per-card request fields. Empty typed fields do not override `custom_extra_body` or platform defaults. Explicit plugin rows are validated at save time and apply after `custom_extra_body` merge by design.
+
+Do not remove those rows merely because the provider can technically send requests without them; their actual model-card visibility and persistence are part of the release acceptance.
+
+## Knowledge discipline
+
+- Current state: `docs/PROJECT_STATE.json`.
+- Current release policy: `docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md`.
+- Current model-card contract: `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`.
+- Historical release summary: `CHANGELOG.md` and Git history.
+- Do not create `docs/archive/` state snapshots for failed candidates. They become misleading action-driving context for future AI.
+- Versioned regression helper filenames may exist as implementation history, but they are never version authority. Active CI must enter through version-neutral current contract entrypoints.
+
+## Ownership boundaries
+
+- Adapter capability means the plugin can express/transport a request shape; it is not permanent proof that a model supports it.
+- Missing upstream feedback is not `false`.
+- A local media/transport failure is not evidence that the model lacks the modality.
+- A raw provider API result is downstream protocol evidence, not proof of the complete QQ/NapCat/AstrBot path.
+- AstrBot owns routing, retry, fallback, provider lifecycle, and installation.
+- Provider-specific UI/config fields must not leak into foreign providers.
+- Secrets, private config, account state, chat data, generated artifacts, caches, and local captures never belong in the repository.
 
 ## Before changing production code
 
-Identify the affected layers:
-
-1. product input path;
-2. UI/config path;
-3. runtime request path;
-4. feedback path;
-5. historical evidence path;
-6. release/distribution path;
-7. knowledge lifecycle: is the requirement/strategy HOT, WARM, COLD, superseded, rejected, or invalidated?
-
-Then locate the corresponding regression test, `TEST_HISTORY`, `REGRESSION_SCOPE`, release rules, ADR, and—when Video/model-card scope is involved—the five-condition joint gate in `docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md`. If the behavior is new, add the smallest explanation that should survive the current release.
-
-## Do not infer from names alone
-
-Do not infer model capability from a model ID prefix, brand, vendor, historical result, or absence of a metadata icon. Volcengine is both a first-party platform for Doubao/Seed models and a serving platform for third-party/open models, and model/platform behavior can change independently.
-
-## Release/history lookup
-
-Do **not** maintain release state here. Use:
-
-- current/HOT: `docs/PROJECT_STATE.json`;
-- published/historical validation: `docs/TEST_HISTORY.md` and `CHANGELOG.md`;
-- completed state snapshots: `docs/archive/`.
-
-This separation is intentional: old release facts stay searchable without remaining action-driving.
-
-## AI intervention principle
-
-Project documentation is an explanatory layer, not runtime authority. It should expose assumptions, evidence, rejected paths, test entry points, invalidators, and current decision frontier while preventing historical goals from silently becoming current instructions.
+Identify whether the change touches: provider protocol, media adapters, model-card UI/config, request overrides, lifecycle/unload, release/distribution, or only historical explanation. Then run the smallest deterministic tests **and** every real-browser/lifecycle gate whose user-visible object changed. Never substitute a mocked or static assertion for a required real Dashboard observation.

@@ -1,28 +1,50 @@
-"""Stable entrypoint for the 0.1.24 lifecycle contract.
+"""Current release lifecycle acceptance for real AstrBot processes and Dashboard.
 
-The product assertions remain in ``lifecycle_matrix_0_1_24``.  AstrBot 4.27.3's
-Vuetify model dialog can leave an overlay scrim mounted after a freshly restarted
-process even after the already-validated dialog itself stops being the topmost
-visible dialog.  That host-only cleanup state can intercept the next pointer
-click for tens of seconds.
-
-Rather than weakening any product assertion or force-clicking through the host
-scrim, this wrapper performs a cross-document reset between the owned and
-foreign model-card assertions, then waits for the fresh Providers surface to be
-free of visible scrims.  Each card is still reopened from AstrBot's persisted
-provider state in the same browser context; the reset only removes transient
-overlay state that is not part of the product contract.
+This version-neutral entrypoint reuses the mature lifecycle implementation while
+making the current release assertions explicit: checked Video, complete owned
+request rows including custom_extra_body, foreign isolation, restart persistence,
+same-version replacement, and uninstall cleanup.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import os
+from pathlib import Path
 from typing import Any
 
 from playwright.async_api import Page, expect
 
 import lifecycle_matrix_0_1_24 as base
+
+ARTIFACT_DIR = Path(os.environ.get("ASTRBOT_E2E_ARTIFACT_DIR", "e2e-artifacts")) / "current-lifecycle"
+base.ARTIFACT_DIR = ARTIFACT_DIR
+base.STATE_PATH = ARTIFACT_DIR / "state.json"
+
+_original_assert_owned_dialog = base.assert_owned_dialog
+
+
+async def assert_owned_dialog(
+    dialog,
+    *,
+    expected_video_checked: bool,
+    stage: str,
+) -> dict[str, Any]:
+    result = await _original_assert_owned_dialog(
+        dialog,
+        expected_video_checked=expected_video_checked,
+        stage=stage,
+    )
+    rows = await base.visible_config_rows(dialog)
+    keys = {str(row.get("key") or "") for row in rows}
+    if "custom_extra_body" not in keys:
+        raise AssertionError(f"{stage}: owned model card lost AstrBot custom_extra_body")
+    result["custom_extra_body_visible"] = True
+    return result
+
+
+base.assert_owned_dialog = assert_owned_dialog
 
 
 async def verify_installed_stage(page: Page, *, stage: str) -> dict[str, Any]:
@@ -37,11 +59,9 @@ async def verify_installed_stage(page: Page, *, stage: str) -> dict[str, Any]:
         stage=f"{stage}/owned-reopen",
     )
 
-    # A same-route navigation is not sufficient here: AstrBot 4.27.3 can retain
-    # the existing Vuetify overlay subtree when the URL stays on /#/providers.
-    # Crossing to about:blank guarantees that the old document is destroyed;
-    # returning in the same context preserves login state while rebuilding the
-    # Providers surface from the same process and persisted data directory.
+    # Destroy the old document between owned and foreign assertions. This avoids
+    # treating a host Vuetify overlay-cleanup artifact as a plugin failure while
+    # preserving all product assertions and the same browser login context.
     await page.goto("about:blank", wait_until="load")
     await base.open_providers(page)
     await base.select_source(page, str(state["openai_source_id"]))
@@ -60,9 +80,6 @@ async def verify_installed_stage(page: Page, *, stage: str) -> dict[str, Any]:
 
 
 async def run(stage: str) -> None:
-    # base.run resolves this name from its module globals at execution time.
-    # Only cleanup-sensitive navigation is replaced; all product assertions,
-    # setup semantics, uninstall assertions and artifact formats stay intact.
     base.verify_installed_stage = verify_installed_stage
     await base.run(stage)
 

@@ -1,90 +1,91 @@
 {
-  "schema_version": 22,
+  "schema_version": 23,
   "role": "hot_state_authority",
   "project": "astrbot_plugin_volcengine_provider",
   "verdict": {
     "stable_release": "0.1.34",
-    "stable_status": "current_stable_release",
-    "active_release_candidate": null,
-    "safe_development_branch": "main",
-    "safe_install_branch": "main",
-    "marketplace": {
-      "last_project_record_version": "0.1.30",
-      "current_official_collection_lookup": "not_found_2026-09-01",
-      "status": "0.1.34_astrbot_cloud_first_publication_pending"
+    "stable_status": "current_until_candidate_merges",
+    "active_release_candidate": {
+      "version": "0.1.35",
+      "status": "validating",
+      "releaseable": false
     },
-    "windows_marketplace_install": "unmeasured"
+    "safe_development_branch": "main",
+    "safe_install_branch": "main"
   },
-  "invalidated_publication": {
-    "version": "0.1.33",
-    "main_commit": "23a7b9866538711c711751bbb8f5924ffddbce49",
-    "reason": "default main declared a complete standard installation but omitted the 0.1.28-0.1.30 configuration, media-limit, image, and cache runtime modules"
-  },
-  "active_experiment": null,
   "development": {
-    "version": "0.1.34",
-    "branch": "main",
-    "track": "stable",
-    "status": "stable",
-    "installable": true
+    "version": "0.1.35",
+    "branch": "release/0.1.35-single-truth",
+    "track": "release_candidate",
+    "status": "validating",
+    "installable": false
   },
   "published_baseline": {
     "version": "0.1.34",
     "branch": "main",
-    "status": "complete_default_branch_installation_source"
+    "status": "current_stable_until_0.1.35_passes"
   },
   "current_goal": {
-    "id": "publish-0.1.34-default-main",
-    "goal": "Publish one complete default-main AstrBot plugin that preserves the verified 0.1.32 runtime behavior and restores the native Video option on AstrBot 4.27.4 without foreign-provider leakage.",
-    "active_decision_ids": [
-      "ADR-0003",
-      "ADR-0004",
-      "ADR-0005"
-    ],
+    "id": "release-0.1.35-single-truth-real-ui",
+    "goal": "Publish a strictly newer single-truth release only after real AstrBot Dashboard and lifecycle evidence proves that both owned Volcengine model cards expose a real checked-and-persistent Video option and their request fields.",
     "non_goals": [
-      "Do not revive or update the historical runtime branch.",
-      "Do not cherry-pick the abandoned 0.1.31 experiment or context_feedback implementation.",
-      "Do not dispatch paid Ark or DeepSeek workflows for this Dashboard-compatibility release.",
-      "Do not claim AstrBot marketplace publication before the external Cloud review/index is observed."
+      "Do not create or revive a second installation/publication branch.",
+      "Do not accept compile, import, no-conflict, unit-only, or bridge-installed evidence as a substitute for real model-card UI behavior.",
+      "Do not make a failed candidate the newest stable version.",
+      "Do not leak plugin fields into foreign Provider cards.",
+      "Do not send paid Ark requests for a Dashboard/release-topology-only change."
     ]
   },
-  "active_validation_frontier": {
-    "release": "0.1.34",
-    "name": "complete_default_main_and_astrbot_4_27_4_video",
-    "current_stage": "stable_projection_for_exact_merge",
-    "blocking_acceptance": [],
-    "merge_conditions": [
-      "commit and push this stable projection without runtime-code changes",
-      "the exact committed stable-projection PR head passes check_main_install_source.py --require-releaseable and every triggered GitHub check",
-      "remote main remains at the reviewed base until the exact PR head is merged",
-      "merge and tag only that reviewed head while leaving the historical runtime branch untouched"
+  "blocking_acceptance": [
+    "AstrBot 4.27.3 real Dashboard: Ark and Agent Plan create dialogs each show exactly one native Video checkbox; clicking the visible label checks it; save/reopen keeps it checked.",
+    "AstrBot 4.27.4 real Dashboard: the same owned-card Video checkbox behavior passes.",
+    "AstrBot 4.28.0-beta.1 real redesigned Provider Dashboard: the same owned-card Video checkbox behavior passes.",
+    "On every tested host, owned cards visibly expose custom_extra_body plus Video Quality, Thinking Mode, Reasoning Effort, Temperature, Top P, Max Output Tokens, Stop Sequences, Frequency Penalty and Presence Penalty.",
+    "Typed request rows can be edited, saved, reopened and retain their values.",
+    "Foreign OpenAI/xAI/Gemini cards expose no plugin Video or volcengine_* rows.",
+    "The saved Video checkbox survives a real AstrBot process restart and same-version plugin replacement.",
+    "Plugin uninstall plus AstrBot restart removes all plugin-owned public UI residue.",
+    "The current tree contains no retired second-publication workflow, retired Video fallback implementation, failed-state archive, or branch-specific diagnostic workflow.",
+    "The exact final releaseable candidate SHA passes all required GitHub checks before merge."
+  ],
+  "release_topology": {
+    "durable_version_authority": "main",
+    "durable_install_authority": "main",
+    "allowed_temporary_branch_role": "review_only",
+    "forbidden_durable_roles": [
+      "runtime publication branch",
+      "generated release branch",
+      "version branch",
+      "rollback branch",
+      "failed candidate branch",
+      "archive branch"
     ],
-    "observed": [
-      "runtime 0.1.32 is the last complete functional payload and is used only as a path-by-path recovery reference",
-      "main 0.1.33 omitted _conf_schema.json, image/limits/cache modules, and the corresponding production integrations",
-      "AstrBot 4.27.4 changed the minified model-builder shape by omitting an optional reasoning fragment",
-      "all 15 deterministic top-level regression scripts pass in the Launcher-managed AstrBot 4.27.4 environment and a clean AstrBot 4.27.3 source environment",
-      "real AstrBot 4.27.4 MediaResolver plus the plugin normalized AMR and Tencent Silk payloads misnamed as .wav into canonical Ark WAV without a paid request",
-      "PR 23 head e95fd52e79c35e59284304c4b52faa484ea85019 passed the AstrBot 4.27.3 and 4.27.4 real Dashboard and lifecycle jobs plus the compatibility evidence job",
-      "after restarting Launcher instance 91165875-d293-4efe-b36a-e2d2c33b33d1, both enabled volcengine-ark model cards showed exactly one checked Video option and one Video Quality row; the Source form had no retired video switch",
-      "the current Launcher profile had no configured foreign model card; the same PR head passed real OpenAI, xAI, and Gemini foreign-card isolation matrices without persisted video or volcengine fields",
-      "two independent read-only reviews found no release blocker, and the merge plan leaves the historical runtime branch untouched"
-    ]
+    "post_release_requirement": "Delete stale non-main refs when possible; otherwise collapse them to the exact main release commit so they cannot carry an alternate tree or version."
+  },
+  "real_ui_contract": {
+    "entrypoint": "tests/e2e/provider_card_matrix/current_release_ui_contract.py",
+    "lifecycle_entrypoint": "tests/e2e/provider_card_matrix/current_lifecycle_contract.py",
+    "hosts": [
+      "4.27.3",
+      "4.27.4",
+      "4.28.0-beta.1"
+    ],
+    "paid_provider_call_required": false,
+    "success_definition": "observable user-visible model-card state and persistence"
   },
   "stable_boundaries": [
-    "AstrBot owns plugin installation, provider lifecycle, routing, retry, fallback, and marketplace cloning.",
-    "The default main branch root is the only active installation/version source.",
-    "The historical runtime branch is recovery evidence and must not receive new releases.",
-    "metadata.yaml and main.py live at the repository root; production modules do not import development evidence.",
-    "Video belongs to the native modalities checklist of one owned model card and must never leak into foreign providers.",
-    "The plugin adapts Volcengine request/media protocols without becoming a global model-capability authority."
+    "main is the only installation and version source.",
+    "Video is one native modality checkbox on one owned model card, never a source-level or global switch.",
+    "Owned model cards retain AstrBot custom_extra_body and the plugin typed request rows.",
+    "Foreign provider cards remain free of plugin UI/config fields.",
+    "AstrBot owns provider lifecycle, routing, retry and fallback.",
+    "The plugin adapts Volcengine protocols without becoming a global model-capability authority."
   ],
-  "knowledge_lifecycle": {
-    "hot_authority": "docs/PROJECT_STATE.json",
-    "policy": "docs/KNOWLEDGE_LIFECYCLE.md",
-    "warm_navigation": "docs/DECISION_INDEX.json",
-    "cold_archive": "docs/archive/",
-    "test_ledger": "docs/TEST_HISTORY.md"
+  "history_policy": {
+    "current_authority": "docs/PROJECT_STATE.json",
+    "release_summary": "CHANGELOG.md",
+    "deep_history": "Git commit history",
+    "failed_state_archives_in_current_tree": false
   },
-  "warning": "0.1.34 functional and restarted-UI acceptance passed. This stable projection may be merged only after its exact committed SHA passes the releaseable checker and every triggered check; AstrBot marketplace availability remains unclaimed until Cloud review and indexing are observed."
+  "warning": "0.1.35 is not stable yet. It becomes releaseable only after every blocking real-browser and lifecycle gate passes on the exact candidate SHA."
 }

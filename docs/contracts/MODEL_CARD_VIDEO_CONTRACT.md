@@ -1,115 +1,131 @@
-# Source-scoped model-card Video contract
+# Model-card Video Contract
 
-Status: **non-negotiable product contract** for the recovered model-card Video capability, with the 0.1.23 delivery-resilience amendment.
+Status: **non-negotiable current product contract**.
 
-This document exists to prevent future refactors, migrations, AI-generated patches, or UI cleanups from confusing an AstrBot **Provider Source / supplier-wide control** with the **capability selector of one concrete model card**, while also preventing a repeat of the 0.1.22 failure mode where a correct private-clone patch existed but a real installation could continue using a stale Dashboard bundle and therefore show no Video control at all.
+This document defines the only acceptable Video UI behavior for `astrbot_plugin_volcengine_provider`. Historical fallback experiments, source-level controls, archive branches and version-specific candidate documents are not authority.
 
-## The object that owns the switch
+## 1. The object that owns Video
 
-`Video` / `视频` belongs to the native AstrBot `modalities` checklist of **one concrete model card**.
+`视频 / Video` belongs to AstrBot's native `modalities` checklist of **one concrete model card**.
 
-The preferred exact presentation path is:
+For a model card whose `provider_source_id` resolves to either:
 
-1. AstrBot is creating or editing one concrete model-card instance;
-2. that card resolves to a Provider Source whose `type` is one of this plugin's two owned source types:
-   - `volcengine_ark_chat_completion`;
-   - `volcengine_agent_plan_chat_completion`;
-3. the UI is operating on the model dialog's **private schema clone**, after the selected Source type is known;
-4. that private owned clone exposes exactly one fifth native `video` option alongside Text, Image, Audio, and Tool use.
+- `volcengine_ark_chat_completion`, or
+- `volcengine_agent_plan_chat_completion`,
 
-The Provider Source page itself is not the owner of this switch. The user's saved truth remains the concrete model card's native `modalities` list.
+the concrete model dialog may expose exactly one additional native `video` option beside AstrBot's host-owned Text, Image, Audio and Tool use options.
 
-## 0.1.23 delivery-resilience amendment
+The Provider Source page does not own this switch. There is no source-level master switch, no source-level model selector, and no second user-facing video truth.
 
-The precise private-clone path remains the target behavior, but **UI disappearance is no longer the accepted fallback** when a browser has cached an older Dashboard bundle or the compatible transformed asset is not re-requested.
+## 2. Foreign-provider isolation
 
-0.1.23 therefore permits one narrowly bounded backend fallback:
+OpenAI, xAI, Gemini, DeepSeek and every other foreign Provider model card must remain free of plugin-specific Video injection and `volcengine_*` request rows.
 
-- the shared `provider.items.modalities` metadata may receive one additional `video` option **only when it is explicitly marked as this plugin's delivery fallback**;
-- the marker must distinguish plugin-inserted fallback Video from any future AstrBot-native Video support;
-- a compatible private-clone frontend bridge must remove the marked fallback Video from foreign Provider dialogs and keep it on the two owned Volcengine Source types;
-- if the precise frontend bridge does not execute, temporary foreign **visual** exposure of the marked Video option is an accepted degradation rather than total disappearance on the owned card;
-- foreign create/update boundaries must strip `video` from the submitted `modalities` before host persistence, so this visual degradation cannot become foreign persisted state or foreign request behavior;
-- plugin release/unload must restore the wrapped host methods and remove plugin-owned temporary Dashboard assets;
-- the fallback must not delete, rewrite, or reinterpret a future host-native Video modality that does not carry the plugin fallback marker.
+A process-global/shared-schema Video injection that can visually leak to foreign cards is forbidden, even if a later save hook could strip it. “Owned cards keep Video but foreign cards temporarily see it” is not an accepted degradation.
 
-This exception exists only for delivery robustness. It is **not** permission to turn shared schema metadata into a second capability database, supplier-wide switch, or permanent cross-provider Video truth.
+Ownership is resolved from the concrete card's `provider_source_id -> provider_sources[].type`. Endpoint URL, API key shape, model name, brand prefix, DOM position or card order are not valid ownership signals.
 
-## Forbidden substitutions
+## 3. Saved and runtime truth
 
-The feature is **not** satisfied by any of the following:
+The concrete owned model card's native `modalities` list is the current UI truth:
 
-- an unmarked/unbounded process-global `video` injection with no foreign save guard;
-- a Provider Source master switch or supplier-wide visibility switch;
-- a Source-page model selector;
-- a custom request-body field, hidden boolean, explanatory row, or plugin-only checkbox outside native `modalities`;
-- a checkbox that exists only during creation but cannot be restored during edit;
-- model metadata saying a model can accept video;
-- a successful video request when the model-card switch is absent or ignored;
-- unit tests that never exercise the real Dashboard ownership boundary;
-- deleting the 0.1.19+ rich model-card request fields, audio path, video quality modes, Agent Plan path, migration logic, or request overrides merely to simplify Video delivery.
+- `video` present: Video input is enabled for that card.
+- `video` absent: Video input is disabled for that card.
 
-A backend shared-schema mutation is acceptable **only** when it satisfies every bounded-fallback condition above. A generic shared-schema Video injection without marker, precise cleanup path, foreign persistence guard, reversibility, and regression tests remains prohibited.
+A compatibility mirror such as `volcengine_video_input_enabled` may exist only as a migration/runtime mirror and may not contradict the native owned-card selection.
 
-## Persistence and runtime truth
+At request time, only the currently selected owned card's saved Video state controls trusted video attachment conversion to Ark-compatible `video_url` content.
 
-The user's current model-card selection is represented by AstrBot's native `modalities` list.
+## 4. Request fields are part of the model-card product
 
-- Saving an owned card with `video` in `modalities` means video input is enabled for **that card**.
-- Saving the same owned card without `video` means video input is disabled for **that card**.
-- A fallback Video value submitted from a foreign card must be removed before persistence.
-- Compatibility mirrors such as `volcengine_video_input_enabled` may exist only as runtime/migration mirrors; they must never become a second user-facing source of truth that can disagree with owned-card `modalities`.
-- Reopening the owned card must reconstruct the native Video checkbox from persisted card state.
+An owned Volcengine model card must preserve AstrBot's native `custom_extra_body` row and expose the plugin's typed per-card request rows:
 
-At request time, the current owned card's persisted setting controls the video transport path:
+- Video Quality
+- Thinking Mode
+- Reasoning Effort
+- Temperature
+- Top P
+- Max Output Tokens
+- Stop Sequences
+- Frequency Penalty
+- Presence Penalty
 
-- enabled: trusted current-request AstrBot video attachment envelopes are converted to Ark-compatible `video_url` content;
-- disabled: that conversion does not run and the attachment remains a non-video placeholder for the model request.
+These rows are not optional documentation. Their actual visibility, editability and save/reopen persistence are release requirements.
 
-Foreign Provider requests are outside this plugin's video transport ownership and must not gain plugin Video behavior from the fallback.
+Empty typed values do not force an override. Explicit typed values are validated and applied with the plugin's documented precedence relative to `custom_extra_body`.
 
-## Acceptance gates
+## 5. Current implementation boundary
 
-### Preferred exact-path five-condition gate
+The current implementation uses three complementary, reversible boundaries:
 
-On every AstrBot/Dashboard version that matches the precise bridge, all five conditions must pass together:
+1. `capabilities/model_fields_bridge.py` contributes hidden shared metadata, projects saved values only onto owned cards, normalizes owned save payloads, and strips plugin fields from foreign cards.
+2. `capabilities/dashboard_asset_bridge.py` may adapt a compatible compiled Dashboard asset only when all required concrete-object boundaries are uniquely identified in the same asset. Partial or ambiguous matches fail closed.
+3. `capabilities/dashboard_runtime_bridge.py` adapts the already-created visible `AstrBotConfig` model-card component after its concrete `provider_source_id` is available. It reads only Source id/type ownership data from the same-origin provider schema and mutates only owned card-local metadata/data.
 
-1. **Correct object appears** — Ark and Agent Plan model create/edit dialogs expose exactly one native Video option alongside Text, Image, Audio, and Tool use.
-2. **Wrong objects stay clean** — OpenAI, xAI, Gemini, and other foreign Provider model dialogs do not expose the plugin fallback Video; Provider Source pages do not substitute a master switch/selector for it.
-3. **Save/reopen persists** — after a real user selection is saved, close/reopen, Dashboard refresh, AstrBot restart, and compatible plugin update preserve that owned card's value.
-4. **Runtime follows the selection** — enabled and disabled owned cards produce different request behavior exactly as specified above.
-5. **Uninstall/release leaves no public-UI residue** — every plugin-owned Dashboard/service wrapper is reversible; after release/unload the host methods/assets are restored and plugin fallback metadata no longer exists.
+No backend shared-schema fallback may add a globally visible Video option. No retired `video_modality_fallback` implementation is part of the product.
 
-### Degraded-delivery fallback gate
+All bridges are lifecycle-owned and reversible. Uninstall/release must leave no plugin-owned public UI residue.
 
-If the precise frontend bridge cannot execute, the fallback is healthy only when all of these hold:
+## 6. Hard acceptance: observable real UI
 
-1. the shared schema contains exactly one **marked** fallback `video` option so owned cards do not lose the control;
-2. any foreign visual Video selection is stripped at foreign create/update persistence boundaries;
-3. no foreign plugin runtime mirror is created and no foreign request is routed through the plugin's Video adapter;
-4. future host-native unmarked Video is left untouched;
-5. release/unload restores the host and removes plugin temporary assets.
+A release is successful only when the exact candidate passes the current real-browser contract on every host named in `docs/PROJECT_STATE.json`.
 
-The degraded gate does not redefine foreign visual pollution as ideal behavior; it records a deliberately accepted side effect in exchange for keeping the owned-card function available.
+For both Ark and Agent Plan:
 
-## Current implementation boundary
+1. Open the real AstrBot Dashboard model-create dialog.
+2. Observe exactly one native `video` checkbox in `modalities`.
+3. Observe that it is initially unchecked for a new card.
+4. Click the **visible Video label** as a user would.
+5. Observe the actual checkbox become checked.
+6. Save the card.
+7. Reopen it and observe Video is still checked.
+8. Confirm `custom_extra_body` and all typed request rows are visible.
+9. Change the typed request rows, save, reopen and verify their values persisted.
+10. Reload the Dashboard and verify the saved Video state.
+11. Restart the real AstrBot process and verify the saved Video state again.
+12. Replace the plugin with the exact same candidate version, restart and verify again.
 
-The 0.1.23 candidate follows this architecture:
+For foreign cards:
 
-- `capabilities/video_modality_fallback.py` adds the marked reversible shared-schema delivery fallback and strips fallback Video from foreign create/update payloads;
-- `capabilities/dashboard_asset_bridge.py` remains the preferred source-scoped private-clone adapter, removes marked fallback Video from foreign clones, preserves it for owned clones, and serves a copied index with a content-derived query suffix so stale cached Dashboard bundles do not satisfy the new request;
-- `capabilities/model_fields_bridge.py` projects/saves the existing rich owned-card request fields and strips plugin fields from foreign cards;
-- `capabilities/model_fields.py` maps native owned-card `modalities` membership to the per-card compatibility/runtime mirror and preserves the 0.1.19+ request-field semantics;
-- `capabilities/model_scope.py` resolves ownership from `provider_source_id -> provider_sources[].type`;
-- `adapters/video.py` performs the actual enabled/disabled transport behavior and is unchanged by the 0.1.23 delivery repair;
-- release functions restore host methods/static resolution and delete plugin-owned temporary assets.
+- no plugin Video option;
+- no `volcengine_*` request rows;
+- no persisted plugin fields.
 
-The candidate is additionally required to pass a real same-endpoint/same-key/same-model source-type differential: an AstrBot-native OpenAI Source pointed at the Ark endpoint must remain without plugin Video on the precise path, while the plugin Ark Source using the same real model exposes Video and persists it.
+For uninstall:
 
-## Recovery anchor
+- remove the plugin;
+- restart AstrBot;
+- plugin Source types disappear from public UI;
+- a normal foreign card remains free of plugin UI;
+- no plugin Dashboard transformation/runtime marker remains served.
 
-The original recovered 0.1.22 source remains frozen at branch:
+## 7. Evidence that does NOT satisfy the contract
 
-`archive/model-card-video-known-good-0.1.22`
+None of the following can substitute for the real UI sequence above:
 
-Do not delete or reinterpret that branch as the new fallback implementation. It remains the regression anchor for the precise source-scoped model-card Video path; 0.1.23 adds a delivery-resilience layer around it rather than replacing its runtime semantics.
+- Python import succeeds;
+- syntax/compile succeeds;
+- Git merge has no conflicts;
+- a unit test or mocked DOM passes;
+- a bridge installs without exception;
+- source code contains the word `video`;
+- metadata says the model supports video;
+- a paid/raw video request succeeds while the model-card checkbox is absent;
+- a checkbox appears only during creation but not edit/reopen;
+- a hidden boolean carries the right value without a visible native checkbox;
+- Provider Source controls approximate the per-card behavior.
+
+## 8. Current host matrix
+
+For 0.1.35 the blocking matrix is:
+
+- AstrBot 4.27.3
+- AstrBot 4.27.4
+- AstrBot 4.28.0-beta.1
+
+The active CI entrypoints are version-neutral:
+
+- `tests/e2e/provider_card_matrix/current_release_ui_contract.py`
+- `tests/e2e/provider_card_matrix/current_lifecycle_contract.py`
+
+Versioned helper modules may remain only as internal regression implementation and cannot be cited as current release authority.
