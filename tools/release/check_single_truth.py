@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject obsolete release topology and require current real-UI gate wiring."""
+"""Reject obsolete release topology and stale current-authority guidance."""
 
 from __future__ import annotations
 
@@ -23,6 +23,31 @@ FORBIDDEN_PATHS = (
 CURRENT_UI_ENTRYPOINT = "tests/e2e/provider_card_matrix/current_release_ui_contract.py"
 CURRENT_LIFECYCLE_ENTRYPOINT = "tests/e2e/provider_card_matrix/current_lifecycle_contract.py"
 REQUIRED_HOSTS = ("4.27.3", "4.27.4", "4.28.0-beta.1")
+
+AUTHORITATIVE_OR_WARM = (
+    "README.md",
+    "AGENTS.md",
+    "docs/AI_ONBOARDING.md",
+    "docs/AI_RULES.md",
+    "docs/KNOWLEDGE_LIFECYCLE.md",
+    "docs/DESIGN_DECISIONS.md",
+    "docs/DECISION_INDEX.json",
+    "docs/ASTRBOT_PLUGIN_RELEASE_SPEC.md",
+    "docs/contracts/MODEL_CARD_VIDEO_CONTRACT.md",
+    "docs/ADR/ADR-0003-dashboard-schema-isolation.md",
+    "docs/ADR/ADR-0004-migration-preserves-intent.md",
+    "docs/PROJECT_STATE.json",
+)
+
+STALE_CURRENT_MARKERS = (
+    "/tree/runtime",
+    "docs/archive/",
+    "archive/model-card-video-known-good",
+    "video_modality_fallback.py",
+    "volcengine_video_controls_visible is presentation-only",
+    "0.1.18 Source presentation control remains",
+    "stable 0.1.18/0.1.19 Source UI remains",
+)
 
 
 def fail(message: str) -> None:
@@ -56,21 +81,21 @@ def main() -> None:
     if real_ui.get("success_definition") != "observable user-visible model-card state and persistence":
         fail("release success definition has drifted away from observable UI persistence")
 
-    authoritative_files = (
-        ROOT / "README.md",
-        ROOT / "AGENTS.md",
-        ROOT / "docs" / "ASTRBOT_PLUGIN_RELEASE_SPEC.md",
-        ROOT / "docs" / "contracts" / "MODEL_CARD_VIDEO_CONTRACT.md",
-        state_path,
-    )
-    for path in authoritative_files:
+    for relative in AUTHORITATIVE_OR_WARM:
+        path = ROOT / relative
+        if not path.is_file():
+            fail(f"missing current authority/navigation file: {relative}")
         text = path.read_text(encoding="utf-8")
-        if "/tree/runtime" in text:
-            fail(f"authoritative file still advertises a retired branch URL: {path.relative_to(ROOT)}")
-        if "video_modality_fallback.py" in text:
-            fail(f"authoritative file still names the retired Video fallback: {path.relative_to(ROOT)}")
-        if "archive/model-card-video-known-good" in text:
-            fail(f"authoritative file still treats an archive branch as authority: {path.relative_to(ROOT)}")
+        for marker in STALE_CURRENT_MARKERS:
+            if marker in text:
+                fail(f"{relative} still contains stale current guidance marker {marker!r}")
+
+    decision_index = json.loads((ROOT / "docs" / "DECISION_INDEX.json").read_text(encoding="utf-8"))
+    history = decision_index.get("history") or {}
+    if history.get("current_tree_failed_state_archive") is not False:
+        fail("DECISION_INDEX must declare no current-tree failed-state archive")
+    if history.get("deep_history") != "Git commit history":
+        fail("deep history must resolve to Git commit history, not an alternate file tree")
 
     video_workflow = (ROOT / ".github" / "workflows" / "model-card-video-contract.yml").read_text(encoding="utf-8")
     lifecycle_workflow = (ROOT / ".github" / "workflows" / "model-card-lifecycle-contract.yml").read_text(encoding="utf-8")
@@ -98,7 +123,11 @@ def main() -> None:
     if "custom_extra_body" not in lifecycle or "expected_video_checked=True" not in lifecycle:
         fail("current lifecycle contract no longer proves request-row visibility and checked Video")
 
-    print("SINGLE_TRUTH_OK main_only=1 real_ui_gate=1 hosts=" + ",".join(REQUIRED_HOSTS))
+    model_scope = (ROOT / "capabilities" / "model_scope.py").read_text(encoding="utf-8")
+    if '"video" in modalities' not in model_scope or "VIDEO_CONTROLS_VISIBLE_KEY" not in model_scope:
+        fail("current owned-card save/migration boundary is missing expected native Video + legacy cleanup logic")
+
+    print("SINGLE_TRUTH_OK main_only=1 stale_current_guidance=0 real_ui_gate=1 hosts=" + ",".join(REQUIRED_HOSTS))
 
 
 if __name__ == "__main__":
